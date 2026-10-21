@@ -18,7 +18,9 @@ def _guard(value: YamlValue) -> str | None:
     expression = value.strip()
     if expression.startswith("${{") and expression.endswith("}}"):
         expression = expression[3:-2].strip()
-    match = re.fullmatch(r"steps\.([A-Za-z0-9_-]+)\.outputs\.cache-hit\s*!=\s*'true'", expression)
+    match = re.fullmatch(
+        r"(?:github\.ref\s*==\s*'refs/heads/(?:main|master)'\s*&&\s*)?"
+        r"steps\.([A-Za-z0-9_-]+)\.outputs\.cache-hit\s*!=\s*'true'", expression)
     return match[1] if match is not None else None
 
 
