@@ -22,6 +22,30 @@ class CacheSaveProofTest(unittest.TestCase):
     def test_matching_exact_hit_save_is_recognized(self):
         self.assertTrue(approved_cache_save(self.job, "Save cache"))
 
+    def test_default_branch_exact_hit_save_is_optional_during_dispatch(self):
+        for branch in ("main", "master"):
+            job = copy.deepcopy(self.job)
+            job["steps"][1]["if"] = (
+                "${{ github.ref == 'refs/heads/" + branch
+                + "' && steps.compile_cache.outputs.cache-hit != 'true' }}"
+            )
+            with self.subTest(branch=branch):
+                self.assertTrue(approved_cache_save(job, "Save cache"))
+
+    def test_branch_guard_cannot_excuse_mismatched_cache_or_validation(self):
+        guard = "github.ref == 'refs/heads/main' && steps.compile_cache.outputs.cache-hit != 'true'"
+        for change in (
+            {"run": "run-tests"},
+            {"if": "github.ref == 'refs/heads/main' || steps.compile_cache.outputs.cache-hit != 'true'"},
+            {"with": {"path": "other", "key": "${{ steps.compile_cache.outputs.cache-primary-key }}"}},
+            {"with": {"path": "cache/units", "key": "other-key"}},
+        ):
+            job = copy.deepcopy(self.job)
+            job["steps"][1]["if"] = guard
+            job["steps"][1].update(change)
+            with self.subTest(change=change):
+                self.assertFalse(approved_cache_save(job, "Save cache"))
+
     def test_validation_steps_and_unmatched_saves_cannot_be_excused(self):
         changes = (
             {"run": "run-tests"}, {"uses": "owner/cache/save@v5"},
