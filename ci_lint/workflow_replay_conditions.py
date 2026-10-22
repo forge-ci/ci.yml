@@ -10,7 +10,7 @@ from ci_lint.workflow_replay_identity import JobIdentity
 from ci_lint.workflow_replay_outputs import ReplayOutput, dependency_output
 from ci_lint.yaml_io import YamlValue
 
-_TOKEN = re.compile(r"\s+|'(?:[^']|'')*'|[A-Za-z_][A-Za-z0-9_.-]*|&&|\|\||==|!=|[!(),]")
+_TOKEN = re.compile(r"\s+|'(?:[^']|'')*'|[A-Za-z_][A-Za-z0-9_-]*(?:\.(?:[A-Za-z0-9_-]+|\*))*|&&|\|\||==|!=|[!(),]")
 _OUTPUT_REFERENCE = re.compile(r"needs\.([A-Za-z_][A-Za-z0-9_-]*)\.outputs\.([A-Za-z_][A-Za-z0-9_-]*)")
 
 
@@ -245,3 +245,22 @@ def condition_excludes(expression: YamlValue, inputs: tuple[BoundInput, ...],
     except (SyntaxError, ValueError, RecursionError):
         return False
     return result.truth is False and result.bound
+
+
+def condition_boolean(expression: YamlValue, inputs: tuple[BoundInput, ...], *,
+                      event: str | None = None) -> bool | None:
+    """Resolve a boolean scalar for a call input, preserving unknown values.
+
+    Unlike guard exclusion, a known truth alone is insufficient: GitHub's
+    logical operators return operands, which may have unknown scalar types.
+    No execution/status/output context is assumed while binding a call.
+    """
+    if not isinstance(expression, str) or not expression.strip().startswith("${{") or not expression.strip().endswith("}}"):
+        return None
+    try:
+        parsed = _parsed_condition(expression)
+        context = GuardContext(inputs, frozenset(), parsed.references, False, event, (), (), ())
+        result = _value(parsed.node.body, context)
+    except (SyntaxError, ValueError, RecursionError):
+        return None
+    return result.value if isinstance(result.value, bool) else None

@@ -1,6 +1,7 @@
 """Bind typed literal workflow-call inputs without evaluating expressions."""
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from ci_lint.workflow_scan import as_dict, get_on_section
@@ -30,7 +31,8 @@ def input_value(value: YamlValue, inputs: tuple[BoundInput, ...],
 
 
 def bind_call_inputs(document: dict[str, YamlValue], caller: dict[str, YamlValue],
-                     parent: tuple[BoundInput, ...], matrix: YamlValue = None) -> tuple[BoundInput, ...]:
+                     parent: tuple[BoundInput, ...], matrix: YamlValue = None, *,
+                     boolean_value: Callable[[YamlValue], bool | None] | None = None) -> tuple[BoundInput, ...]:
     declarations = as_dict(as_dict(get_on_section(document).get("workflow_call")).get("inputs"))
     supplied = as_dict(caller.get("with"))
     if set(supplied) - set(declarations):
@@ -45,6 +47,8 @@ def bind_call_inputs(document: dict[str, YamlValue], caller: dict[str, YamlValue
             continue
         raw_value = supplied[name] if name in supplied else descriptor.get("default", False if kind == "boolean" else "")
         value = input_value(raw_value, parent if name in supplied else (), matrix if name in supplied else None)
+        if value is None and kind == "boolean" and name in supplied and boolean_value is not None:
+            value = boolean_value(raw_value)
         if value is None and _context_expression(raw_value):
             continue
         if not isinstance(value, str if kind == "string" else bool):

@@ -6,7 +6,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 
 from ci_lint.workflow_replay_dependencies import _needs
-from ci_lint.workflow_replay_conditions import condition_excludes
+from ci_lint.workflow_replay_conditions import condition_excludes, condition_boolean
 from ci_lint.workflow_replay_inputs import BoundInput, bind_call_inputs, bound_name
 from ci_lint.workflow_replay_identity import JobIdentity, identity_part, bounded_identity
 from ci_lint.workflow_replay_matrix import job_matrices
@@ -194,7 +194,9 @@ def _called(state: _ExpansionState, current: str, job: dict[str, YamlValue],
     jobs = jobs_of(document)
     if "workflow_call" not in get_on_section(document) or not jobs:
         raise ValueError("called workflow has no workflow_call contract or executable jobs")
-    bound = bind_call_inputs(document, job, inputs, json.loads(callers[-1].matrix) if callers else None)
+    bound = bind_call_inputs(
+        document, job, inputs, json.loads(callers[-1].matrix) if callers else None,
+        boolean_value=lambda expression: condition_boolean(expression, inputs, event=state.event))
     caller_name = job_id if state.qualified else bound_name(job.get("name", job_id), inputs)
     caller_prefix = prefix + caller_name + "/"
     if not state.qualified and caller_prefix in state.caller_prefixes:
