@@ -45,6 +45,26 @@ class ReplayInputIdentityTest(unittest.TestCase):
         caller["with"]["compile"] = "${{ github.ref }}"
         self.assertNotIn("compile", {item.name for item in bind_call_inputs(self.called.document, caller, ())})
 
+    def test_event_expression_binds_only_known_boolean_scalars(self):
+        caller = self.entry.document["jobs"]["linux"]
+        self.called.document["on"]["workflow_call"]["inputs"]["compile"] = {"type": "boolean"}
+        cases = (
+            ("github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci-integration')", "workflow_dispatch", False),
+            ("github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci-integration')", "pull_request", None),
+            ("github.event_name == 'workflow_dispatch' || github.ref == 'main'", "workflow_dispatch", True),
+            ("github.ref == 'main' || true", "workflow_dispatch", None),
+            ("github.ref", "workflow_dispatch", None),
+            ("github.event_name == 'push'", None, None),
+            ("github.event_name == 'push' + 1", "workflow_dispatch", None),
+        )
+        for expression, event, expected in cases:
+            with self.subTest(expression=expression, event=event):
+                caller["with"]["compile"] = "${{ " + expression + " }}"
+                proof = expand_selection((self.entry, self.called), self.entry.path, "linux", event=event)
+                self.assertIsNone(proof.problem)
+                found = next((item.value for item in proof.jobs[0].inputs if item.name == "compile"), None)
+                self.assertIs(found, expected)
+
     def test_qualified_caller_matrix_binds_each_reusable_profile(self):
         caller = self.entry.document["jobs"]["linux"]
         caller["strategy"] = {"matrix": {"target": ["linux-x64", "linux-arm64"], "compile": [False, True]}}
