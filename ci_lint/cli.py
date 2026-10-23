@@ -1058,7 +1058,7 @@ def _cmd_cache_janitor(args: argparse.Namespace) -> int:
     result, table = cache_janitor(
         ci, fetch=default_fetch, graphql=default_graphql, delete=delete_fn, token=token, repo=repo_slug,
         max_deletes=args.max_deletes, dry_run=args.dry_run, stale_days=args.stale_days,
-        default_branch=args.default_branch,
+        default_branch=args.default_branch, enforce_budget=args.enforce_budget,
     )
     if args.json:
         payload = result.to_json_dict()
@@ -1439,12 +1439,16 @@ def build_parser() -> argparse.ArgumentParser:
     p_cache_trim.set_defaults(func=_cmd_cache_trim)
 
     p_cache_janitor = cache_sub.add_parser(
-        "janitor", help="delete closed-PR entries, CACHE-001/003/005/006/009, LRU overflow and stale entries (10-min grace, newest restored entry kept); prints a before/after table"
+        "janitor", help="delete closed-PR entries, CACHE-001/003/005/006/009, LRU overflow, repo-wide LRU down to [cache].budget and stale entries (10-min grace, newest restored entry kept); prints a before/after table"
     )
     p_cache_janitor.add_argument("--repo", default=".")
     p_cache_janitor.add_argument("--default-branch", default="main")
     p_cache_janitor.add_argument("--max-deletes", type=int, default=100)
     p_cache_janitor.add_argument("--stale-days", type=int, default=5)
+    p_cache_janitor.add_argument(
+        "--no-enforce-budget", dest="enforce_budget", action="store_false",
+        help="skip the repo-wide LRU pass that keeps the total under [cache].budget (#405)",
+    )
     p_cache_janitor.add_argument("--dry-run", action="store_true")
     p_cache_janitor.add_argument("--json", action="store_true")
     p_cache_janitor.set_defaults(func=_cmd_cache_janitor)

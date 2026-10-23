@@ -243,6 +243,7 @@ def janitor(  # noqa: C901
     default_branch: str = "main",
     now: float | None = None,
     grace_seconds: int = JANITOR_GRACE_SECONDS,
+    enforce_budget: bool = True,
 ) -> tuple[OpsResult, str]:
     """zackees/ci.yml#23 section 4. Deletes: every entry of a closed/merged
     PR (key `pr-<N>`/legacy delta, or ref `refs/pull/<N>/merge`; a failed
@@ -299,13 +300,78 @@ def janitor(  # noqa: C901
         elif entry.id in protected and not entry.reason.startswith(("CACHE-005", "CACHE-009", "closed PR")):
             del plan[cache_id]  # the newest entry a required job restores
 
-    planned = _prioritise_plan(plan)[:max_deletes]
+    budget = BudgetEvictions((), None)
+    if enforce_budget:
+        budget = _budget_evictions(ci, list(classified), plan, grace_cutoff)
+        for cache_id in budget.ids:
+            c = by_id[cache_id]
+            plan[cache_id] = DeletePlanEntry(
+                id=cache_id, key=c.entry.key, size_in_bytes=c.entry.size_in_bytes,
+                reason="budget: repo total over [cache].budget (LRU)",
+            )
+    # Budget evictions keep their least-recently-accessed order, after every
+    # provable reason, so a truncated sweep still evicts the oldest first.
+    ordered = _prioritise_plan({k: v for k, v in plan.items() if k not in set(budget.ids)})
+    planned = (ordered + [plan[i] for i in budget.ids])[:max_deletes]
     result = _apply(planned, delete=delete, token=token, repo=repo, dry_run=dry_run)
     deleted_or_planned_ids = {p.id for p in (result.deleted if not result.dry_run else result.planned)}
     table = _before_after_table(list(classified), deleted_or_planned_ids)
-    if report.warning:
-        result = OpsResult(**{**result.__dict__, "warning": report.warning})
+    warning = "; ".join(w for w in (report.warning, budget.warning) if w) or None
+    if warning:
+        result = OpsResult(**{**result.__dict__, "warning": warning})
     return result, table
+
+
+def _family_newest_ids(classified: list[ClassifiedEntry]) -> set[int]:
+    """The newest (by last_accessed_at) base entry of each family."""
+
+    newest: dict[str, ClassifiedEntry] = {}
+    for c in classified:
+        if c.family_id is None or c.is_delta or c.is_retired or c.pr is not None:
+            continue
+        cur = newest.get(c.family_id)
+        if cur is None or c.entry.last_accessed_at > cur.entry.last_accessed_at:
+            newest[c.family_id] = c
+    return {c.entry.id for c in newest.values()}
+
+
+@dataclass(frozen=True)
+class BudgetEvictions:
+    ids: tuple[int, ...]  # least recently accessed first
+    warning: str | None
+
+
+def _budget_evictions(
+    ci: CiToml, classified: list[ClassifiedEntry], plan: dict[int, DeletePlanEntry], grace_cutoff: float
+) -> BudgetEvictions:
+    """zackees/ci.yml#405: evict least recently accessed entries until the
+    repository total is within [cache].budget, so GitHub's own eviction never
+    picks. Keeps each family's newest base entry and every in-grace entry;
+    returns a warning when those alone exceed the budget."""
+
+    budget = parse_size(ci.cache.budget) if ci.cache.budget else None
+    if not budget:
+        return BudgetEvictions((), None)
+    remaining = sum(c.entry.size_in_bytes for c in classified if c.entry.id not in plan)
+    if remaining <= budget:
+        return BudgetEvictions((), None)
+    keep = _family_newest_ids(classified)
+    candidates = []
+    for c in classified:
+        created = _parse_iso8601(c.entry.created_at)
+        if c.entry.id in plan or c.entry.id in keep or (created is not None and created > grace_cutoff):
+            continue
+        candidates.append(c)
+    candidates.sort(key=lambda c: (c.entry.last_accessed_at, c.entry.id))
+    out = []
+    for c in candidates:
+        if remaining <= budget:
+            break
+        out.append(c.entry.id)
+        remaining -= c.entry.size_in_bytes
+    if remaining > budget:
+        return BudgetEvictions(tuple(out), f"repo total {remaining}B still over [cache].budget {budget}B: only protected or in-grace entries remain")
+    return BudgetEvictions(tuple(out), None)
 
 
 def heal(*, delete: DeleteFn | None, token: str, repo: str, key: str, ref: str | None = None, dry_run: bool = False) -> OpsResult:

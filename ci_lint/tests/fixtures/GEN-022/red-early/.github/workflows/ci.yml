@@ -1,0 +1,16 @@
+name: CI
+on:
+  pull_request:
+  merge_group:
+permissions:
+  contents: read
+jobs:
+  cache-janitor:
+    runs-on: ubuntu-24.04
+    concurrency: { group: cache-janitor, cancel-in-progress: false }
+    steps:
+      - run: python3 -m ci_lint cache janitor --repo .
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: echo build

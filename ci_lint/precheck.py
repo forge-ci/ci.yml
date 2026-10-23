@@ -25,6 +25,7 @@ from ci_lint.rules.cache_restore_copy import check_gen_013
 from ci_lint.rules.cache_static import check_group9
 from ci_lint.rules.complexity import check_complexity
 from ci_lint.rules.default_branch_skip import check_gen_021
+from ci_lint.rules.merge_queue import check_gen_022
 from ci_lint.gate_bare_tools import check_no_bare_rust
 from ci_lint.local_gate import GATE_FILE, check_gate_static
 from ci_lint.remote_only import check_gate_012
@@ -179,6 +180,7 @@ def run_precheck(repo_root: Path, *, title: str = "", local: bool = False, live:
         all_findings.extend(check_rust_015(repo_root))
         all_findings.extend(check_rust_016(repo_root))
         all_findings.extend(check_gen_021(repo_root))
+        all_findings.extend(check_gen_022(ci, repo_root))
         all_findings.extend(check_gate_012(repo_root))
         all_findings.extend(check_complexity(repo_root).findings)
         all_findings.extend(check_ghapi_001(repo_root))

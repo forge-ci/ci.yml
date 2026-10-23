@@ -377,3 +377,66 @@ class LruFootprintTest(unittest.TestCase):
         entries = [self._entry(1, "2026-10-04T00:00:00Z", 1200),
                    self._entry(2, "2026-10-03T00:00:00Z", 1200)]
         self.assertEqual(set(_lru_evictions(ci, entries)), {2})
+
+
+class JanitorRepoBudgetTest(unittest.TestCase):
+    """zackees/ci.yml#405: the end-of-queue janitor keeps the repository
+    total under [cache].budget by LRU itself, so GitHub's eviction never
+    fires; protected and in-grace entries are never evicted for budget."""
+
+    def setUp(self) -> None:
+        from dataclasses import replace
+
+        ci, findings = load_ci_toml(REPO)
+        assert ci is not None, findings
+        self.ci = replace(ci, cache=replace(ci.cache, budget="100MB"))
+
+    def _run(self, entries, **kwargs):
+        result, _table = janitor(
+            self.ci, fetch=_fetch_from({"actions_caches": entries}), graphql=None, delete=None,
+            token=TOKEN, repo=REPO_SLUG, dry_run=True, stale_days=999999, now=NOW, **kwargs,
+        )
+        return result
+
+    def test_over_budget_evicts_least_recently_accessed_first(self) -> None:
+        old = _iso(-7200)
+        entries = [
+            _entry(31, "setup-soldr-dylint-v2-1111111111111111-k31", "refs/heads/main", 60 * MB, old, _iso(-100)),
+            _entry(32, "setup-soldr-dylint-v2-2222222222222222-k32", "refs/heads/main", 30 * MB, old, _iso(-200)),
+            _entry(33, "setup-soldr-dylint-v2-3333333333333333-k33", "refs/heads/main", 30 * MB, old, _iso(-300)),
+            _entry(34, "setup-soldr-dylint-v2-4444444444444444-k34", "refs/heads/main", 30 * MB, old, _iso(-400)),
+        ]
+        planned = {p.id: p.reason for p in self._run(entries).planned}
+        # 150MB live, 100MB budget: the two least recently accessed go.
+        self.assertEqual({33, 34}, set(planned))
+        self.assertTrue(all(r.startswith("budget") for r in planned.values()))
+
+    def test_budget_pass_respects_protection_and_grace(self) -> None:
+        old = _iso(-7200)
+        entries = [
+            _entry(41, "setup-soldr-dylint-v2-1111111111111111-k41", "refs/heads/main", 90 * MB, old, _iso(-10)),
+            _entry(42, "setup-soldr-dylint-v2-2222222222222222-k42", "refs/heads/main", 30 * MB, _iso(-60), _iso(-60)),
+        ]
+        result = self._run(entries)
+        # 41 is its family's newest; 42 is inside the grace window.
+        self.assertEqual((), result.planned)
+        self.assertIn("over [cache].budget", result.warning or "")
+
+    def test_budget_order_survives_max_deletes(self) -> None:
+        old = _iso(-7200)
+        entries = [
+            _entry(51, "setup-soldr-dylint-v2-1111111111111111-k51", "refs/heads/main", 10 * MB, old, _iso(-100)),
+            _entry(52, "setup-soldr-dylint-v2-2222222222222222-k52", "refs/heads/main", 80 * MB, old, _iso(-200)),
+            _entry(53, "setup-soldr-dylint-v2-3333333333333333-k53", "refs/heads/main", 20 * MB, old, _iso(-900)),
+            _entry(54, "setup-soldr-dylint-v2-4444444444444444-k54", "refs/heads/main", 20 * MB, old, _iso(-800)),
+        ]
+        result = self._run(entries, max_deletes=1)
+        self.assertEqual([53], [p.id for p in result.planned])  # oldest access, not largest
+
+    def test_enforce_budget_off_keeps_previous_behaviour(self) -> None:
+        old = _iso(-7200)
+        entries = [
+            _entry(61, "setup-soldr-dylint-v2-1111111111111111-k61", "refs/heads/main", 90 * MB, old, _iso(-100)),
+            _entry(62, "setup-soldr-dylint-v2-2222222222222222-k62", "refs/heads/main", 90 * MB, old, _iso(-200)),
+        ]
+        self.assertEqual((), self._run(entries, enforce_budget=False).planned)

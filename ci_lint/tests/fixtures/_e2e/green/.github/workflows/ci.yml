@@ -4,6 +4,7 @@ on:
     types: [opened, synchronize, reopened, edited]
   push:
     branches: [main]
+  merge_group:
   schedule:
     - cron: "0 6 * * *"
   workflow_dispatch:
@@ -38,3 +39,15 @@ jobs:
       - run: soldr cargo check --locked --target x86_64-unknown-linux-musl
       - run: soldr cargo check --locked --target x86_64-pc-windows-msvc
       - run: soldr cargo check --locked --target aarch64-pc-windows-msvc
+  cache-janitor:
+    needs: fast
+    if: always() && github.event_name == 'merge_group'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    concurrency: { group: cache-janitor, cancel-in-progress: false }
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - uses: actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa  # v4.1.1
+      - run: python3 -m ci_lint cache janitor --repo .
