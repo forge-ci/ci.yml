@@ -864,12 +864,15 @@ def _run_gate(  # noqa: C901
 
 ZERO_SHA = "0" * 40
 HOOK_MARKER = "# installed by: ci-lint local-gate hook install (zackees/ci.yml#166)"
+WIP_PUSH_ENV = "CI_LINT_GATE_WIP_PUSH"
 
 
 @dataclass(frozen=True)
 class PushCheck:
     exit_code: int
     problems: list[str]
+    # Unattested heads admitted by an explicit WIP reason (ci.yml#406).
+    wip: list[str] = field(default_factory=list)
 
 
 def _publication_problems(repo: Path, sha: str, config: GateConfig) -> tuple[str, ...]:
@@ -892,12 +895,16 @@ def _publication_problems(repo: Path, sha: str, config: GateConfig) -> tuple[str
                             if status.state != VALID and (status.gate in required or status.state != MISSING))
 
 
-def check_push(repo: Path, stdin_text: str) -> PushCheck:
+def check_push(repo: Path, stdin_text: str, *, wip_reason: str | None = None) -> PushCheck:
     """git's pre-push stdin: `<local ref> <local sha> <remote ref> <remote sha>`
     per line. Every pushed branch head must be attested; tags and deletes
-    pass."""
+    pass. A non-blank `wip_reason` admits unattested heads only (a paused
+    handoff branch, ci.yml#406); gate-policy and publication problems still
+    refuse, and hosted `local-gate verify` still fails the unattested PR."""
 
+    wip_reason = (wip_reason or "").strip() or None
     problems: list[str] = []
+    wip: list[str] = []
     for line in stdin_text.splitlines():
         parts = line.split()
         if len(parts) != 4:
@@ -914,11 +921,11 @@ def check_push(repo: Path, stdin_text: str) -> PushCheck:
             continue
         result = check_commit(repo, local_sha)
         if not result.ok:
-            problems.append(f"{local_ref} -> {remote_ref}: {result.detail}")
+            (wip if wip_reason else problems).append(f"{local_ref} -> {remote_ref}: {result.detail}")
         else:
             problems.extend(f"{local_ref} -> {remote_ref}: {problem}"
                             for problem in _publication_problems(repo, local_sha, loaded.config))
-    return PushCheck(exit_code=1 if problems else 0, problems=problems)
+    return PushCheck(exit_code=1 if problems else 0, problems=problems, wip=wip)
 
 
 def hook_script(launcher: str) -> str:
