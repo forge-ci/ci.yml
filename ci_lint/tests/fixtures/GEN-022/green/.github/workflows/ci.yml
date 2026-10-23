@@ -1,0 +1,23 @@
+name: CI
+on:
+  pull_request:
+  merge_group:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: echo build
+  test:
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - run: echo test
+  cache-janitor:
+    needs: test
+    if: always() && github.event_name == 'merge_group'
+    runs-on: ubuntu-24.04
+    concurrency: { group: cache-janitor, cancel-in-progress: false }
+    steps:
+      - run: python3 -m ci_lint cache janitor --repo .
