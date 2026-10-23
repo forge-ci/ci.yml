@@ -45,6 +45,7 @@ from ci_lint.local_gate import (
     GitError,
     _git,
     VerifyOutcome,
+    WIP_PUSH_ENV,
     check_gate_static,
     check_push,
     default_launcher,
@@ -234,13 +235,18 @@ def _show_lane_cache(repo: Path, config: GateConfig) -> int:
 
 def _cmd_check_push(args: argparse.Namespace) -> int:
     repo = Path(args.repo).resolve()
-    push = check_push(repo, sys.stdin.read())
+    push = check_push(repo, sys.stdin.read(), wip_reason=os.environ.get(WIP_PUSH_ENV))
     code, problems = push.exit_code, push.problems
+    for head in push.wip:
+        print(f"ci-lint local-gate: WIP push of an unattested head ({WIP_PUSH_ENV}="
+              f"{os.environ[WIP_PUSH_ENV].strip()!r}): {head}", file=sys.stderr)
     if code:
         print("ci-lint local-gate: push refused -- these heads have not passed the local gate (GATE-003):", file=sys.stderr)
         for problem in problems:
             print(f"  {problem}", file=sys.stderr)
         print("  fix: check out the refused head and run ci-lint local-gate run, then push again", file=sys.stderr)
+        print(f"  WIP/handoff branch that cannot pass yet: {WIP_PUSH_ENV}='<reason>' git push "
+              "(admits unattested heads only; CI verify still fails the PR)", file=sys.stderr)
     return code
 
 

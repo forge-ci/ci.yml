@@ -205,6 +205,19 @@ class VerifyAndHookTest(TempRepoCase):
         head = _git(repo, "rev-parse", "HEAD")
         self.assertEqual(check_push(repo, f"refs/heads/main {head} refs/heads/main {'0' * 40}\n").exit_code, 0)
 
+    def test_check_push_wip_reason_admits_only_unattested_heads(self) -> None:
+        # ci.yml#406: a paused handoff branch cannot pass the gate yet; an
+        # explicit reason lets it through instead of a blanket --no-verify.
+        repo = _repo(self.tmp, "print('ok')\n")
+        head = _git(repo, "rev-parse", "HEAD")
+        line = f"refs/heads/wip {head} refs/heads/wip {'0' * 40}\n"
+        self.assertEqual(check_push(repo, line, wip_reason="  ").exit_code, 1)
+        push = check_push(repo, line, wip_reason="paused draft for #1964")
+        self.assertEqual(push.exit_code, 0)
+        self.assertEqual(push.problems, [])
+        self.assertEqual(len(push.wip), 1)
+        self.assertIn("refs/heads/wip", push.wip[0])
+
     def test_install_hook_refuses_foreign_hook(self) -> None:
         repo = _repo(self.tmp, "print('ok')\n")
         self.assertEqual(install_hook(repo, "ci-lint").exit_code, 0)
