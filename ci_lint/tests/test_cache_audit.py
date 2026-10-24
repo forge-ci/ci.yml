@@ -24,7 +24,7 @@ from ci_lint.cache.audit import (
 )
 from ci_lint.cache_lineage import parse_ancestor_key
 from ci_lint.cache.github_cache import CacheEntry, GitHubApiError, list_caches
-from ci_lint.finding import Status
+from ci_lint.finding import Finding, Status
 from ci_lint.schema import CiToml, load_ci_toml
 from ci_lint.tests.helpers import FIXTURES
 
@@ -740,7 +740,7 @@ max-age-hours = 168
         classified = classify(ci, entries)
         # Both must resolve to the declared family, or the rule never runs.
         self.assertEqual(["compile", "compile"], [c.family_id for c in classified])
-        findings = _check_cache_006(classified)
+        findings = _check_cache_006(ci, classified)
         self.assertEqual(["CACHE-006"], [f.rule for f in findings])
         self.assertEqual(1, findings[0].cache_id)  # the older access is superseded
 
@@ -843,3 +843,36 @@ class Cache005DeclaredMinTest(unittest.TestCase):
         )
         classified = (ClassifiedEntry(entry=entry, family_id=None, is_delta=False, delta=None, is_retired=False),)
         self.assertEqual(1, len(_check_cache_005(self._with_min("0B"), classified)))
+
+
+class Cache006LruFamilyTest(unittest.TestCase):
+    """zackees/ci.yml#421: an `evict = "lru"` family is bounded by its
+    footprint, not by CACHE-006. Content-addressed keys (soldr verdicts)
+    share a shape once the hash is stripped, but every one is live."""
+
+    def setUp(self) -> None:
+        ci, findings = load_ci_toml(REPO)
+        assert ci is not None, findings
+        self.ci = ci
+
+    def _findings(self, evict: str | None) -> list[Finding]:
+        fam = replace(self.ci.cache.family["soldr-mini"], evict=evict)
+        ci = replace(self.ci, cache=replace(self.ci.cache, family={**self.ci.cache.family, "soldr-mini": fam}))
+        classified = tuple(
+            ClassifiedEntry(
+                entry=CacheEntry(
+                    id=i, ref=MAIN_REF, key=f"soldr-verdict-v1-dylint-ws-{h * 32}", version="v",
+                    size_in_bytes=400, created_at="2026-10-24T00:00:00Z",
+                    last_accessed_at=f"2026-10-24T00:00:0{i}Z",
+                ),
+                family_id="soldr-mini", is_delta=False, delta=None, is_retired=False,
+            )
+            for i, h in ((1, "a"), (2, "b"))
+        )
+        return _check_cache_006(ci, classified)
+
+    def test_lru_family_keeps_every_same_shape_entry(self) -> None:
+        self.assertEqual([], self._findings("lru"))
+
+    def test_default_family_still_supersedes(self) -> None:
+        self.assertEqual([1], [f.cache_id for f in self._findings(None)])
