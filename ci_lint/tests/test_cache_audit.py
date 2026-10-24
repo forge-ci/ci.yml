@@ -14,6 +14,7 @@ from dataclasses import replace
 
 from ci_lint.cache.audit import (
     _TRAILING_HASH_RE,
+    _check_cache_005,
     _check_cache_006,
     _shape,
     ClassifiedEntry,
@@ -796,3 +797,49 @@ class LiveExcessShapesTest(unittest.TestCase):
         plain = replace(shaped, cache=replace(shaped.cache, family={**shaped.cache.family,
                      "deps": replace(fam, shapes=())}))
         self.assertTrue(_check_family_live_excess(plain, entries, "main"))
+
+
+class Cache005DeclaredMinTest(unittest.TestCase):
+    """zackees/ci.yml#417: a family whose entries are tiny by design (soldr
+    verdict records, ~400 B; empty pass markers) declares `min`, and the
+    declared minimum replaces the 1 KB poison-guard floor. A family that
+    declares nothing keeps the floor."""
+
+    KEY = "soldr-mini-v2-linux-x64-glibc-v0.9.25"
+
+    def setUp(self) -> None:
+        ci, findings = load_ci_toml(REPO)
+        assert ci is not None, findings
+        self.ci = ci
+
+    def _with_min(self, value: str | None) -> CiToml:
+        fam = replace(self.ci.cache.family["soldr-mini"], min=value)
+        family = {**self.ci.cache.family, "soldr-mini": fam}
+        return replace(self.ci, cache=replace(self.ci.cache, family=family))
+
+    def _flagged(self, ci: CiToml, size: int) -> list[str]:
+        entry = CacheEntry(
+            id=1, ref=MAIN_REF, key=self.KEY, version="v", size_in_bytes=size,
+            created_at="2026-10-24T00:00:00Z", last_accessed_at="2026-10-24T00:00:00Z",
+        )
+        classified = (ClassifiedEntry(entry=entry, family_id="soldr-mini", is_delta=False, delta=None, is_retired=False),)
+        return [f.message for f in _check_cache_005(ci, classified)]
+
+    def test_undeclared_min_keeps_the_floor(self) -> None:
+        self.assertEqual(1, len(self._flagged(self._with_min(None), 400)))
+
+    def test_declared_zero_min_keeps_tiny_entries(self) -> None:
+        self.assertEqual([], self._flagged(self._with_min("0B"), 400))
+
+    def test_declared_min_still_flags_below_it(self) -> None:
+        found = self._flagged(self._with_min("300B"), 200)
+        self.assertEqual(1, len(found))
+        self.assertIn("below [cache.family.soldr-mini].min", found[0])
+
+    def test_unclassified_tiny_entry_keeps_the_floor(self) -> None:
+        entry = CacheEntry(
+            id=2, ref=MAIN_REF, key="unknown-x", version="v", size_in_bytes=10,
+            created_at="2026-10-24T00:00:00Z", last_accessed_at="2026-10-24T00:00:00Z",
+        )
+        classified = (ClassifiedEntry(entry=entry, family_id=None, is_delta=False, delta=None, is_retired=False),)
+        self.assertEqual(1, len(_check_cache_005(self._with_min("0B"), classified)))
