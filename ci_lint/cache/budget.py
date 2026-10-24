@@ -135,7 +135,7 @@ def run_budget(
     verdict = evaluate(
         ci, total, own_bytes=own, hard=is_hard_context(event_name, ref, default_branch), pr_number=pr_number
     )
-    contributing = list(_check_cache_003(classified, default_branch)) + list(_check_cache_006(classified))
+    contributing = list(_check_cache_003(classified, default_branch)) + list(_check_cache_006(ci, classified))
     if contributing:
         counts: dict[str, int] = {}
         for f in contributing:

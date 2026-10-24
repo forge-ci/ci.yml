@@ -327,10 +327,16 @@ def _check_cache_005(ci: CiToml, classified: tuple[ClassifiedEntry, ...]) -> lis
     return findings
 
 
-def _check_cache_006(classified: tuple[ClassifiedEntry, ...]) -> list[Finding]:
+def _check_cache_006(ci: CiToml, classified: tuple[ClassifiedEntry, ...]) -> list[Finding]:
     groups: dict[tuple[str, str, int | None], list[ClassifiedEntry]] = {}
     for c in classified:
         if c.family_id is None or c.is_delta or c.is_retired:
+            continue
+        # An `evict = "lru"` family is bounded by its footprint instead
+        # (#421): its keys may be content-addressed (soldr verdicts), so
+        # entries sharing a stripped shape are all live, not generations.
+        fam = ci.cache.family.get(c.family_id)
+        if fam is not None and fam.evict == "lru":
             continue
         groups.setdefault((c.family_id, _shape(c.entry.key), c.pr if c.pr_in_key else None), []).append(c)
 
@@ -731,7 +737,7 @@ def audit_classified(
     findings.extend(_check_cache_001(classified))
     findings.extend(_check_cache_003(classified, default_branch))
     findings.extend(_check_cache_005(ci, classified))
-    findings.extend(_check_cache_006(classified))
+    findings.extend(_check_cache_006(ci, classified))
     findings.extend(_check_cache_009(classified))
     findings.extend(_check_family_live_excess(ci, classified, default_branch))
     cache008_findings, warning, closed_pr_ids = _check_cache_008(
