@@ -63,9 +63,9 @@ DYLINT_CACHE_VIA_VALUES: frozenset[str] = frozenset({"setup-soldr:dylint-output"
 _RUST_004_RUNS_PER_PAGE = 20
 _RUST_004_JOBS_PER_PAGE = 50
 
-# CACHE-005: "poisoned/tiny (< family min, or <= 1KB for any family)" --
-# the 1KB floor applies regardless of whether a family declares its own
-# `min` (issue #6 §6: this is exactly clud's 253-byte entry).
+# CACHE-005: "poisoned/tiny" -- below the family's declared `min`, else at or
+# below 1KB (issue #6 §6: clud's 253-byte entry). A declared `min` replaces
+# the floor (#417), so a tiny-by-design family declares `min = "0B"`.
 TINY_BYTES = 1024
 BUDGET_WARN_RATIO = 0.90
 
@@ -303,14 +303,16 @@ def _check_cache_005(ci: CiToml, classified: tuple[ClassifiedEntry, ...]) -> lis
     for c in classified:
         entry = c.entry
         reason: str | None = None
-        if entry.size_in_bytes <= TINY_BYTES:
+        fam = ci.cache.family[c.family_id] if c.family_id is not None else None
+        min_bytes = parse_size(fam.min) if fam is not None and fam.min else None
+        if fam is not None and min_bytes is not None:
+            # A declared `min` replaces the floor (#417): a family whose
+            # entries are tiny by design (soldr verdicts, pass markers)
+            # declares `min = "0B"`.
+            if entry.size_in_bytes < min_bytes:
+                reason = f"{entry.size_in_bytes}B is below [cache.family.{c.family_id}].min ({fam.min})"
+        elif entry.size_in_bytes <= TINY_BYTES:
             reason = f"{entry.size_in_bytes}B is at or below the {TINY_BYTES}B poison-guard floor"
-        elif c.family_id is not None:
-            fam = ci.cache.family[c.family_id]
-            if fam.min:
-                min_bytes = parse_size(fam.min)
-                if min_bytes is not None and entry.size_in_bytes < min_bytes:
-                    reason = f"{entry.size_in_bytes}B is below [cache.family.{c.family_id}].min ({fam.min})"
         if reason is not None:
             findings.append(
                 Finding(
