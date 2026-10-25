@@ -557,15 +557,28 @@ PR-title-shaped string (`"[ci-cache-save]"`) or a bare list
 
 ### `ci-lint cache audit` (live, read-only)
 
-`ci-lint cache audit --repo . [--default-branch main] [--json]` --
+`ci-lint cache audit --repo . [--default-branch <branch>] [--json]` --
 `actions: read`, `GITHUB_TOKEN` + `GITHUB_REPOSITORY`. Lists every cache
 (`GET /repos/{repo}/actions/caches`, paginated) and classifies each by
 `[cache.family]` prefix (`ci_lint.cache.audit.classify`):
 
+**Default branch is inferred, never guessed (#425).** `--default-branch`
+no longer defaults to `main`. Without it the audit resolves the branch
+itself: the Actions event payload (`$GITHUB_EVENT_PATH` ->
+`repository.default_branch`, zero API calls), then one read-only
+`GET /repos/{repo}`. If neither resolves, `CACHE-003`, `CACHE-004`'s
+live-excess check and `RUST-004` are skipped behind a single
+`needs_review` finding -- never a guessed one (obs-studio's `master`
+drew 33 false CACHE-003 under the old `main` assumption). `cache trim`,
+`cache janitor`, `cache preprune` and `precheck --live` resolve the same
+way, so an unresolvable branch means the janitor plans no CACHE-003
+deletion at all (fail closed). `cache budget` and `ci-lint audit` keep
+their own explicit `--default-branch` defaults.
+
 | Rule | Fires on |
 | --- | --- |
 | `CACHE-001` | a key matching no declared family prefix (and not a delta, not retired, not a ci-lint attestation side entry: `att1-*` is a known ci-lint family, #412) |
-| `CACHE-003` | a declared **base**-layer family's key saved on a ref other than `refs/heads/<--default-branch>` |
+| `CACHE-003` | a declared **base**-layer family's key saved on a ref other than `refs/heads/<default branch>` (inferred when `--default-branch` is omitted, #425; unresolvable -> skipped as one `needs_review`, never guessed) |
 | `CACHE-005` | an entry below its family's declared `min`, else <= 1KB -- except `att1-*` attestation side entries, which are tiny by design and never judged by the floor (#412; a declared `min` still applies) |
 | `CACHE-006` | >= 2 entries of the same family whose keys differ only in a trailing lockfile/version hash (best-effort: strips trailing hyphen-hex segments and groups what's left; a `setup-soldr-cargoregistry-` key keeps its trailing toolchain digest in the shape and only its Cargo.lock hash is a generation, since per-job digests are live at once -- ci.yml#88) -- all but the most-recently-accessed are flagged |
 | `CACHE-008` | an entry of a closed/merged PR -- its key carries a delimited `pr-<N>` component (#23 §5; the legacy `delta-v1-pr<N>-...` form is still recognized) or it was saved on `refs/pull/<N>/merge` -- or a PR delta whose PR is closed/merged (one GraphQL query, all referenced PR numbers batched via aliased fields), or whose `b<base8>` matches none of the family's live base entries' own key hashes |

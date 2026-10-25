@@ -37,6 +37,8 @@ module's classification and then act on it.
 from __future__ import annotations
 
 import hashlib
+import json
+import os
 import re
 from dataclasses import dataclass, replace
 
@@ -732,6 +734,40 @@ def _check_family_live_excess(
     return findings
 
 
+def infer_default_branch(fetch: FetchFn | None, token: str, repo: str) -> str | None:
+    """zackees/ci.yml#425: the repository knows its own default branch;
+    never guess `main`. Order: the Actions event payload
+    (`$GITHUB_EVENT_PATH` -> `repository.default_branch`, zero API calls),
+    then one read-only `GET /repos/{repo}`. Unresolvable -> `None`, and the
+    caller skips the default-branch-relative checks behind one needs_review
+    finding instead of emitting a guessed one (obs-studio's `master` drew
+    33 false CACHE-003 under the old `main` assumption)."""
+
+    payload_path = os.environ.get("GITHUB_EVENT_PATH")
+    if payload_path:
+        try:
+            with open(payload_path, encoding="utf-8") as fh:
+                data: JsonValue = json.load(fh)
+        except (OSError, ValueError, UnicodeDecodeError):
+            data = None
+        if isinstance(data, dict):
+            repository = data.get("repository")
+            if isinstance(repository, dict):
+                branch = repository.get("default_branch")
+                if isinstance(branch, str) and branch:
+                    return branch
+    if fetch is not None and token and repo:
+        try:
+            answer = fetch(f"/repos/{repo}", token)
+        except GitHubApiError:
+            return None
+        if isinstance(answer, dict):
+            branch = answer.get("default_branch")
+            if isinstance(branch, str) and branch:
+                return branch
+    return None
+
+
 def audit_classified(
     ci: CiToml,
     classified: tuple[ClassifiedEntry, ...],
@@ -739,7 +775,7 @@ def audit_classified(
     graphql: GraphQLFn | None,
     token: str,
     repo: str,
-    default_branch: str = "main",
+    default_branch: str | None = "main",
     fetch: FetchFn | None = None,
 ) -> AuditReport:
     """The pure-ish half: findings from an already-fetched cache listing.
@@ -754,18 +790,36 @@ def audit_classified(
     hand already (it just used it to list caches) and passes it through."""
 
     findings: list[Finding] = []
+    if default_branch is None:
+        # #425: the CLI default is "infer"; explicit callers (including the
+        # legacy `"main"` default above) never reach this line.
+        default_branch = infer_default_branch(fetch, token, repo)
     findings.extend(_check_cache_001(classified))
-    findings.extend(_check_cache_003(classified, default_branch))
+    if default_branch is None:
+        findings.append(
+            Finding(
+                rule="CACHE-003",
+                path="cache:default-branch",
+                status=Status.NEEDS_REVIEW,
+                message="default branch could not be determined; skipped CACHE-003, "
+                "CACHE-004's live-excess check and RUST-004 rather than assume 'main' (#425)",
+                fix="pass --default-branch, or run where $GITHUB_EVENT_PATH (GitHub Actions) "
+                "or one read-only GET /repos/<owner>/<name> can resolve it",
+            )
+        )
+    else:
+        findings.extend(_check_cache_003(classified, default_branch))
     findings.extend(_check_cache_005(ci, classified))
     findings.extend(_check_cache_006(ci, classified))
     findings.extend(_check_cache_009(classified))
-    findings.extend(_check_family_live_excess(ci, classified, default_branch))
+    if default_branch is not None:
+        findings.extend(_check_family_live_excess(ci, classified, default_branch))
     cache008_findings, warning, closed_pr_ids = _check_cache_008(
         classified, graphql=graphql, token=token, repo=repo
     )
     findings.extend(cache008_findings)
 
-    if fetch is not None:
+    if fetch is not None and default_branch is not None:
         rust004_findings, rust004_warning = _check_rust_004(
             ci, classified, fetch=fetch, token=token, repo=repo, default_branch=default_branch
         )
@@ -818,7 +872,7 @@ def run_audit(
     graphql: GraphQLFn | None,
     token: str,
     repo: str,
-    default_branch: str = "main",
+    default_branch: str | None = "main",
 ) -> AuditReport:
     try:
         entries = list_caches(fetch, token, repo)

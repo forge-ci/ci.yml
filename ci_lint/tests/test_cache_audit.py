@@ -9,6 +9,7 @@ repo doesn't currently exhibit -- see caches-synthetic-rules.json's own
 from __future__ import annotations
 
 import json
+import os
 import unittest
 from dataclasses import replace
 
@@ -21,6 +22,7 @@ from ci_lint.cache.audit import (
     ClassifiedEntry,
     audit_classified,
     classify,
+    infer_default_branch,
     run_audit,
 )
 from ci_lint.cache_lineage import parse_ancestor_key
@@ -918,6 +920,126 @@ class CacheAttestationSideEntryTest(unittest.TestCase):
         classified = classify(self.ci, [self._entry(key=self.PR_KEY)])
         self.assertEqual(3532, classified[0].pr)
         self.assertTrue(classified[0].pr_in_key)
+
+
+class DefaultBranchInferenceTest(unittest.TestCase):
+    """zackees/ci.yml#425: `cache audit` / `janitor` / `trim` / `preprune`
+    and `precheck --live` never guess `main`. With no explicit
+    `--default-branch` (the CLI default is now "infer") the audit resolves
+    the branch from the Actions event payload, then one read-only
+    `GET /repos/{repo}`; unresolvable, the default-branch-relative checks
+    are skipped behind a single needs_review finding instead of emitting a
+    guessed one (obs-studio's `master` drew 33 false CACHE-003)."""
+
+    def setUp(self) -> None:
+        ci, findings = load_ci_toml(REPO)
+        assert ci is not None, findings
+        self.ci = ci
+        self._saved_env = os.environ.get("GITHUB_EVENT_PATH")
+
+    def tearDown(self) -> None:
+        if self._saved_env is None:
+            os.environ.pop("GITHUB_EVENT_PATH", None)
+        else:
+            os.environ["GITHUB_EVENT_PATH"] = self._saved_env
+
+    def _payload(self, branch: str) -> None:
+        import tempfile
+        from pathlib import Path
+
+        path = Path(tempfile.mkdtemp()) / "event.json"
+        path.write_text(json.dumps({"repository": {"default_branch": branch}}), encoding="utf-8")
+        os.environ["GITHUB_EVENT_PATH"] = str(path)
+
+    def _classified(self, *refs: str) -> tuple[ClassifiedEntry, ...]:
+        # setup-uv-2-... is a declared base-layer family in the fixture repo,
+        # so each entry is CACHE-003-eligible on a non-default ref.
+        entries = [
+            CacheEntry(
+                id=900 + i, ref=ref, key=f"setup-uv-2-linux-x64-py3.11-abcd{i:04d}", version="v",
+                size_in_bytes=4096, created_at="2026-10-25T00:00:00Z",
+                last_accessed_at="2026-10-25T00:00:00Z",
+            )
+            for i, ref in enumerate(refs)
+        ]
+        return classify(self.ci, entries)
+
+    def _report(self, classified, *, default_branch, fetch=None):
+        return audit_classified(
+            self.ci, classified, graphql=None, token=TOKEN, repo=REPO_SLUG,
+            default_branch=default_branch, fetch=fetch,
+        )
+
+    @staticmethod
+    def _cache003(report) -> list[Finding]:
+        return [f for f in report.findings if f.rule == "CACHE-003"]
+
+    @staticmethod
+    def _repo_fetch(branch: str):
+        def fetch(url: str, token: str):
+            if url.startswith("/repos/"):
+                return {"default_branch": branch}
+            if "actions/runs" in url:  # RUST-004's probe, answered with "no runs"
+                return {"workflow_runs": []}
+            raise AssertionError(f"unexpected fetch {url}")
+
+        return fetch
+
+    def test_payload_env_resolves_master(self) -> None:
+        self._payload("master")
+        report = self._report(self._classified("refs/heads/master", "refs/heads/main"), default_branch=None)
+        messages = [f.message for f in self._cache003(report)]
+        self.assertFalse([m for m in messages if "was saved on ref 'refs/heads/master'" in m])
+        self.assertTrue([m for m in messages if "was saved on ref 'refs/heads/main'" in m])
+
+    def test_api_lookup_resolves_when_no_payload(self) -> None:
+        os.environ.pop("GITHUB_EVENT_PATH", None)
+        report = self._report(
+            self._classified("refs/heads/master", "refs/heads/main"),
+            default_branch=None, fetch=self._repo_fetch("master"),
+        )
+        messages = [f.message for f in self._cache003(report)]
+        self.assertFalse([m for m in messages if "was saved on ref 'refs/heads/master'" in m])
+        self.assertTrue([m for m in messages if "was saved on ref 'refs/heads/main'" in m])
+
+    def test_unresolvable_fails_closed(self) -> None:
+        os.environ.pop("GITHUB_EVENT_PATH", None)
+        # Add an undeclared key: its CACHE-001 must still fire, proving the
+        # rest of the audit runs while only the default-branch checks pause.
+        classified = classify(
+            self.ci,
+            [
+                CacheEntry(
+                    id=910, ref="refs/heads/main", key="setup-uv-2-linux-x64-py3.11-abcd0910",
+                    version="v", size_in_bytes=4096, created_at="2026-10-25T00:00:00Z",
+                    last_accessed_at="2026-10-25T00:00:00Z",
+                ),
+                CacheEntry(
+                    id=911, ref="refs/heads/main", key="undeclared-shape-x",
+                    version="v", size_in_bytes=4096, created_at="2026-10-25T00:00:00Z",
+                    last_accessed_at="2026-10-25T00:00:00Z",
+                ),
+            ],
+        )
+        report = self._report(classified, default_branch=None)
+        per_entry = [f for f in self._cache003(report) if f.path != "cache:default-branch"]
+        self.assertEqual([], per_entry, "never a guessed per-entry finding")
+        notes = [f for f in self._cache003(report) if f.path == "cache:default-branch"]
+        self.assertEqual(1, len(notes))
+        self.assertEqual(Status.NEEDS_REVIEW, notes[0].status)
+        self.assertTrue(any(f.rule == "CACHE-001" and f.cache_id == 911 for f in report.findings))
+
+    def test_explicit_default_branch_wins_over_payload(self) -> None:
+        self._payload("master")
+        report = self._report(self._classified("refs/heads/master"), default_branch="main")
+        messages = [f.message for f in self._cache003(report)]
+        self.assertTrue([m for m in messages if "was saved on ref 'refs/heads/master'" in m])
+        self.assertFalse([f for f in self._cache003(report) if f.path == "cache:default-branch"])
+
+    def test_broken_payload_falls_through(self) -> None:
+        os.environ["GITHUB_EVENT_PATH"] = "/nonexistent/event.json"
+        self.assertIsNone(infer_default_branch(None, TOKEN, REPO_SLUG))
+        self.assertEqual("master", infer_default_branch(self._repo_fetch("master"), TOKEN, REPO_SLUG))
 
 
 class Cache006LruFamilyTest(unittest.TestCase):

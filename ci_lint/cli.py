@@ -299,7 +299,7 @@ def _write_plan_github_output(
             fh.write(line + "\n")
 
 
-def _live_cache_findings(ci: CiToml | None, *, default_branch: str) -> list[Finding]:
+def _live_cache_findings(ci: CiToml | None, *, default_branch: str | None) -> list[Finding]:
     """Round-4A brief, deliverable 4: `precheck --live` runs `ci_lint.cache
     .audit` and folds its findings in as WARNINGS only (never fails a PR
     for cache state it didn't cause) -- except CACHE-009 (a live retired-
@@ -1213,8 +1213,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_precheck.add_argument(
         "--default-branch",
-        default="main",
-        help="the branch a base cache layer may legitimately be written from (--live's CACHE-003 check)",
+        default=None,
+        help="the branch a base cache layer may legitimately be written from (--live's CACHE-003 check); "
+        "default: inferred from $GITHUB_EVENT_PATH, then GET /repos/<owner>/<name> (#425)",
     )
     p_precheck.set_defaults(func=_cmd_precheck)
 
@@ -1401,7 +1402,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_cache_audit = cache_sub.add_parser("audit", help="live, read-only classification of every cache entry")
     p_cache_audit.add_argument("--repo", default=".")
-    p_cache_audit.add_argument("--default-branch", default="main")
+    p_cache_audit.add_argument(
+        "--default-branch",
+        default=None,
+        help="default: inferred from $GITHUB_EVENT_PATH, then GET /repos/<repo>; "
+        "unresolvable -> CACHE-003 skipped as needs_review, never guessed (#425)",
+    )
     p_cache_audit.add_argument("--json", action="store_true")
     p_cache_audit.set_defaults(func=_cmd_cache_audit)
 
@@ -1433,7 +1439,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_cache_trim = cache_sub.add_parser("trim", help="delete CACHE-008 entries (closed/merged + stale-base PR deltas)")
     p_cache_trim.add_argument("--repo", default=".")
-    p_cache_trim.add_argument("--default-branch", default="main")
+    p_cache_trim.add_argument("--default-branch", default=None, help="default: inferred (#425); see cache audit")
     p_cache_trim.add_argument("--max-deletes", type=int, default=50)
     p_cache_trim.add_argument("--dry-run", action="store_true")
     p_cache_trim.add_argument("--json", action="store_true")
@@ -1443,7 +1449,11 @@ def build_parser() -> argparse.ArgumentParser:
         "janitor", help="delete closed-PR entries, CACHE-001/003/005/006/009, LRU overflow, repo-wide LRU down to [cache].budget and stale entries (10-min grace, newest restored entry kept); prints a before/after table"
     )
     p_cache_janitor.add_argument("--repo", default=".")
-    p_cache_janitor.add_argument("--default-branch", default="main")
+    p_cache_janitor.add_argument(
+        "--default-branch",
+        default=None,
+        help="default: inferred (#425); unresolvable skips CACHE-003 deletions (fail closed)",
+    )
     p_cache_janitor.add_argument("--max-deletes", type=int, default=100)
     p_cache_janitor.add_argument("--stale-days", type=int, default=5)
     p_cache_janitor.add_argument(
@@ -1477,7 +1487,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_cache_preprune = cache_sub.add_parser("preprune", help="forecast the lockfile-change peak with live sizes; prune if over budget")
     p_cache_preprune.add_argument("--repo", default=".")
-    p_cache_preprune.add_argument("--default-branch", default="main")
+    p_cache_preprune.add_argument("--default-branch", default=None, help="default: inferred (#425); see cache audit")
     p_cache_preprune.add_argument("--lockfile-changed", action="store_true")
     p_cache_preprune.add_argument("--max-deletes", type=int, default=50)
     p_cache_preprune.add_argument("--dry-run", action="store_true")
