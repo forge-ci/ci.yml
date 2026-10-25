@@ -18,6 +18,8 @@ from ci_lint.cache.audit import (
     _check_cache_001,
     _check_cache_005,
     _check_cache_006,
+    _check_cache_006_same_lock,
+    _same_lock_family,
     _shape,
     ClassifiedEntry,
     audit_classified,
@@ -1073,3 +1075,149 @@ class Cache006LruFamilyTest(unittest.TestCase):
 
     def test_default_family_still_supersedes(self) -> None:
         self.assertEqual([1], [f.cache_id for f in self._findings(None)])
+
+
+class SameLockGenerationTest(unittest.TestCase):
+    """zackees/ci.yml#222: the zccache#1876 same-lock generation rule.
+
+    A soldr release rewrites setup-soldr's toolchain digest without touching
+    Cargo.lock, growing one lock into two full cache sets (zccache#1875:
+    12.41 GB live) where every trailing-hash shape keeps the generations
+    apart. A base entry created BEFORE the generation epoch (earliest
+    default-branch `soldr-mini` save of the highest present soldr version,
+    less 10 minutes of slack) is dead weight once a replacement of its
+    restore family exists AFTER the epoch; post-epoch entries -- concurrent
+    job shapes among them -- are never targets; without mini entries the
+    whole check stays silent.
+    """
+
+    OLD = "2026-09-30T00:00:00Z"
+    EPOCH_DAY = "2026-10-02T00:00:00Z"   # mini of the highest version
+    NEW = "2026-10-03T00:00:00Z"
+
+    MINI_OLD = "soldr-mini-v2-linux-x64-glibc-v0.9.25"
+    MINI_NEW = "soldr-mini-v2-linux-x64-glibc-v0.9.27"
+
+    def setUp(self) -> None:
+        ci, findings = load_ci_toml(REPO)
+        assert ci is not None, findings
+        self.ci = ci
+
+    def _entry(self, cid: int, key: str, created: str, ref: str = MAIN_REF) -> CacheEntry:
+        return CacheEntry(
+            id=cid, ref=ref, key=key, version="v", size_in_bytes=4096,
+            created_at=created, last_accessed_at=created,
+        )
+
+    def _findings(self, *entries: CacheEntry, default_branch: str = "main") -> list:
+        classified = classify(self.ci, list(entries))
+        return _check_cache_006_same_lock(self.ci, classified, default_branch)
+
+    def _with_epoch(self, *entries: CacheEntry) -> list:
+        return self._findings(
+            self._entry(900, self.MINI_OLD, self.OLD),
+            self._entry(901, self.MINI_NEW, self.EPOCH_DAY),
+            *entries,
+        )
+
+    def test_real_key_shapes_parse_into_their_families(self) -> None:
+        parsed = {
+            "setup-soldr-buildcache-v2-linux-x64-4f471a0fa0a2a00c-static-314e10a8550aaa80": "buildcache",
+            "setup-soldr-cargoregistry-v1-linux-x64-deadbeefdeadbeef-cafebabecafebabe": "registry",
+            "cook-base-v2-linux-x64-glibc-rustc1.95.0-fnone-la87d2454829c34f1-soldrv0.9.25": "cook",
+            "setup-soldr-dylint-output-v2-linux-x64-deadbeefcafebabe": "dylint",
+        }
+        for key, kind in parsed.items():
+            result = _same_lock_family(key)
+            assert result is not None, key
+            self.assertEqual(kind, result.kind, key)
+        # Unknown shapes and the epoch source itself are never targets.
+        self.assertIsNone(_same_lock_family("totally-unknown-key"))
+        self.assertIsNone(_same_lock_family(self.MINI_NEW))
+
+    def test_buildcache_generation_is_flagged_only_with_a_post_epoch_replacement(self) -> None:
+        old = "setup-soldr-buildcache-v2-linux-x64-4f471a0fa0a2a00c-static-314e10a8550aaa80"
+        new = "setup-soldr-buildcache-v2-linux-x64-5820c6969e26aa8b-static-314e10a8550aaa80"  # same suffix+lock
+        findings = self._with_epoch(self._entry(1, old, self.OLD), self._entry(2, new, self.NEW))
+        self.assertEqual([1], [f.cache_id for f in findings])
+        self.assertIn("same-lock buildcache generation", findings[0].message)
+        self.assertEqual("CACHE-006", findings[0].rule)
+        # Same family but ONLY pre-epoch entries: the producer has not
+        # re-seeded, so nothing is dead weight yet.
+        other = "setup-soldr-buildcache-v2-linux-x64-aaaaaaaaaaaaaaaa-static-55c1323f88b8e77c"
+        self.assertEqual([], self._with_epoch(self._entry(3, other, self.OLD)))
+        # A different suffix is a different restore family: its un-reseeded
+        # members stay even when another family has a replacement.
+        pair = "setup-soldr-buildcache-v2-linux-x64-bbbbbbbbbbbbbbbb-integration-55c1323f88b8e77c"
+        findings = self._with_epoch(self._entry(4, old, self.OLD), self._entry(5, new, self.NEW),
+                                    self._entry(6, pair, self.OLD))
+        self.assertEqual([4], [f.cache_id for f in findings])
+
+    def test_post_epoch_entries_are_never_targets(self) -> None:
+        old = "setup-soldr-buildcache-v2-linux-x64-4f471a0fa0a2a00c-static-314e10a8550aaa80"
+        newer = "setup-soldr-buildcache-v2-linux-x64-5820c6969e26aa8b-static-314e10a8550aaa80"
+        # Both created after the epoch (concurrent job shapes): untouched.
+        findings = self._with_epoch(self._entry(1, old, self.NEW), self._entry(2, newer, self.NEW))
+        self.assertEqual([], findings)
+
+    def test_registry_generation_groups_on_head_and_lock_not_the_tail(self) -> None:
+        # #88 keeps the tail in the CACHE-006 shape (so the old rule never
+        # grouped these); the same-lock rule drops exactly that tail.
+        old = "setup-soldr-cargoregistry-v1-linux-x64-deadbeefdeadbeef-cafebabecafebabe"
+        new = "setup-soldr-cargoregistry-v1-linux-x64-deadbeefdeadbeef-0123456789abcdef"
+        findings = self._with_epoch(self._entry(1, old, self.OLD), self._entry(2, new, self.NEW))
+        self.assertEqual([1], [f.cache_id for f in findings])
+        self.assertIn("same-lock registry generation", findings[0].message)
+        # A different lock is a different family: never grouped.
+        other_lock = "setup-soldr-cargoregistry-v1-linux-x64-1111111111111111-cafebabecafebabe"
+        self.assertEqual([], self._with_epoch(self._entry(3, old, self.OLD),
+                                               self._entry(4, other_lock, self.NEW)))
+
+    def test_cook_compares_explicit_versions_across_any_lock(self) -> None:
+        old = "cook-base-v2-linux-x64-glibc-rustc1.95.0-fnone-la87d2454829c34f1-soldrv0.9.25"
+        new = "cook-base-v2-linux-x64-glibc-rustc1.95.0-fnone-l40d011b8bf414a69-soldrv0.9.26"  # any lock
+        findings = self._with_epoch(self._entry(1, old, self.OLD), self._entry(2, new, self.NEW))
+        self.assertEqual([1], [f.cache_id for f in findings])
+        self.assertIn("same-lock cook generation", findings[0].message)
+        # No strictly newer version after the epoch: kept (and a post-epoch
+        # lower-version save -- the soldr-rollback shape -- is never a target).
+        self.assertEqual([], self._with_epoch(self._entry(3, old, self.OLD)))
+        self.assertEqual([], self._with_epoch(self._entry(4, old, self.NEW), self._entry(5, new, self.NEW)))
+
+    def test_without_an_epoch_the_check_stays_silent(self) -> None:
+        old = "setup-soldr-buildcache-v2-linux-x64-4f471a0fa0a2a00c-static-314e10a8550aaa80"
+        new = "setup-soldr-buildcache-v2-linux-x64-5820c6969e26aa8b-static-314e10a8550aaa80"
+        self.assertEqual([], self._findings(self._entry(1, old, self.OLD), self._entry(2, new, self.NEW)))
+
+    def test_only_default_branch_base_entries_are_evaluated(self) -> None:
+        old = "setup-soldr-buildcache-v2-linux-x64-4f471a0fa0a2a00c-static-314e10a8550aaa80"
+        new = "setup-soldr-buildcache-v2-linux-x64-5820c6969e26aa8b-static-314e10a8550aaa80"
+        base = (self._entry(900, self.MINI_OLD, self.OLD), self._entry(901, self.MINI_NEW, self.EPOCH_DAY))
+        # PR-scoped and off-default-ref entries are never targets.
+        self.assertEqual([], self._findings(
+            *base, self._entry(1, old + "-pr-9", self.OLD), self._entry(2, old, self.OLD, ref="refs/heads/topic")))
+        # ...and no epoch is found from PR-ref mini entries alone.
+        self.assertEqual([], self._findings(
+            self._entry(900, self.MINI_OLD, self.OLD, ref="refs/pull/1/merge"),
+            self._entry(901, self.MINI_NEW, self.EPOCH_DAY, ref="refs/pull/1/merge"),
+            self._entry(1, old, self.OLD), self._entry(2, new, self.NEW),
+        ))
+
+    def test_lru_families_stay_exempt_and_wired_into_the_full_audit(self) -> None:
+        old = "setup-soldr-buildcache-v2-linux-x64-4f471a0fa0a2a00c-static-314e10a8550aaa80"
+        new = "setup-soldr-buildcache-v2-linux-x64-5820c6969e26aa8b-static-314e10a8550aaa80"
+        # evict = "lru" keeps the #421 all-live semantics.
+        compile_family = replace(self.ci.cache.family["compile"], evict="lru")
+        ci = replace(self.ci, cache=replace(self.ci.cache, family={**self.ci.cache.family, "compile": compile_family}))
+        entries = [self._entry(900, self.MINI_OLD, self.OLD), self._entry(901, self.MINI_NEW, self.EPOCH_DAY),
+                   self._entry(1, old, self.OLD), self._entry(2, new, self.NEW)]
+        classified = classify(ci, entries)
+        self.assertEqual([], _check_cache_006_same_lock(ci, classified, "main"))
+        # ...and the rule reaches the full audit under a resolved default branch.
+        report = audit_classified(ci, classified, graphql=None, token=TOKEN, repo=REPO_SLUG, default_branch="main")
+        hits = [f for f in report.findings if f.rule == "CACHE-006" and "same-lock" in f.message]
+        self.assertEqual([], hits)  # lru exempt end to end
+        report = audit_classified(self.ci, classify(self.ci, entries), graphql=None, token=TOKEN,
+                                  repo=REPO_SLUG, default_branch="main")
+        hits = [f for f in report.findings if f.rule == "CACHE-006" and "same-lock" in f.message]
+        self.assertEqual([1], [f.cache_id for f in hits])  # wired, not just callable
