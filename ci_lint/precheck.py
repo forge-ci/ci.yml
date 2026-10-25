@@ -41,6 +41,7 @@ from ci_lint.rules.ghapi_reread import check_ghapi_001
 from ci_lint.rules.release_gate import check_group11
 from ci_lint.rules.rust_dylint_target import check_rust_016
 from ci_lint.rules.cpp_ctest import check_cpp_001
+from ci_lint.rules.rust_async_guards import check_rust_019
 from ci_lint.rules.rust_nocapture import check_rust_017
 from ci_lint.rules.rust_test_selectors import check_rust_015
 from ci_lint.rules.rust_units import check_group7
@@ -122,6 +123,7 @@ GROUP_LABELS: dict[int, str] = {
     18: "remote-only checks never gate a PR: CodeRabbit suppressed, act-impossible steps confined, no app waits (GATE-012)",
     19: "function-complexity ratchet: clippy and ruff ceilings, per-function expect/noqa only (RUST-018, PY-004)",
     20: "GitHub API budget: no unbounded GitHub re-read loops in run:, ci/ or skill/tool scripts (GHAPI-001)",
+    21: "async guard lints: workspace deny + member inheritance + clippy.toml well-formed (RUST-019)",
 }
 
 
@@ -183,6 +185,7 @@ def run_precheck(repo_root: Path, *, title: str = "", local: bool = False, live:
         all_findings.extend(check_gen_022(ci, repo_root))
         all_findings.extend(check_gate_012(repo_root))
         all_findings.extend(check_complexity(repo_root).findings)
+        all_findings.extend(check_rust_019(repo_root))
         all_findings.extend(check_ghapi_001(repo_root))
         if ci.local.gate is not None:
             all_findings.extend(check_gate_static(ci.local.gate, repo_root))
