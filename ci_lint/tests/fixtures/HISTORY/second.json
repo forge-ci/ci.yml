@@ -1,0 +1,50 @@
+{
+ "owners": [
+  "zackees"
+ ],
+ "errors": [],
+ "repos": [
+  {
+   "repo": "zackees/a",
+   "default_branch": "main",
+   "findings": [
+    {
+     "rule": "FLEET-001",
+     "status": "violation",
+     "path": null,
+     "line": null,
+     "message": "FLEET-001 msg",
+     "fix": "fix it"
+    },
+    {
+     "rule": "RUN-001",
+     "status": "violation",
+     "path": ".github/workflows/ci.yml",
+     "line": null,
+     "message": "RUN-001 msg",
+     "fix": "fix it"
+    }
+   ]
+  },
+  {
+   "repo": "zackees/b",
+   "default_branch": "main",
+   "findings": []
+  },
+  {
+   "repo": "zackees/c",
+   "default_branch": "main",
+   "findings": [
+    {
+     "rule": "SEC-007",
+     "status": "violation",
+     "path": null,
+     "line": null,
+     "message": "SEC-007 msg",
+     "fix": "fix it"
+    }
+   ]
+  }
+ ],
+ "scanned_at": "2026-10-02T06:00:00Z"
+}

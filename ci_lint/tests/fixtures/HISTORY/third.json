@@ -1,0 +1,45 @@
+{
+ "owners": [
+  "zackees"
+ ],
+ "errors": [],
+ "repos": [
+  {
+   "repo": "zackees/a",
+   "default_branch": "main",
+   "findings": [
+    {
+     "rule": "FLEET-001",
+     "status": "violation",
+     "path": null,
+     "line": null,
+     "message": "FLEET-001 msg",
+     "fix": "fix it"
+    },
+    {
+     "rule": "GEN-008",
+     "status": "needs_review",
+     "path": null,
+     "line": null,
+     "message": "GEN-008 msg",
+     "fix": "fix it"
+    }
+   ]
+  },
+  {
+   "repo": "zackees/b",
+   "default_branch": "main",
+   "findings": [
+    {
+     "rule": "GEN-006",
+     "status": "violation",
+     "path": null,
+     "line": null,
+     "message": "GEN-006 msg",
+     "fix": "fix it"
+    }
+   ]
+  }
+ ],
+ "scanned_at": "2026-10-03T06:00:00Z"
+}
