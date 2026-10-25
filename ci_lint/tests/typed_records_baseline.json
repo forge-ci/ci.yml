@@ -10,7 +10,7 @@
     "ci_lint/cache/save_evidence.py": 3,
     "ci_lint/cache/save_ok.py": 1,
     "ci_lint/cargo_messages.py": 1,
-    "ci_lint/cargo_scan.py": 12,
+    "ci_lint/cargo_scan.py": 4,
     "ci_lint/cli.py": 7,
     "ci_lint/default_branch_reuse.py": 3,
     "ci_lint/example_drift.py": 1,

@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ci_lint.repo_files import list_repo_files
+from ci_lint.toml_cursor import TomlValue
 from ci_lint.rust_lexer import find_attribute_and_macro_spans, strip_comments_and_strings
 
 # Round-6B: match `cfg(feature`/`cfg_attr(feature` allowing whitespace
@@ -53,7 +54,7 @@ class CargoCrate:
     optional_dep_names: tuple[str, ...]
 
 
-def _load_toml(path: Path) -> dict[str, object] | None:
+def _load_toml(path: Path) -> dict[str, TomlValue] | None:
     try:
         with path.open("rb") as fh:
             return tomllib.load(fh)
@@ -73,7 +74,7 @@ def _expand_members(repo_root: Path, patterns: list[str]) -> set[Path]:
     return out
 
 
-def _resolve_publish(pkg: dict[str, object]) -> bool:
+def _resolve_publish(pkg: dict[str, TomlValue]) -> bool:
     raw = pkg.get("publish", True)
     if isinstance(raw, bool):
         return raw
@@ -82,7 +83,7 @@ def _resolve_publish(pkg: dict[str, object]) -> bool:
     return True
 
 
-def _resolve_lib(crate_dir: Path, manifest: dict[str, object]) -> tuple[bool, bool]:
+def _resolve_lib(crate_dir: Path, manifest: dict[str, TomlValue]) -> tuple[bool, bool]:
     lib_section = manifest.get("lib")
     default_path = crate_dir / "src" / "lib.rs"
     if isinstance(lib_section, dict):
@@ -94,7 +95,7 @@ def _resolve_lib(crate_dir: Path, manifest: dict[str, object]) -> tuple[bool, bo
 
 
 def _resolve_bins(  # noqa: C901
-    crate_dir: Path, manifest: dict[str, object], pkg: dict[str, object], crate_name: str
+    crate_dir: Path, manifest: dict[str, TomlValue], pkg: dict[str, TomlValue], crate_name: str
 ) -> tuple[CargoBinTarget, ...]:
     bins: dict[str, CargoBinTarget] = {}
     explicit = manifest.get("bin")
@@ -128,7 +129,7 @@ def _resolve_bins(  # noqa: C901
 
 
 def _resolve_tests(
-    crate_dir: Path, manifest: dict[str, object], pkg: dict[str, object]
+    crate_dir: Path, manifest: dict[str, TomlValue], pkg: dict[str, TomlValue]
 ) -> tuple[CargoTestTarget, ...]:
     tests: dict[str, CargoTestTarget] = {}
     explicit = manifest.get("test")
@@ -152,7 +153,7 @@ def _resolve_tests(
 
 
 def _resolve_features_and_deps(
-    manifest: dict[str, object],
+    manifest: dict[str, TomlValue],
 ) -> tuple[dict[str, tuple[str, ...]], tuple[str, ...]]:
     features_raw = manifest.get("features")
     features: dict[str, tuple[str, ...]] = {}
