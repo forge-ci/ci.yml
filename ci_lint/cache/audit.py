@@ -41,6 +41,7 @@ import json
 import os
 import re
 from dataclasses import dataclass, replace
+from datetime import datetime, timezone
 
 from ci_lint.cache.families import resolve_prefixes, resolve_retired_prefix
 from ci_lint.cache_lineage import parse_ancestor_key
@@ -384,6 +385,232 @@ def _check_cache_006(ci: CiToml, classified: tuple[ClassifiedEntry, ...]) -> lis
                 )
             )
     return findings
+
+
+# ── zackees/ci.yml#222: same-lock toolchain generations ─────────────────────
+#
+# A soldr release changes setup-soldr's toolchain-signature digest and the
+# cook-base `soldr` component WITHOUT touching Cargo.lock, so one lock grows
+# two full cache sets and every trailing-hash shape keeps them apart
+# (zccache#1875: 12.41 GB live, pre-prune blind, GitHub LRU the only thing
+# that moved). zccache#1876 adopted the rule; this is its ci-lint form: a
+# base entry created BEFORE the generation epoch -- the earliest
+# default-branch `soldr-mini` save of the highest present soldr version,
+# less 10 minutes of slack -- is dead weight once a replacement of its
+# restore family exists AFTER the epoch. Entries created after the epoch are
+# never targets, so concurrent job shapes are untouched; a soldr rollback
+# re-seeds the epoch on the way back down (documented limitation).
+
+_EPOCH_SLACK_SECONDS = 600.0
+_MINI_VERSION_RE = re.compile(r"-v(\d+\.\d+\.\d+)$")
+_BUILDCACHE_RE = re.compile(
+    r"^setup-soldr-buildcache-v\d+-(?P<os>[^-]+)-(?P<arch>[^-]+)-"
+    r"(?P<digest>[0-9a-f]{8,64})(?:-(?P<suffix>.+?))?-(?P<lock>[0-9a-f]{16,64})$"
+)
+_COOK_RE = re.compile(
+    r"^cook-base-v\d+-(?P<plat>.+?)-rustc(?P<rustc>\d+\.\d+\.\d+)-[^-]+-"
+    r"(?P<lock>l[0-9a-f]{16,64})-soldrv(?P<soldr>\d+\.\d+\.\d+)$"
+)
+_DYLINT_PREFIXES = (
+    "setup-soldr-dylint-v1-", "setup-soldr-dylint-v2-",
+    "setup-soldr-dylint-output-v1-", "setup-soldr-dylint-output-v2-",
+)
+
+
+@dataclass(frozen=True)
+class _SameLockFamily:
+    """One entry parsed into the restore-family identity #222 compares on."""
+
+    kind: str  # "buildcache" | "dylint" | "registry" | "cook"
+    group: str  # restore-family id (kind-specific; cook groups per platform)
+    version: tuple[int, ...] | None  # cook only: (soldr..., rustc...)
+
+
+@dataclass(frozen=True)
+class _TimedEntry:
+    """A candidate with its parsed creation time -- a typed record (PY-002),
+    never a positional tuple, carrying its parsed family for cook verdicts."""
+
+    entry: ClassifiedEntry
+    created: float
+    family: _SameLockFamily | None = None
+
+
+@dataclass(frozen=True)
+class _ShapeGroup:
+    """One restore family's candidates (#222): `family` is `kind:group`."""
+
+    family: str
+    members: tuple[_TimedEntry, ...]
+
+
+@dataclass(frozen=True)
+class _SameLockCandidates:
+    """The two candidate sets of #222, as a typed record (PY-002: no tuple
+    returns, no dict fields -- homogeneous sequences only)."""
+
+    shape_groups: tuple[_ShapeGroup, ...]
+    cook: tuple[_TimedEntry, ...]
+
+
+def _same_lock_family(key: str) -> _SameLockFamily | None:
+    """Parse a key into its same-lock generation family, or None when the
+    shape is not one of the four #222 knows -- never guessed, never
+    evaluated (fail closed to today's behavior)."""
+
+    match = _BUILDCACHE_RE.match(key)
+    if match is not None:
+        suffix = match.group("suffix") or ""
+        return _SameLockFamily(
+            "buildcache", f"{match.group('os')}/{match.group('arch')}/{suffix}/{match.group('lock')}", None
+        )
+    if key.startswith(_DYLINT_PREFIXES):
+        # The digest trails (or is the whole tail): stripping it yields the
+        # restore family; identical keys still group as their own family.
+        return _SameLockFamily("dylint", _TRAILING_HASH_RE.sub("", key) or key, None)
+    match = _CARGO_REGISTRY_RE.match(key)
+    if match is not None:
+        # head + the lock it stops at: the soldr/toolchain tail (the part a
+        # release rewrites; #88 keeps it in the CACHE-006 shape) drops out,
+        # so same-lock generations group here and cross-lock never do.
+        return _SameLockFamily("registry", key[: len(match.group("head")) + 16], None)
+    match = _COOK_RE.match(key)
+    if match is not None:
+        soldr = tuple(int(part) for part in match.group("soldr").split("."))
+        rustc = tuple(int(part) for part in match.group("rustc").split("."))
+        return _SameLockFamily("cook", match.group("plat"), (*soldr, *rustc))
+    return None
+
+
+def _created_seconds(value: str) -> float | None:
+    try:
+        stamp = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if stamp.tzinfo is None:
+        stamp = stamp.replace(tzinfo=timezone.utc)
+    return stamp.timestamp()
+
+
+def _toolchain_epoch(classified: tuple[ClassifiedEntry, ...], default_ref: str) -> float | None:
+    """The generation epoch (#222): earliest default-branch `soldr-mini` save
+    of the HIGHEST present soldr version, less slack. No mini entries ->
+    no epoch -> the whole check stays silent."""
+
+    created: dict[tuple[int, ...], float] = {}
+    for c in classified:
+        if c.entry.ref != default_ref or not c.entry.key.startswith("soldr-mini-"):
+            continue
+        match = _MINI_VERSION_RE.search(c.entry.key)
+        if match is None:
+            continue
+        stamp = _created_seconds(c.entry.created_at)
+        if stamp is None:
+            continue
+        version = tuple(int(part) for part in match.group(1).split("."))
+        created[version] = min(created.get(version, stamp), stamp)
+    if not created:
+        return None
+    return created[max(created)] - _EPOCH_SLACK_SECONDS
+
+
+def _same_lock_finding(c: ClassifiedEntry, kind: str, epoch: float, detail: str) -> Finding:
+    when = datetime.fromtimestamp(epoch, timezone.utc).isoformat(timespec="seconds")
+    return Finding(
+        rule="CACHE-006",
+        path=f"cache:{c.entry.key}",
+        cache_id=c.entry.id,
+        message=f"cache id={c.entry.id} is a same-lock {kind} generation superseded by the toolchain epoch "
+        f"(created_at={c.entry.created_at!r} < epoch {when}: {detail}; zccache#1876)",
+        fix="delete the superseded generation (ci-lint cache janitor; preprune must retire these BEFORE its "
+        "forecast): current producers restore the post-epoch replacement, so it is dead weight on the "
+        "current lock (zackees/ci.yml#222)",
+    )
+
+
+def _same_lock_candidates(
+    ci: CiToml, classified: tuple[ClassifiedEntry, ...], default_ref: str
+) -> _SameLockCandidates:
+    """Collect same-lock candidates: base, default-ref, non-lru entries of
+    the four known shapes, grouped by restore family (cook across locks)."""
+
+    groups: dict[str, list[_TimedEntry]] = {}
+    cook: list[_TimedEntry] = []
+    for c in classified:
+        if c.family_id is None or c.is_delta or c.is_retired or c.pr is not None or c.entry.ref != default_ref:
+            continue
+        fam = ci.cache.family.get(c.family_id)
+        if fam is not None and fam.evict == "lru":
+            continue
+        parsed = _same_lock_family(c.entry.key)
+        stamp = _created_seconds(c.entry.created_at) if parsed is not None else None
+        if parsed is None or stamp is None:
+            continue
+        if parsed.kind == "cook":
+            cook.append(_TimedEntry(c, stamp, parsed))
+        else:
+            groups.setdefault(f"{parsed.kind}:{parsed.group}", []).append(_TimedEntry(c, stamp, parsed))
+    shape_groups = tuple(_ShapeGroup(key, tuple(members)) for key, members in sorted(groups.items()))
+    return _SameLockCandidates(shape_groups, tuple(cook))
+
+
+def _superseded_shape_findings(epoch: float, shape_groups: tuple[_ShapeGroup, ...]) -> list[Finding]:
+    """Pre-epoch members of a family whose replacement exists after the epoch."""
+
+    findings: list[Finding] = []
+    for group in shape_groups:
+        replacements = [item for item in group.members if item.created > epoch]
+        if not replacements:
+            continue  # the producer has not re-seeded this family yet
+        newest = max(replacements, key=lambda item: item.created)
+        for item in group.members:
+            if item.created >= epoch:
+                continue  # post-epoch entries (incl. concurrent shapes) are never targets
+            kind = group.family.partition(":")[0]
+            detail = f"replacement id={newest.entry.entry.id} created_at={newest.entry.entry.created_at!r}"
+            findings.append(_same_lock_finding(item.entry, kind, epoch, detail))
+    return findings
+
+
+def _superseded_cook_findings(epoch: float, cook: tuple[_TimedEntry, ...]) -> list[Finding]:
+    """Cook bases: a strictly newer (soldr, rustc) after the epoch, any lock."""
+
+    findings: list[Finding] = []
+    for item in cook:
+        version = item.family.version if item.family is not None else None
+        if item.created >= epoch or version is None:
+            continue
+        newer = [
+            other for other in cook
+            if other.created > epoch
+            and other.family is not None and other.family.version is not None
+            and other.family.version > version
+        ]
+        if not newer:
+            continue  # no strictly newer version exists after the epoch (rollback-safe)
+        best = max(newer, key=lambda other: (other.family.version if other.family else (), other.created))
+        detail = (
+            f"newer cook base (soldr/rustc {best.family.version if best.family else None}, "
+            f"created_at={best.entry.entry.created_at!r})"
+        )
+        findings.append(_same_lock_finding(item.entry, "cook", epoch, detail))
+    return findings
+
+
+def _check_cache_006_same_lock(
+    ci: CiToml, classified: tuple[ClassifiedEntry, ...], default_branch: str
+) -> list[Finding]:
+    """#222: same-lock toolchain generations, via the zccache#1876 rule."""
+
+    default_ref = f"refs/heads/{default_branch}"
+    epoch = _toolchain_epoch(classified, default_ref)
+    if epoch is None:
+        return []
+    candidates = _same_lock_candidates(ci, classified, default_ref)
+    return [
+        *_superseded_shape_findings(epoch, candidates.shape_groups),
+        *_superseded_cook_findings(epoch, candidates.cook),
+    ]
 
 
 # GEN-009 (issue #5): a fleet-level rollup, not a new detection signal.
@@ -814,6 +1041,7 @@ def audit_classified(
     findings.extend(_check_cache_009(classified))
     if default_branch is not None:
         findings.extend(_check_family_live_excess(ci, classified, default_branch))
+        findings.extend(_check_cache_006_same_lock(ci, classified, default_branch))
     cache008_findings, warning, closed_pr_ids = _check_cache_008(
         classified, graphql=graphql, token=token, repo=repo
     )
