@@ -144,6 +144,7 @@ python3 -m ci_lint reuse-check
     [--event-name EVENT]         # default $GITHUB_EVENT_NAME
     [--ref REF]                  # default $GITHUB_REF
     [--now ISO8601]              # evaluation clock; default now (tests)
+    [--queue-evidence]           # opt-in merge_group fallback (section 5.7)
     [--json] [--out FILE] [--github-output]
     [--record FILE | --replay FILE]
 ```
@@ -170,6 +171,7 @@ Token: `GITHUB_TOKEN` or `GH_TOKEN`, sent only as a bearer header to `api.github
 | `detail` | string | Human-readable explanation. |
 | `pr` | int or null | The associated merged PR. |
 | `pr_head_sha` | string or null | Its head SHA at merge. |
+| `proving_sha` | string or null | The commit the proving jobs ran on: `pr_head_sha`, or the pushed commit when `--queue-evidence` proved them (section 5.7). Additive; absent on documents written before #424 (schema stays 1). |
 | `tree` | string or null | The pushed commit's tree SHA. |
 | `run_id`, `run_url` | int/string or null | The first proving run. |
 | `runs` | array of `{workflow, run_id, run_url, run_attempt, created_at}` | One proving run per `--workflow`. |
@@ -410,6 +412,19 @@ Every reason `reuse-check` can report. All except `verified` mean `reuse=false`,
 | `stale-run` | A proving job completed more than `max_age_hours` before `now`. | PR validated days before merge. |
 | `run-after-decision` | A proving job completed after `now`. | Only in retroactive evaluation (`reuse-report`). |
 
+### 5.7 Merge-queue evidence (`--queue-evidence`, opt-in; #419, implemented in #423/#424/#429)
+
+A merge queue merges a PR that is behind the default branch, so the pushed tree differs from the PR head's and the procedure above answers `tree-mismatch` -- even though the queue already validated the exact commit this push introduces. The default-branch push then reruns every lane the queue run just ran. `--queue-evidence` (off by default; `reuse` itself never turns on implicitly) adds one fallback to step 3:
+
+- **Trigger.** The PR-head proof fails with `tree-mismatch`, `no-successful-run`, or `required-job-not-success` (`QUEUE_FALLBACK_REASONS`). The last one covers a locally attested PR head (GATE-008): its PR run *skips* the routine lanes, so per-job proof on the head cannot hold, while the queue run executes those very lanes (#429).
+- **Fallback evidence.** The newest decisive `merge_group` run whose `head_sha` is the pushed commit itself, selected with the same `_select_run` / `_check_jobs` rules parameterized by event: per-workflow selection, per-job `success`, fork and freshness checks all apply unchanged. Tree identity needs no separate check -- the queue tested this exact commit.
+- **Still bound to a PR.** Steps 1-2 run first: the merged-PR association is required, so a direct push never reaches queue evidence. (The queue can only ever exist for a PR merge, but the binding is checked, not assumed.)
+- **Refusals are their own.** No `merge_group` run at all leaves the PR-head reason standing (`no-successful-run` on the queue falls back to the original `head_stop`). A red, unfinished, stale, forked, or lane-skipping queue run refuses with its own reason -- a `required-job-not-success` *in the queue run* is a real catch, not answerable by fallback. No new reason codes are introduced; `event-not-push` above still holds: the decision only ever runs on a `push`, and a `merge_group` run is evidence, never a decision point.
+- **`proving_sha` and the consumer (#424).** The decision document's `proving_sha` names the commit the proving jobs ran on: the PR head normally, the pushed commit under queue evidence. `ci-lint gate --default-branch-reuse` re-fetches each proving job and requires `head_sha == proving_sha` (falling back to `pr_head_sha` for documents that predate the field), so a skip is accepted only when the proving jobs really ran on this push's commit. Without this, every queue-proven skip would have failed `CI OK` (queue runs execute on the pushed commit, not the PR head).
+- **Scope.** This saves the *default-branch push* rerun. Skipping lanes *inside* the `merge_group` run itself (queue-time attested skip) is a separate, unimplemented idea -- see #419's first acceptance bullet.
+
+Tests: `QueueEvidenceTest` (6 cases: identical-commit queue run reuses; no queue run keeps the PR-head reason; red queue run refuses; built from clud #1630's tree-mismatch recording plus #1643's run/jobs), `AttestedHeadTest` (#429: a queue run proves a skipped attested head; no queue run keeps the refusal; a skipped lane in the queue run refuses), and the gate's `proving_sha` cases (queue doc verified; a jobs-on-a-third-commit mismatch rejected; documents without `proving_sha` fall back to `pr_head_sha`). Adoption reference: talos-hq/clud#2048 wiring, live on talos-hq/clud#2135 → main push 40153941757 (340 s re-run) answered by merge_group run 40153565385.
+
 ## 6. Edge-case catalogue
 
 | Case | Decision | Why |
@@ -441,6 +456,11 @@ Every reason `reuse-check` can report. All except `verified` mean `reuse=false`,
 | Fork PR | no reuse (`fork-head`) | Restricted token/secrets; different trust. |
 | Concurrency cancellation of the `main` run by a newer push | irrelevant to the decision | clud's `main` concurrency group uses `run_id`, so `main` runs are not cancelled by each other. |
 | `commits/{sha}/pulls` not yet indexed right after a merge | no reuse (`no-associated-pr`) | Costs a full run, never a skip; Phase 1 measures it (15.3). |
+| Queue merges a behind-base PR (single-PR group), `--queue-evidence`, queue run green and fresh | reuse, `proving_sha` = the pushed commit | The queue validated exactly this commit; the PR-head `tree-mismatch` is answered by the `merge_group` run (5.7, #423). |
+| Same, but no `merge_group` run exists | no reuse, PR-head reason stands | Absence is not evidence; the fallback only *substitutes* proof, it never invents it (#423). |
+| Same, but the queue run is red, unfinished, stale, or skips a required lane | no reuse, queue run's own reason | The queue is the post-merge catch too; a lane-skipping queue run is a real catch (#429). |
+| Locally attested PR head (GATE-008) whose PR run skipped the routine lanes, queue run green | reuse via `required-job-not-success` fallback | The attested head proved its lanes locally, the queue executed them remotely; per-job proof on the head alone could never hold (#429). |
+| Batched queue group (2+ PRs landing as one commit) | association decides first: several PRs with `merge_commit_sha == sha` -> `ambiguous-pr`, no reuse; exactly one associated PR -> the usual PR-head proof first, then 5.7's queue fallback against the batched queue run | The batched queue run tested exactly the landed tree, so a green one is sound evidence for the push; the ambiguity guard never guesses which PR's evidence applies. The group-size-1 restriction in #419's *proposal* governs the unimplemented queue-time skip (5.7 scope), not this push-side fallback. |
 
 ## 7. Configuration design (`[reuse.default-branch]`, Phase 2)
 
