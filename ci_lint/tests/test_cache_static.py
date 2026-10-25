@@ -23,6 +23,7 @@ from ci_lint.rules.cache_static import (
     check_cache_031,
     check_cache_032,
     check_cache_034,
+    check_cache_038,
     parse_size,
 )
 from ci_lint.schema import CachePromote, load_ci_toml
@@ -574,3 +575,107 @@ class Cache034PrepruneTest(unittest.TestCase):
         repo = self._repo_with(declared=False, call=None)
         ci, _ = load_ci_toml(repo)
         self.assertEqual(check_cache_034(ci, repo), [])
+
+
+class Cache038RacingSoldrWritersTest(unittest.TestCase):
+    """CACHE-038 (#125): saving setup-soldr jobs sharing runner + suffix race."""
+
+    SOLDR = "zackees/setup-soldr@v0"
+
+    def _repo(self, workflow: str, action: str | None = None) -> pathlib.Path:
+        import tempfile
+
+        root = pathlib.Path(tempfile.mkdtemp(prefix="cache038-"))
+        (root / "ci.toml").write_text(
+            'schema = 3\nprofile = "library"\n'
+            '[platforms]\nlinux-x64 = { target = "x86_64-unknown-linux-gnu", runs-on = "ubuntu-24.04", group = "linux" }\n'
+            '[suites]\nunit = { run = "pytest", required = true }\n'
+            '[cache]\nbudget = "9GB"\nwrite-on = ["main"]\n'
+            '[cache.family]\nsmall = { via = "setup-uv", max = "5MB", per = "none" }\n'
+            '[allow]\nworkflows = { "ci.yml" = ["push:main"] }\n',
+            encoding="utf-8",
+        )
+        wf = root / ".github" / "workflows"
+        wf.mkdir(parents=True)
+        (wf / "ci.yml").write_text(workflow, encoding="utf-8")
+        if action is not None:
+            ad = root / ".github" / "actions" / "soldr"
+            ad.mkdir(parents=True)
+            (ad / "action.yml").write_text(action, encoding="utf-8")
+        return root
+
+    @staticmethod
+    def _job(name: str, runs_on: str, with_: str) -> str:
+        return (
+            f"  {name}:\n    runs-on: {runs_on}\n    steps:\n"
+            f"      - uses: zackees/setup-soldr@v0\n" + (f"        with:\n{with_}" if with_ else "")
+        )
+
+    def _check(self, workflow: str, action: str | None = None) -> list[tuple[str, str]]:
+        repo = self._repo(workflow, action)
+        ci, _ = load_ci_toml(repo)
+        return [(f.rule, f.status.value) for f in check_cache_038(ci, repo)]
+
+    @requires_yaml_tooling
+    def test_two_unsuffixed_writers_on_one_runner_race(self) -> None:
+        wf = "on: [push]\njobs:\n" + self._job("check", "ubuntu-24.04", "") + self._job(
+            "facade", "ubuntu-24.04", ""
+        )
+        self.assertEqual(self._check(wf), [("CACHE-038", "violation")])
+
+    @requires_yaml_tooling
+    def test_same_literal_suffix_races(self) -> None:
+        w = "          cache-key-suffix: lint\n"
+        wf = "on: [push]\njobs:\n" + self._job("a", "ubuntu-24.04", w) + self._job("b", "ubuntu-24.04", w)
+        self.assertEqual(self._check(wf), [("CACHE-038", "violation")])
+
+    @requires_yaml_tooling
+    def test_distinct_suffix_runner_or_restore_only_is_clean(self) -> None:
+        wf = (
+            "on: [push]\njobs:\n"
+            + self._job("a", "ubuntu-24.04", "          cache-key-suffix: a\n")
+            + self._job("b", "ubuntu-24.04", "          cache-key-suffix: b\n")
+            + self._job("c", "windows-2025", "")
+            + self._job("d", "ubuntu-24.04", '          cache-key-suffix: a\n          save-cache: "false"\n')
+        )
+        self.assertEqual(self._check(wf), [])
+
+    @requires_yaml_tooling
+    def test_single_writer_is_clean_even_if_dynamic(self) -> None:
+        wf = "on: [push]\njobs:\n" + self._job("a", "${{ matrix.os }}", "")
+        self.assertEqual(self._check(wf), [])
+
+    @requires_yaml_tooling
+    def test_dynamic_suffix_or_runner_needs_review(self) -> None:
+        wf = (
+            "on: [push]\njobs:\n"
+            + self._job("a", "ubuntu-24.04", "          cache-key-suffix: ${{ github.job }}\n")
+            + self._job("b", "${{ matrix.os }}", "")
+        )
+        self.assertEqual(
+            self._check(wf), [("CACHE-038", "needs_review"), ("CACHE-038", "needs_review")]
+        )
+
+    @requires_yaml_tooling
+    def test_cook_subaction_is_not_a_build_cache_writer(self) -> None:
+        wf = (
+            "on: [push]\njobs:\n"
+            + self._job("a", "ubuntu-24.04", "")
+            + "  b:\n    runs-on: ubuntu-24.04\n    steps:\n      - uses: zackees/setup-soldr/cook@v0\n"
+        )
+        self.assertEqual(self._check(wf), [])
+
+    @requires_yaml_tooling
+    def test_wrapper_composite_resolves_caller_inputs(self) -> None:
+        action = (
+            "runs:\n  using: composite\n  steps:\n      - uses: zackees/setup-soldr@v0\n"
+            "        with:\n          cache-key-suffix: ${{ inputs.suffix }}\n"
+            "inputs:\n  suffix:\n    default: ''\n"
+        )
+        call = "    runs-on: ubuntu-24.04\n    steps:\n      - uses: ./.github/actions/soldr\n"
+        racing = "on: [push]\njobs:\n  a:\n" + call + "  b:\n" + call
+        self.assertEqual(self._check(racing, action), [("CACHE-038", "violation")])
+        distinct = (
+            "on: [push]\njobs:\n  a:\n" + call + "        with:\n          suffix: x\n  b:\n" + call
+        )
+        self.assertEqual(self._check(distinct, action), [])

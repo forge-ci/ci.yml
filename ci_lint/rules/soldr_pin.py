@@ -85,7 +85,10 @@ def _check_setup_soldr_version_input(repo_root: Path) -> list[Finding]:
             files.append((act.path, True, as_dict(act.document)))
 
     for path, is_composite, doc in files:
-        for uses, loc, with_ in _iter_uses_with(doc, is_composite=is_composite):
+        for use_step in _iter_uses_with(doc, is_composite=is_composite):
+            uses = use_step.uses
+            loc = use_step.loc
+            with_ = use_step.with_
             if not uses.startswith("zackees/setup-soldr"):
                 continue
             version = with_.get("version")

@@ -99,12 +99,17 @@ def check_rust_005(ci: CiToml, crates: list[CargoCrate]) -> list[Finding]:
 
 def _iter_all_commands(repo_root: Path) -> list[tuple[list[str], str, str]]:
     out: list[tuple[list[str], str, str]] = []
-    for run_text, path, loc in _iter_run_steps(repo_root):
+    for run_step in _iter_run_steps(repo_root):
+        run_text = run_step.run_text
+        path = run_step.path
+        loc = run_step.loc
         for tokens in find_commands(run_text):
             out.append((tokens, path, loc))
     for path in _discover_python_command_files(repo_root):
         rel = path.relative_to(repo_root).as_posix()
-        for tokens, lineno in _extract_ast_commands(path):
+        for cmd in _extract_ast_commands(path):
+            tokens = cmd.tokens
+            lineno = cmd.lineno
             i = 0
             while i < len(tokens) and ENV_ASSIGN_RE.match(tokens[i]):
                 i += 1

@@ -45,7 +45,7 @@
     "ci_lint/rules/shell.py": 1,
     "ci_lint/rules/soldr_pin.py": 2,
     "ci_lint/rules/test_invocations.py": 6,
-    "ci_lint/rules/tools.py": 12,
+    "ci_lint/rules/tools.py": 0,
     "ci_lint/rules/workflows.py": 2,
     "ci_lint/runtime/dylint.py": 2,
     "ci_lint/runtime/gate.py": 2,

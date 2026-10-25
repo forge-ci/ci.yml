@@ -15,6 +15,7 @@ import argparse
 import json
 import os
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 from ci_lint.finding import Status
@@ -22,6 +23,9 @@ from ci_lint.fleet import DEFAULT_OWNERS, FleetReport, load_report_json, run_fle
 from ci_lint.fleet import render_text as render_fleet_text
 from ci_lint.fleet import to_json_dict as fleet_to_json_dict
 from ci_lint.github_api import FetchStatusFn, GitHubApiError, default_fetch_status, default_write
+from ci_lint.history import build_history, load_snapshot
+from ci_lint.history import render_text as render_history_text
+from ci_lint.history import to_json_dict as history_to_json_dict
 from ci_lint.sync_issues import apply_to_json, plan_sync, run_apply
 from ci_lint.sync_issues import render_apply_text as render_sync_apply_text
 from ci_lint.sync_issues import render_text as render_sync_text
@@ -88,7 +92,13 @@ def _cmd_fleet_scan(args: argparse.Namespace) -> int:
     report = _scan(args, fetch, token)
     if table is not None:
         Path(args.record).write_text(json.dumps(table, indent=1, sort_keys=True), encoding="utf-8")
-    print(json.dumps(fleet_to_json_dict(report), indent=2) if args.json else render_fleet_text(report))
+    if args.json:
+        doc = fleet_to_json_dict(report)
+        # `ci-lint history` dates each recorded scan by this field (#99).
+        doc["scanned_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        print(json.dumps(doc, indent=2))
+    else:
+        print(render_fleet_text(report))
     return 1 if any(f.status == Status.VIOLATION for s in report.repos for f in s.findings) else 0
 
 
@@ -143,6 +153,16 @@ def _cmd_sync_issues(args: argparse.Namespace) -> int:  # noqa: C901
     return 0
 
 
+def _cmd_history(args: argparse.Namespace) -> int:
+    try:
+        report = build_history([load_snapshot(Path(p)) for p in args.scans])
+    except (OSError, ValueError) as exc:
+        print(f"ci-lint history: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(history_to_json_dict(report), indent=2) if args.json else render_history_text(report))
+    return 1 if any(e.state == "new" and e.status == Status.VIOLATION.value for e in report.entries) else 0
+
+
 def _common(p: argparse.ArgumentParser) -> None:
     p.add_argument("--owners", default=",".join(DEFAULT_OWNERS), help="comma-separated owners/orgs")
     p.add_argument("--repos", default=None, help="comma-separated repo names (bare or owner/name) to narrow to")
@@ -177,3 +197,10 @@ def register(sub: argparse._SubParsersAction) -> None:  # type: ignore[type-arg]
     p_sync.add_argument("--from-scan", default=None, help="a `fleet scan --json` file instead of a live scan")
     p_sync.add_argument("--offline", action="store_true", help="skip reading existing issues (plan all as create)")
     p_sync.set_defaults(func=_cmd_sync_issues, record=None)
+
+    p_hist = sub.add_parser(
+        "history", help="diff recorded `fleet scan --json` files: new/persisting/resolved findings (#99)"
+    )
+    p_hist.add_argument("scans", nargs="+", help="two or more `fleet scan --json` files (dated by scanned_at or filename)")
+    p_hist.add_argument("--json", action="store_true")
+    p_hist.set_defaults(func=_cmd_history)
