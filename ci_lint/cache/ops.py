@@ -14,13 +14,22 @@ import time
 from dataclasses import dataclass
 from datetime import datetime
 
-from ci_lint.cache.audit import ClassifiedEntry, _shape, audit_classified, classify
+from ci_lint.cache.audit import ClassifiedEntry, _shape, audit_classified, classify, infer_default_branch
 from ci_lint.cache.github_cache import CacheApiError, delete_cache_by_id, delete_cache_by_key, list_caches
 from ci_lint.github_api import DeleteFn, FetchFn, GraphQLFn
 from ci_lint.rules.cache_static import cardinality, family_footprint, parse_size
 from ci_lint.schema import CiToml
 
 JANITOR_RULES: frozenset[str] = frozenset({"CACHE-001", "CACHE-003", "CACHE-005", "CACHE-006", "CACHE-009"})
+
+
+def _resolve_branch(default_branch: str | None, fetch: FetchFn, token: str, repo: str) -> str | None:
+    """#425: a caller passing None asks for inference (event payload, then
+    one GET /repos/{repo}); `None` back means the caller must fail closed.
+    Extracted as a helper so each ops entry point stays under the C901
+    ceiling instead of growing an inline branch."""
+
+    return infer_default_branch(fetch, token, repo) if default_branch is None else default_branch
 DEFAULT_STALE_DAYS = 5
 # zackees/ci.yml#23 section 4.3: the janitor never deletes an entry younger
 # than this, so a sweep cannot race the producer that just saved it or the
@@ -126,7 +135,7 @@ def trim(
     repo: str,
     max_deletes: int = 50,
     dry_run: bool = False,
-    default_branch: str = "main",
+    default_branch: str | None = "main",
 ) -> OpsResult:
     """Delete CACHE-008 entries only: closed/merged PR deltas (ONE
     GraphQL query for every referenced PR number, inside `audit_classified`)
@@ -137,6 +146,7 @@ def trim(
     except CacheApiError as exc:
         return OpsResult(planned=(), deleted=(), errors=(), dry_run=dry_run, warning=str(exc))
     classified = classify(ci, entries)
+    default_branch = _resolve_branch(default_branch, fetch, token, repo)  # #425: infer, never guess `main`
     report = audit_classified(ci, classified, graphql=graphql, token=token, repo=repo, default_branch=default_branch)
     plan = _findings_to_plan(report.findings, list(classified), frozenset({"CACHE-008"}))
     # Same reasoning as the janitor (#357): `trim`'s plan can exceed
@@ -240,7 +250,7 @@ def janitor(  # noqa: C901
     max_deletes: int = 100,
     dry_run: bool = False,
     stale_days: int = DEFAULT_STALE_DAYS,
-    default_branch: str = "main",
+    default_branch: str | None = "main",
     now: float | None = None,
     grace_seconds: int = JANITOR_GRACE_SECONDS,
     enforce_budget: bool = True,
@@ -259,6 +269,8 @@ def janitor(  # noqa: C901
     except CacheApiError as exc:
         return OpsResult(planned=(), deleted=(), errors=(), dry_run=dry_run, warning=str(exc)), ""
     classified = classify(ci, entries)
+    # #425: infer, never guess `main` -- a wrong guess deletes CACHE-003 wrongly.
+    default_branch = _resolve_branch(default_branch, fetch, token, repo)
     report = audit_classified(ci, classified, graphql=graphql, token=token, repo=repo, default_branch=default_branch)
     by_id = {c.entry.id: c for c in classified}
     plan = _findings_to_plan(report.findings, list(classified), JANITOR_RULES)
@@ -400,7 +412,7 @@ def preprune(
     lockfile_changed: bool,
     max_deletes: int = 50,
     dry_run: bool = False,
-    default_branch: str = "main",
+    default_branch: str | None = "main",
 ) -> tuple[OpsResult, str]:
     """The CACHE-004 arithmetic, using LIVE sizes where a family has a live
     base entry (else its declared `max`), forecasting whether writing a
@@ -455,6 +467,9 @@ def preprune(
         return OpsResult(planned=(), deleted=(), errors=(), dry_run=dry_run), summary + "\n  under budget: nothing to preprune"
 
     lockfile_families = {fid for fid, fam in ci.cache.family.items() if fam.lockfile}
+    # #425: resolved only now -- the under-budget fast path above never needs
+    # the branch, so it never pays the lookup.
+    default_branch = _resolve_branch(default_branch, fetch, token, repo)
     report = audit_classified(ci, classified, graphql=graphql, token=token, repo=repo, default_branch=default_branch)
     by_id, by_key = _indexes(list(classified))
     planned: list[DeletePlanEntry] = []
