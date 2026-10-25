@@ -96,7 +96,10 @@ def check_cache_001(ci: CiToml, repo_root: Path) -> list[Finding]:
     only_in = ci.allow.cache_actions.only_in.strip("/")
     for path, is_composite, doc in _loaded_files(repo_root):
         file_dir = Path(path).parent.as_posix()
-        for uses, loc, _with in _iter_uses_with(doc, is_composite=is_composite):
+        for use_step in _iter_uses_with(doc, is_composite=is_composite):
+            uses = use_step.uses
+            loc = use_step.loc
+            _with = use_step.with_
             slug = uses.split("@", 1)[0]
             if not _is_cache_action_slug(slug):
                 continue
@@ -162,7 +165,10 @@ def check_cache_002(ci: CiToml, repo_root: Path) -> list[Finding]:
     only_in = ci.allow.cache_actions.only_in.strip("/")
     for path, is_composite, doc in _loaded_files(repo_root):
         file_dir = Path(path).parent.as_posix()
-        for uses, loc, with_ in _iter_uses_with(doc, is_composite=is_composite):
+        for use_step in _iter_uses_with(doc, is_composite=is_composite):
+            uses = use_step.uses
+            loc = use_step.loc
+            with_ = use_step.with_
             for field_name in KEY_FIELD_NAMES:
                 findings.extend(_check_key_value(with_.get(field_name), path, f"{loc}.with.{field_name}"))
             slug = uses.split("@", 1)[0]
@@ -207,7 +213,10 @@ def check_cache_003_setup_uv(ci: CiToml, repo_root: Path) -> list[Finding]:
     if not require:
         return findings
     for path, is_composite, doc in _loaded_files(repo_root):
-        for uses, loc, with_ in _iter_uses_with(doc, is_composite=is_composite):
+        for use_step in _iter_uses_with(doc, is_composite=is_composite):
+            uses = use_step.uses
+            loc = use_step.loc
+            with_ = use_step.with_
             if uses.split("@", 1)[0] != "astral-sh/setup-uv":
                 continue
             for key, expected in require.items():

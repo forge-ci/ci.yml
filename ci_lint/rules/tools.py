@@ -24,6 +24,7 @@ import ast
 import re
 import shlex
 import tomllib
+from dataclasses import dataclass
 from pathlib import Path
 
 from ci_lint.finding import Finding, Status
@@ -38,6 +39,58 @@ from ci_lint.workflow_scan import (
     steps_of,
 )
 from ci_lint.yaml_io import LoadStatus, YamlValue
+
+
+@dataclass(frozen=True)
+class RunStep:
+    """One `run:` step in a workflow or composite action."""
+
+    run_text: str
+    path: str
+    loc: str
+
+
+@dataclass(frozen=True)
+class AstCommand:
+    """A literal subprocess/os command found in a Python script."""
+
+    tokens: list[str]
+    lineno: int
+
+
+@dataclass(frozen=True)
+class UsesStep:
+    """One `uses:` step and its `with:` inputs."""
+
+    uses: str
+    loc: str
+    with_: dict[str, YamlValue]
+
+
+@dataclass(frozen=True)
+class YamlFileDoc:
+    """A loaded workflow or composite-action document."""
+
+    path: str
+    is_composite: bool
+    doc: dict[str, YamlValue]
+
+
+@dataclass(frozen=True)
+class WorkflowJob:
+    """One job of a loaded workflow."""
+
+    path: str
+    job_id: str
+    job: dict[str, YamlValue]
+
+
+@dataclass(frozen=True, order=True)
+class LintToolHit:
+    """A standalone Black/isort invocation found by GEN-004."""
+
+    kind: str
+    loc: str
 
 BARE_BANNED: frozenset[str] = frozenset(
     {
@@ -146,10 +199,10 @@ def _tool_findings_for_commands(commands: list[list[str]], path: str, loc: str) 
     return findings
 
 
-def _iter_run_steps(repo_root: Path) -> list[tuple[str, str, str]]:  # noqa: C901
+def _iter_run_steps(repo_root: Path) -> list[RunStep]:  # noqa: C901
     """(run_text, path, loc) for every run: step in workflows and composite actions."""
 
-    out: list[tuple[str, str, str]] = []
+    out: list[RunStep] = []
     for wf in load_workflows(repo_root):
         if wf.status != LoadStatus.OK:
             continue
@@ -158,7 +211,7 @@ def _iter_run_steps(repo_root: Path) -> list[tuple[str, str, str]]:  # noqa: C90
             for i, step in enumerate(steps_of(job)):
                 run_text = step.get("run")
                 if isinstance(run_text, str):
-                    out.append((run_text, wf.path, f"jobs.{job_id}.steps[{i}]"))
+                    out.append(RunStep(run_text, wf.path, f"jobs.{job_id}.steps[{i}]"))
     for act in load_composite_actions(repo_root):
         if act.status != LoadStatus.OK:
             continue
@@ -166,7 +219,7 @@ def _iter_run_steps(repo_root: Path) -> list[tuple[str, str, str]]:  # noqa: C90
         if isinstance(runs, dict):
             for i, step in enumerate(as_list(runs.get("steps"))):
                 if isinstance(step, dict) and isinstance(step.get("run"), str):
-                    out.append((step["run"], act.path, f"runs.steps[{i}]"))
+                    out.append(RunStep(step["run"], act.path, f"runs.steps[{i}]"))
     return out
 
 
@@ -183,7 +236,10 @@ def check_tool_rules_workflows(repo_root: Path) -> list[Finding]:
 
     findings: list[Finding] = []
     raw_cache: dict[str, list[str]] = {}
-    for run_text, path, loc in _iter_run_steps(repo_root):
+    for run_step in _iter_run_steps(repo_root):
+        run_text = run_step.run_text
+        path = run_step.path
+        loc = run_step.loc
         commands = find_commands(run_text)
         step_findings = _tool_findings_for_commands(commands, path, loc)
         if any(f.rule == TOOL_002 for f in step_findings):
@@ -243,13 +299,13 @@ def _discover_python_command_files(repo_root: Path) -> list[Path]:
     return sorted(out)
 
 
-def _extract_ast_commands(path: Path) -> list[tuple[list[str], int]]:  # noqa: C901
+def _extract_ast_commands(path: Path) -> list[AstCommand]:  # noqa: C901
     try:
         source = path.read_text(encoding="utf-8")
         tree = ast.parse(source, filename=str(path))
     except (SyntaxError, UnicodeDecodeError, OSError):
         return []
-    out: list[tuple[list[str], int]] = []
+    out: list[AstCommand] = []
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
             continue
@@ -273,7 +329,7 @@ def _extract_ast_commands(path: Path) -> list[tuple[list[str], int]]:  # noqa: C
                 except ValueError:
                     tokens = None
         if tokens:
-            out.append((tokens, node.lineno))
+            out.append(AstCommand(tokens, node.lineno))
     return out
 
 
@@ -281,7 +337,9 @@ def check_tool_rules_python(repo_root: Path) -> list[Finding]:
     findings: list[Finding] = []
     for path in _discover_python_command_files(repo_root):
         rel = path.relative_to(repo_root).as_posix()
-        for tokens, lineno in _extract_ast_commands(path):
+        for cmd in _extract_ast_commands(path):
+            tokens = cmd.tokens
+            lineno = cmd.lineno
             i = 0
             while i < len(tokens) and ENV_ASSIGN_RE.match(tokens[i]):
                 i += 1
@@ -305,15 +363,15 @@ def _truthy(value: YamlValue) -> bool:
 
 def _iter_uses_with(
     doc: dict[str, YamlValue], *, is_composite: bool
-) -> list[tuple[str, str, dict[str, YamlValue]]]:
-    out: list[tuple[str, str, dict[str, YamlValue]]] = []
+) -> list[UsesStep]:
+    out: list[UsesStep] = []
     if is_composite:
         runs = doc.get("runs")
         if isinstance(runs, dict):
             for i, step in enumerate(as_list(runs.get("steps"))):
                 if isinstance(step, dict) and isinstance(step.get("uses"), str):
                     with_ = step.get("with")
-                    out.append((step["uses"], f"runs.steps[{i}]", with_ if isinstance(with_, dict) else {}))
+                    out.append(UsesStep(step["uses"], f"runs.steps[{i}]", with_ if isinstance(with_, dict) else {}))
     else:
         for job_id, job in jobs_of(doc).items():
             for i, step in enumerate(steps_of(job)):
@@ -321,7 +379,7 @@ def _iter_uses_with(
                 if isinstance(uses, str):
                     with_ = step.get("with")
                     out.append(
-                        (uses, f"jobs.{job_id}.steps[{i}]", with_ if isinstance(with_, dict) else {})
+                        UsesStep(uses, f"jobs.{job_id}.steps[{i}]", with_ if isinstance(with_, dict) else {})
                     )
     return out
 
@@ -341,16 +399,20 @@ def check_cache_009(ci: CiToml, repo_root: Path) -> list[Finding]:  # noqa: C901
     findings: list[Finding] = []
     only_in = ci.allow.setup_soldr.only_in.strip("/")
 
-    files: list[tuple[str, bool, dict[str, YamlValue]]] = []
+    files: list[YamlFileDoc] = []
     for wf in load_workflows(repo_root):
         if wf.status == LoadStatus.OK:
-            files.append((wf.path, False, as_dict(wf.document)))
+            files.append(YamlFileDoc(wf.path, False, as_dict(wf.document)))
     for act in load_composite_actions(repo_root):
         if act.status == LoadStatus.OK:
-            files.append((act.path, True, as_dict(act.document)))
+            files.append(YamlFileDoc(act.path, True, as_dict(act.document)))
 
-    for path, is_composite, doc in files:
-        for uses, loc, with_ in _iter_uses_with(doc, is_composite=is_composite):
+    for yf in files:
+        path, is_composite, doc = yf.path, yf.is_composite, yf.doc
+        for use_step in _iter_uses_with(doc, is_composite=is_composite):
+            uses = use_step.uses
+            loc = use_step.loc
+            with_ = use_step.with_
             if not uses.startswith("zackees/setup-soldr"):
                 continue
             file_dir = Path(path).parent.as_posix()
@@ -532,7 +594,9 @@ def _follow_ci_scripts(commands: list[list[str]], repo_root: Path) -> list[list[
             script_path = repo_root / candidate
             if not script_path.is_file():
                 continue
-            for sub_tokens, _lineno in _extract_ast_commands(script_path):
+            for cmd in _extract_ast_commands(script_path):
+                sub_tokens = cmd.tokens
+                _lineno = cmd.lineno
                 i = 0
                 while i < len(sub_tokens) and ENV_ASSIGN_RE.match(sub_tokens[i]):
                     i += 1
@@ -542,13 +606,13 @@ def _follow_ci_scripts(commands: list[list[str]], repo_root: Path) -> list[list[
     return out
 
 
-def _iter_workflow_jobs(repo_root: Path) -> list[tuple[str, str, dict[str, YamlValue]]]:
-    out: list[tuple[str, str, dict[str, YamlValue]]] = []
+def _iter_workflow_jobs(repo_root: Path) -> list[WorkflowJob]:
+    out: list[WorkflowJob] = []
     for wf in load_workflows(repo_root):
         if wf.status != LoadStatus.OK:
             continue
         for job_id, job in jobs_of(as_dict(wf.document)).items():
-            out.append((wf.path, job_id, job))
+            out.append(WorkflowJob(wf.path, job_id, job))
     return out
 
 
@@ -585,14 +649,20 @@ def _runs_on_is_linux(runs_on: YamlValue) -> bool | None:
 
 def check_rust_002(repo_root: Path) -> list[Finding]:  # noqa: C901
     findings: list[Finding] = []
-    dylint_jobs: list[tuple[str, str, dict[str, YamlValue]]] = []
+    dylint_jobs: list[WorkflowJob] = []
 
-    for path, job_id, job in _iter_workflow_jobs(repo_root):
+    for wj in _iter_workflow_jobs(repo_root):
+
+        path = wj.path
+
+        job_id = wj.job_id
+
+        job = wj.job
         commands = _job_effective_commands(job, repo_root)
         for tokens in commands:
             findings.extend(_rust_002_findings_for_command(tokens, path, f"jobs.{job_id}"))
         if _job_has_dylint_setup(job) or any(_is_dylint_related(c) for c in commands):
-            dylint_jobs.append((path, job_id, job))
+            dylint_jobs.append(WorkflowJob(path, job_id, job))
 
     # Also scan every root/ci/*.py file directly (not only scripts reached
     # via a job's run: line) -- matches check_tool_rules_python's blanket
@@ -600,7 +670,9 @@ def check_rust_002(repo_root: Path) -> list[Finding]:  # noqa: C901
     # calls (yet) is still caught before it is wired up wrong.
     for py_path in _discover_python_command_files(repo_root):
         rel = py_path.relative_to(repo_root).as_posix()
-        for tokens, lineno in _extract_ast_commands(py_path):
+        for cmd in _extract_ast_commands(py_path):
+            tokens = cmd.tokens
+            lineno = cmd.lineno
             i = 0
             while i < len(tokens) and ENV_ASSIGN_RE.match(tokens[i]):
                 i += 1
@@ -611,8 +683,9 @@ def check_rust_002(repo_root: Path) -> list[Finding]:  # noqa: C901
                 findings.append(Finding(rule=f.rule, path=f.path, line=lineno, message=f.message, fix=f.fix))
 
     if len(dylint_jobs) > 1:
-        names = ", ".join(f"{path}:{job_id}" for path, job_id, _ in dylint_jobs)
-        for path, job_id, _job in dylint_jobs:
+        names = ", ".join(f"{dj.path}:{dj.job_id}" for dj in dylint_jobs)
+        for dj in dylint_jobs:
+            path, job_id = dj.path, dj.job_id
             findings.append(
                 Finding(
                     rule="RUST-002",
@@ -626,7 +699,8 @@ def check_rust_002(repo_root: Path) -> list[Finding]:  # noqa: C901
                 )
             )
 
-    for path, job_id, job in dylint_jobs:
+    for dj in dylint_jobs:
+        path, job_id, job = dj.path, dj.job_id, dj.job
         runs_on = job.get("runs-on")
         verdict = _runs_on_is_linux(runs_on)
         if verdict is False:
@@ -699,7 +773,7 @@ def _scan_commands_for_gen_004(  # noqa: C901
     repo_root: Path,
     *,
     found: set[str],
-    black_isort_hits: list[tuple[str, str]],
+    black_isort_hits: list[LintToolHit],
     unresolved: list[str],
     loc: str,
     follow_scripts: bool,
@@ -709,7 +783,7 @@ def _scan_commands_for_gen_004(  # noqa: C901
         if kind in ("ruff-check", "ruff-format-check", "pylint"):
             found.add(kind)
         elif kind in ("black", "isort"):
-            black_isort_hits.append((kind, loc))
+            black_isort_hits.append(LintToolHit(kind, loc))
 
         if not follow_scripts:
             continue
@@ -727,7 +801,9 @@ def _scan_commands_for_gen_004(  # noqa: C901
                 unresolved.append(f"{candidate} (referenced by {loc}, but fails to parse)")
                 continue
             sub_commands: list[list[str]] = []
-            for sub_tokens, _lineno in _extract_ast_commands(script_path):
+            for cmd in _extract_ast_commands(script_path):
+                sub_tokens = cmd.tokens
+                _lineno = cmd.lineno
                 i = 0
                 while i < len(sub_tokens) and ENV_ASSIGN_RE.match(sub_tokens[i]):
                     i += 1
@@ -806,7 +882,7 @@ def check_gen_004(repo_root: Path) -> list[Finding]:  # noqa: C901
         commands.extend(find_commands(text))
 
     found: set[str] = set()
-    black_isort_hits: list[tuple[str, str]] = []
+    black_isort_hits: list[LintToolHit] = []
     unresolved: list[str] = []
     _scan_commands_for_gen_004(
         commands,
@@ -819,7 +895,8 @@ def check_gen_004(repo_root: Path) -> list[Finding]:  # noqa: C901
     )
 
     findings: list[Finding] = []
-    for kind, loc in sorted(set(black_isort_hits)):
+    for hit in sorted(set(black_isort_hits)):
+        kind, loc = hit.kind, hit.loc
         findings.append(
             Finding(
                 rule="GEN-004",
@@ -980,7 +1057,9 @@ def check_tool_003_python(repo_root: Path) -> list[Finding]:
     findings: list[Finding] = []
     for path in _discover_python_command_files(repo_root):
         rel = path.relative_to(repo_root).as_posix()
-        for tokens, lineno in _extract_ast_commands(path):
+        for cmd in _extract_ast_commands(path):
+            tokens = cmd.tokens
+            lineno = cmd.lineno
             kind = _uv_run_or_sync_kind(tokens)
             if kind is not None and not _has_accepted_uv_flag(tokens):
                 findings.append(_tool_003_finding(kind, rel, lineno, f"line {lineno}"))

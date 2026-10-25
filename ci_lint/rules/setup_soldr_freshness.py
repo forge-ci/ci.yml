@@ -100,7 +100,10 @@ def _find_sha_pins(repo_root: Path) -> dict[str, list[tuple[str, str]]]:
             files.append((act.path, True, as_dict(act.document)))
 
     for path, is_composite, doc in files:
-        for uses, loc, _with in _iter_uses_with(doc, is_composite=is_composite):
+        for use_step in _iter_uses_with(doc, is_composite=is_composite):
+            uses = use_step.uses
+            loc = use_step.loc
+            _with = use_step.with_
             m = _SHA_PIN_RE.match(uses)
             if m is None:
                 continue
