@@ -433,7 +433,9 @@ def decide(req: ReuseRequest, fetch_status: FetchStatusFn | None, token: str | N
 
 
 # PR-head proof failures a green merge_group run on the pushed commit answers.
-QUEUE_FALLBACK_REASONS = frozenset({"tree-mismatch", "no-successful-run"})
+# `required-job-not-success` covers a locally attested PR head (GATE-008),
+# whose PR run skips the very lanes the queue run then executes.
+QUEUE_FALLBACK_REASONS = frozenset({"tree-mismatch", "no-successful-run", "required-job-not-success"})
 
 
 def _run_evidence(api: _Api, req: ReuseRequest, sha: str, event: str) -> list[RunEvidence]:
@@ -494,6 +496,7 @@ def _decide(req: ReuseRequest, api: _Api | None) -> ReuseDecision:
         proving_sha = head_sha
         try:
             evidence = _pr_head_evidence(api, req, pr, head_sha, tree)
+            jobs = _check_jobs(api, req, evidence)
         except _Stop as head_stop:
             if not req.queue_evidence or head_stop.reason not in QUEUE_FALLBACK_REASONS:
                 raise
@@ -506,7 +509,7 @@ def _decide(req: ReuseRequest, api: _Api | None) -> ReuseDecision:
                 raise
             proving_sha = req.sha
             proof = f"merge_group run on {req.sha[:12]} itself (PR #{pr}; {head_stop.reason} on the head)"
-        jobs = _check_jobs(api, req, evidence)
+            jobs = _check_jobs(api, req, evidence)
     except _Stop as stop:
         return ReuseDecision(
             req, False, stop.reason, stop.detail, pr, head_sha, tree, tuple(evidence), (), api.calls - start
