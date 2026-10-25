@@ -275,6 +275,51 @@ class QueueEvidenceTest(unittest.TestCase):
         self.assertEqual((d.verdict, d.reason), (False, "no-associated-pr"))
 
 
+QUEUE_RUNS_1643 = f"{API}/actions/runs?head_sha={SHA_1643}&event=merge_group&per_page=100&page=1"
+
+
+def attested_table(queue: bool = True) -> Table:
+    """PR #1643 with its head attested by the local gate (GATE-008): the PR
+    run's routine lanes concluded `skipped`. With `queue`, a merge_group run
+    on the merged commit ran those lanes green."""
+
+    table = load("clud-pr1643.json")
+    pr_jobs = body(table, JOBS_1643)
+    queue_jobs = copy.deepcopy(pr_jobs)
+    job(table, "Static checks")["conclusion"] = "skipped"
+    if queue:
+        queue_run = copy.deepcopy(ci_run(table))
+        queue_run.update(id=QUEUE_RUN, head_sha=SHA_1643, event="merge_group", conclusion="success")
+        table[QUEUE_RUNS_1643] = [200, {"total_count": 1, "workflow_runs": [queue_run]}]
+        for item in queue_jobs["jobs"]:  # type: ignore[index]
+            item["run_id"] = QUEUE_RUN
+        table[QUEUE_JOBS] = [200, queue_jobs]
+    else:
+        table[QUEUE_RUNS_1643] = [200, {"total_count": 0, "workflow_runs": []}]
+    return table
+
+
+class AttestedHeadTest(unittest.TestCase):
+    def test_queue_run_proves_an_attested_heads_skipped_lanes(self) -> None:
+        d = run(attested_table(), req(queue_evidence=True))
+        self.assertEqual((d.verdict, d.reason), (True, "verified"), d.detail)
+        self.assertEqual([r.run_id for r in d.runs], [QUEUE_RUN])
+        self.assertIn("required-job-not-success on the head", d.detail)
+        self.assertEqual(d.proving_sha, SHA_1643)
+
+    def test_without_a_queue_run_the_skipped_lane_still_refuses(self) -> None:
+        d = run(attested_table(queue=False), req(queue_evidence=True))
+        self.assertEqual((d.verdict, d.reason), (False, "required-job-not-success"))
+
+    def test_a_skipped_lane_in_the_queue_run_refuses(self) -> None:
+        table = attested_table()
+        for item in body(table, QUEUE_JOBS)["jobs"]:  # type: ignore[index]
+            if item["name"] == "Static checks":
+                item["conclusion"] = "skipped"
+        d = run(table, req(queue_evidence=True))
+        self.assertEqual((d.verdict, d.reason), (False, "required-job-not-success"))
+
+
 class FailClosedTest(unittest.TestCase):
     def assertReason(self, table: Table, reason: str, request: ReuseRequest | None = None) -> None:
         d = run(table, request)
