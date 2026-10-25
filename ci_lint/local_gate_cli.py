@@ -33,6 +33,7 @@ from ci_lint.github_api import GitHubApiError, default_fetch
 from ci_lint.gate_bare_tools import check_no_bare_rust
 from ci_lint.remote_only import check_gate_012
 from ci_lint.rules.cpp_ctest import check_cpp_001
+from ci_lint.rules.host_sweeps import check_gen_030
 from ci_lint.rules.swatinem_ban import check_cache_025
 from ci_lint.rules.tools import CI_SCRIPT_RE
 from ci_lint.gate_trust import TrustDecision, TrustInput
@@ -271,6 +272,7 @@ def _cmd_lint(args: argparse.Namespace) -> int:
             tok for argv in (config.run, *(lane.run for lane in config.lanes)) for tok in argv if CI_SCRIPT_RE.match(tok)
         )
         findings = findings + check_cpp_001(repo, extra_scripts=gate_scripts)
+        findings = findings + check_gen_030(repo)
     for finding in findings:
         print(finding.render())
     violations = [f for f in findings if f.status == Status.VIOLATION]
