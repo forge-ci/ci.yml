@@ -57,7 +57,6 @@
     "ci_lint/runtime/wheel.py": 9,
     "ci_lint/rust_lexer.py": 1,
     "ci_lint/schema.py": 14,
-    "ci_lint/settings_audit.py": 12,
     "ci_lint/sync_issues.py": 6,
     "ci_lint/toml_cursor.py": 3
   }

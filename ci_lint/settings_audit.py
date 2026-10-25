@@ -37,6 +37,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ci_lint.finding import Finding, Status
+from ci_lint.cargo_messages import JsonValue
 from ci_lint.github_api import FetchStatusFn, GitHubApiError
 from ci_lint.remote_only import check_required_checks as check_gate_012_required
 from ci_lint.rules.doc_claims import DocClaim, scan_repo_docs
@@ -60,12 +61,24 @@ class AuditReport:
     default_branch: str
 
 
-def _get(fetch_status: FetchStatusFn, token: str, url: str) -> tuple[int, object] | None:
+@dataclass(frozen=True)
+class SettingsReply:
+    """One GET's status plus its parsed body (the API-JSON boundary,
+    typed `JsonValue`). Replaces the `(status, body)` record tuples the
+    module passed around (PY-002, zackees/ci.yml#193); the FetchStatusFn
+    wire protocol itself is unchanged."""
+
+    status: int
+    body: JsonValue
+
+
+def _get(fetch_status: FetchStatusFn, token: str, url: str) -> SettingsReply | None:
     """Wraps a live call: `None` means a transport failure (DNS, timeout,
     ...), distinct from any HTTP status the server actually returned."""
 
     try:
-        return fetch_status(url, token)
+        status, body = fetch_status(url, token)
+        return SettingsReply(status, body)
     except GitHubApiError:
         return None
 
@@ -109,7 +122,7 @@ def _check_secrets_endpoint(
     result = _get(fetch_status, token, url)
     if result is None:
         return [_network_finding("SEC-005", path, url)]
-    status, body = result
+    status, body = result.status, result.body
     if status == 403:
         return [_forbidden_finding("SEC-005", path, what)]
     if status == 404:
@@ -185,7 +198,7 @@ def check_sec_006(fetch_status: FetchStatusFn, token: str, repo: str, ci: CiToml
     result = _get(fetch_status, token, url)
     if result is None:
         return [_network_finding("SEC-006", f"environment:{env}", url)]
-    status, body = result
+    status, body = result.status, result.body
     if status == 403:
         return [_forbidden_finding("SEC-006", f"environment:{env}", f"environment '{env}'")]
     if status == 404:
@@ -239,7 +252,7 @@ def check_sec_006(fetch_status: FetchStatusFn, token: str, repo: str, ci: CiToml
     policies_result = _get(fetch_status, token, policies_url)
     if policies_result is None:
         return [_network_finding("SEC-006", f"environment:{env}", policies_url)]
-    p_status, p_body = policies_result
+    p_status, p_body = policies_result.status, policies_result.body
     if p_status == 403:
         return [_forbidden_finding("SEC-006", f"environment:{env}", f"'{env}' deployment branch policies")]
     if p_status != 200 or not isinstance(p_body, dict):
@@ -272,7 +285,7 @@ def check_sec_007(fetch_status: FetchStatusFn, token: str, repo: str) -> list[Fi
     result = _get(fetch_status, token, url)
     if result is None:
         return [_network_finding("SEC-007", f"repo:{repo}", url)]
-    status, body = result
+    status, body = result.status, result.body
     if status == 403:
         return [_forbidden_finding("SEC-007", f"repo:{repo}", "default Actions workflow permissions")]
     if status != 200 or not isinstance(body, dict):
@@ -297,16 +310,15 @@ def check_sec_007(fetch_status: FetchStatusFn, token: str, repo: str) -> list[Fi
 
 def _fetch_branch_protection(
     fetch_status: FetchStatusFn, token: str, repo: str, branch: str
-) -> tuple[int, dict[str, object] | None] | None:
+) -> SettingsReply | None:
     url = f"{API_ROOT}/repos/{repo}/branches/{branch}/protection"
     result = _get(fetch_status, token, url)
     if result is None:
         return None
-    status, body = result
-    return status, (body if isinstance(body, dict) else None)
+    return SettingsReply(result.status, result.body if isinstance(result.body, dict) else None)
 
 
-def _fetch_rulesets(fetch_status: FetchStatusFn, token: str, repo: str) -> tuple[int, list[dict[str, object]]] | None:
+def _fetch_rulesets(fetch_status: FetchStatusFn, token: str, repo: str) -> SettingsReply | None:
     """Lists rulesets, then fetches each one's full detail (the list
     endpoint's summary objects don't carry `rules`/`conditions`). A 404 on
     the list itself is treated as "no rulesets" (status 404, empty list) --
@@ -317,12 +329,12 @@ def _fetch_rulesets(fetch_status: FetchStatusFn, token: str, repo: str) -> tuple
     result = _get(fetch_status, token, url)
     if result is None:
         return None
-    status, body = result
+    status, body = result.status, result.body
     if status == 404:
-        return 404, []
+        return SettingsReply(404, [])
     if status != 200 or not isinstance(body, list):
-        return status, []
-    detailed: list[dict[str, object]] = []
+        return SettingsReply(status, [])
+    detailed: list[dict[str, JsonValue]] = []
     for summary in body:
         if not isinstance(summary, dict):
             continue
@@ -332,13 +344,12 @@ def _fetch_rulesets(fetch_status: FetchStatusFn, token: str, repo: str) -> tuple
         detail_result = _get(fetch_status, token, f"{API_ROOT}/repos/{repo}/rulesets/{rid}")
         if detail_result is None:
             continue
-        d_status, d_body = detail_result
-        if d_status == 200 and isinstance(d_body, dict):
-            detailed.append(d_body)
-    return status, detailed
+        if detail_result.status == 200 and isinstance(detail_result.body, dict):
+            detailed.append(detail_result.body)
+    return SettingsReply(status, detailed)
 
 
-def _ruleset_covers_branch(ruleset: dict[str, object], default_branch: str) -> bool:
+def _ruleset_covers_branch(ruleset: dict[str, JsonValue], default_branch: str) -> bool:
     """Best-effort: a ruleset's `conditions.ref_name.include` patterns are a
     small DSL (`~DEFAULT_BRANCH`, `~ALL`, `refs/heads/<name>`, fnmatch-style
     globs). This resolves exactly the patterns the fleet's own rulesets are
@@ -364,7 +375,7 @@ def _ruleset_covers_branch(ruleset: dict[str, object], default_branch: str) -> b
     return False
 
 
-def _has_active_merge_queue(rulesets: list[dict[str, object]], default_branch: str) -> bool:
+def _has_active_merge_queue(rulesets: list[dict[str, JsonValue]], default_branch: str) -> bool:
     for rs in rulesets:
         if rs.get("enforcement") != "active":
             continue
@@ -380,13 +391,13 @@ def _has_active_merge_queue(rulesets: list[dict[str, object]], default_branch: s
 
 
 def check_gen_006(
-    branch_protection: tuple[int, dict[str, object] | None] | None,
-    rulesets: tuple[int, list[dict[str, object]]] | None,
+    branch_protection: SettingsReply | None,
+    rulesets: SettingsReply | None,
     default_branch: str,
 ) -> list[Finding]:
     if branch_protection is None:
         return [_network_finding("GEN-006", f"branch:{default_branch}", "branch protection")]
-    bp_status, bp_body = branch_protection
+    bp_status, bp_body = branch_protection.status, branch_protection.body
     if bp_status == 403:
         return [_forbidden_finding("GEN-006", f"branch:{default_branch}", "branch protection")]
     if bp_status == 404:
@@ -401,7 +412,7 @@ def check_gen_006(
 
     if rulesets is None:
         return [_network_finding("GEN-006", f"branch:{default_branch}", "rulesets")]
-    rs_status, rs_list = rulesets
+    rs_status, rs_list = rulesets.status, rulesets.body
     if rs_status == 403:
         return [_forbidden_finding("GEN-006", f"branch:{default_branch}", "rulesets")]
     if rs_status not in (200, 404):
@@ -425,13 +436,13 @@ def check_gen_006(
 
 
 def check_gen_011(
-    branch_protection: tuple[int, dict[str, object] | None] | None,
+    branch_protection: SettingsReply | None,
     default_branch: str,
     gate_check_name: str,
 ) -> list[Finding]:
     if branch_protection is None:
         return [_network_finding("GEN-011", f"branch:{default_branch}", "branch protection")]
-    bp_status, bp_body = branch_protection
+    bp_status, bp_body = branch_protection.status, branch_protection.body
     if bp_status == 403:
         return [_forbidden_finding("GEN-011", f"branch:{default_branch}", "branch protection")]
     if bp_status == 404:
@@ -488,8 +499,8 @@ def check_gen_011(
 
 def check_gen_010(  # noqa: C901
     claims: list[DocClaim],
-    branch_protection: tuple[int, dict[str, object] | None] | None,
-    rulesets: tuple[int, list[dict[str, object]]] | None,
+    branch_protection: SettingsReply | None,
+    rulesets: SettingsReply | None,
     default_branch: str,
 ) -> list[Finding]:
     relevant = [c for c in claims if c.kind in ("merge_queue", "branch_protection")]
@@ -498,7 +509,7 @@ def check_gen_010(  # noqa: C901
 
     bp_exists: bool | None = None  # None = unknown (network/403/unexpected)
     if branch_protection is not None:
-        bp_status, _bp_body = branch_protection
+        bp_status, _bp_body = branch_protection.status, branch_protection.body
         if bp_status == 200:
             bp_exists = True
         elif bp_status == 404:
@@ -506,7 +517,7 @@ def check_gen_010(  # noqa: C901
 
     has_merge_queue: bool | None = None
     if rulesets is not None:
-        rs_status, rs_list = rulesets
+        rs_status, rs_list = rulesets.status, rulesets.body
         if rs_status in (200, 404):
             has_merge_queue = _has_active_merge_queue(rs_list, default_branch)
 
@@ -593,8 +604,8 @@ def run_audit(
     rulesets = _fetch_rulesets(fetch_status, token, repo)
     findings.extend(check_gen_006(branch_protection, rulesets, default_branch))
     findings.extend(check_gen_011(branch_protection, default_branch, gate_check_name))
-    protection_body = branch_protection[1] if branch_protection is not None and branch_protection[0] == 200 else None
-    ruleset_list = rulesets[1] if rulesets is not None and rulesets[0] == 200 else None
+    protection_body = branch_protection.body if branch_protection is not None and branch_protection.status == 200 else None
+    ruleset_list = rulesets.body if rulesets is not None and rulesets.status == 200 else None
     findings.extend(check_gate_012_required(protection_body, ruleset_list, default_branch))
 
     if repo_root is not None:
@@ -605,7 +616,7 @@ def run_audit(
     return AuditReport(findings=tuple(findings), repo=repo, default_branch=default_branch)
 
 
-def to_json_dict(report: AuditReport) -> dict[str, object]:
+def to_json_dict(report: AuditReport) -> dict[str, JsonValue]:
     return {
         "repo": report.repo,
         "default_branch": report.default_branch,
