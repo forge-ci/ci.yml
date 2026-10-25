@@ -29,6 +29,12 @@ class ReplayJob:
     identity: tuple[JobIdentity, ...] = ()
     excluded: bool = False
     remote_maintenance: bool = False
+    # #415: source-derived steps guarded by a runtime-dynamic step output
+    # (a pass-marker cache-hit lookup): proved by exactly one Main section
+    # that either succeeded or explicitly skipped -- never absent, never
+    # failed. Appended last so every existing positional construction is
+    # unaffected; only `derive_checks` populates it today.
+    conditional_steps: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -146,6 +152,24 @@ def _step(section: JsonValue, name: str) -> bool:
             and 0 < first <= last)
 
 
+def _step_accepted(name: str, expected: ReplayJob, section: dict[str, JsonValue]) -> bool:
+    """Does this single matched Main section prove `name` for its class?
+
+    Finite exclusions demand an explicit skip; conditional steps (#415)
+    accept success *or* an explicit skip (a runtime-dynamic output guard,
+    e.g. a pass-marker cache-hit, skips them by design); cache-save steps
+    accept either as their save may be conditionally withheld; every other
+    required check demands unambiguous success.
+    """
+
+    skipped = section.get("status") == "completed" and section.get("conclusion") == "skipped"
+    if name in (*expected.minimal_skip_steps, *expected.pr_cache_save_steps, *expected.input_skip_steps):
+        return skipped
+    if name in expected.conditional_steps:
+        return _step(section, name) or skipped
+    return _step(section, name) or (name in expected.cache_save_steps and skipped)
+
+
 def _prove_job(raw: dict[str, JsonValue], expected: ReplayJob) -> None:
     if expected.identity and (raw.get("job_id") != expected.identity[-1].job_id
                               or matrix_json(raw.get("matrix")) != expected.identity[-1].matrix):
@@ -169,13 +193,7 @@ def _prove_job(raw: dict[str, JsonValue], expected: ReplayJob) -> None:
     for name in expected.steps:
         named = [section for section in sections if isinstance(section, dict) and section.get("name") == name
                  and section.get("stage") == "Main"]
-        skipped_save = (name in expected.cache_save_steps and len(named) == 1
-                        and named[0].get("status") == "completed" and named[0].get("conclusion") == "skipped")
-        skipped_profile = (len(named) == 1 and named[0].get("status") == "completed"
-                           and named[0].get("conclusion") == "skipped")
-        excluded = name in (*expected.minimal_skip_steps, *expected.pr_cache_save_steps, *expected.input_skip_steps)
-        accepted = skipped_profile if excluded else (_step(named[0], name) if len(named) == 1 else False) or skipped_save
-        if len(named) != 1 or not accepted:
+        if len(named) != 1 or not _step_accepted(name, expected, named[0]):
             raise ValueError(f"workflow replay lacks an unambiguous executed check: {expected.key}: {name}")
 
 
@@ -213,6 +231,21 @@ def _input_skips(expected: ReplayExpectation) -> None:
             raise ValueError("input exclusions require distinct disjoint declared steps")
 
 
+def _conditional_steps(expected: ReplayExpectation) -> None:
+    """#415: conditional steps are a source-derived class only (the
+    declared-proof TOML cannot express them); they must be distinct, inside
+    `steps`, disjoint from every finite exclusion -- whose section-shape
+    contracts are stricter -- and absent from excluded/maintenance jobs."""
+
+    for job in expected.required_jobs:
+        steps = set(job.conditional_steps)
+        if (len(steps) != len(job.conditional_steps) or not steps.issubset(set(job.steps))
+                or steps.intersection((*job.cache_save_steps, *job.minimal_skip_steps,
+                                       *job.pr_cache_save_steps, *job.input_skip_steps))
+                or ((job.excluded or job.remote_maintenance) and steps)):
+            raise ValueError("conditional steps require distinct disjoint declared steps")
+
+
 def _valid_checks(job: ReplayJob) -> bool:
     if job.excluded:
         return bool(job.identity) and not (job.steps or job.cache_save_steps or job.minimal_skip_steps
@@ -234,6 +267,7 @@ def prove_replay(raw: JsonValue, expected: ReplayExpectation) -> ReplayProof:
     _minimal_skips(expected)
     _pr_cache_saves(expected)
     _input_skips(expected)
+    _conditional_steps(expected)
     if (all(job.excluded or job.remote_maintenance for job in expected.required_jobs)
             or any(not job.key or not _valid_checks(job) for job in expected.required_jobs)):
         raise ValueError("workflow replay requires distinct executed checks in each job")
