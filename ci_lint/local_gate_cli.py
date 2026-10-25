@@ -37,7 +37,7 @@ from ci_lint.rules.swatinem_ban import check_cache_025
 from ci_lint.rules.tools import CI_SCRIPT_RE
 from ci_lint.gate_trust import TrustDecision, TrustInput
 from ci_lint.gate_trust import decide as decide_trust
-from ci_lint.lane_cache import ToolVersions, lane_key, lookup, run_audit, simulate, tree_entries
+from ci_lint.lane_cache import ToolVersions, lane_key, lookup, run_audit, simulate, tree_entries, tree_file
 from ci_lint.workflow_replay_runtime import query_execution_pins
 from ci_lint.gate_publish import publish
 from ci_lint.local_gate import (
@@ -216,6 +216,7 @@ def _cmd_lanes(args: argparse.Namespace) -> int:
 
 def _show_lane_cache(repo: Path, config: GateConfig) -> int:
     entries = tree_entries(repo, "HEAD")
+    ci_toml = tree_file(repo, "HEAD", "ci.toml")  # #401: semantic pin hashing per lane
     versions = ToolVersions()
     try:
         pins = query_execution_pins(repo, config.replay)
@@ -225,7 +226,7 @@ def _show_lane_cache(repo: Path, config: GateConfig) -> int:
     for lane in config.lanes:
         query = config.replay.provider_query if config.replay else ()
         key = lane_key(entries, lane, gate_run=(*config.run, *query), gate_source=config.source,
-                       versions=versions, provider=pins)
+                       versions=versions, provider=pins, ci_toml=ci_toml)
         hit = lookup(repo, lane, key.key)
         state = f"HIT (passed {hit.age_hours(time.time()):.1f} h ago in {hit.secs}s)" if hit else "miss"
         tools = ", ".join(f"{t.tool}={t.version}" for t in key.tools) or "none declared"

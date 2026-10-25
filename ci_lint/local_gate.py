@@ -77,6 +77,7 @@ from ci_lint.lane_cache import (
     parse_lanes,
     record,
     tree_entries,
+    tree_file,
 )
 from ci_lint.proc import run_captured
 from ci_lint.toml_cursor import Cursor, TomlValue
@@ -699,6 +700,7 @@ def run_lanes(repo: Path, config: GateConfig, head: str, tree: str, *, use_cache
     another lane failed, so fixing that one does not rerun these."""
 
     entries = tree_entries(repo, tree)
+    ci_toml = tree_file(repo, tree, "ci.toml")  # #401: semantic pin hashing per lane
     versions = ToolVersions()
     replay = bind_execution_pins(repo, config.replay) if config.replay is not None else None
     config = replace(config, replay=replay)
@@ -709,7 +711,7 @@ def run_lanes(repo: Path, config: GateConfig, head: str, tree: str, *, use_cache
     for lane in config.lanes:
         key = lane_key(entries, lane, gate_run=(*config.run, *(replay.provider_query if replay else ())),
                        gate_source=config.source, versions=versions,
-                       provider=replay.execution_pins if replay else None)
+                       provider=replay.execution_pins if replay else None, ci_toml=ci_toml)
         hit = lookup(repo, lane, key.key) if use_cache else None
         if hit is not None:
             print(
