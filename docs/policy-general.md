@@ -49,6 +49,35 @@ native/full labels to business-logic PRs.
 This is a selection policy for agents and reviewers; ci-lint does not infer
 semantic changes from a diff or automatically enforce this distinction.
 
+### Front-loading build-system changes (GEN-027)
+
+In a repository whose lanes are path-scoped, the files that select the
+expensive platform lanes are usually build-system files: export lists, CMake
+files, `build.rs`, and test registrations. Source-only changes stay in the
+cheap lane. A multi-PR series (a migration, a port, a subsystem rewrite) that
+edits those files in every unit PR pays for the full platform matrix once per
+PR. In obs-rust/obs-studio#2288, a long migration repeatedly touched build
+files and repeatedly triggered the full matrix.
+
+When planning such a series, batch the build-system and test-registration
+changes for each subsystem into one front-loaded PR. That PR adds the
+characterization tests, the stubs, and every export, CMake, `build.rs`, and
+test-registration entry the series will need. The later implementation PRs
+then touch only source and stay in the cheap path-scoped lane. Finish with one
+batched switch-over PR if the series needs one. This cuts the series from N
+full-matrix runs to about 2. Repository coverage stays the same: the
+front-loaded and switch-over PRs run the full lanes their paths select, and no
+required check is skipped.
+
+This rule does not override "Selecting full PR coverage". It decides how to
+split the work. It does not decide which lanes a PR selects. A PR that changes
+a platform implementation still needs its native coverage, even if its
+build-file edits were moved to an earlier PR. Do not reorder edits to keep a
+real platform change out of the lanes that validate it. This is planning
+guidance for agents and reviewers, and ci-lint does not enforce it. A possible
+later ratchet would flag an implementation-labelled PR that touches shared
+build files.
+
 ## Default-branch validation
 
 **Decision (`GEN-021`, [issue #156](https://github.com/zackees/ci.yml/issues/156)):** a default-branch push run may skip a required job **only through verified reuse**, never by a blanket `if:` that excludes default-branch pushes and never by deleting the `push:` trigger, unless the repository proves live (per `GEN-010`'s live half, `ci-lint audit`) that a merge queue validates the exact merge commit -- the clause the fleet-wide removal campaign exercises beginning 2026-10-24 ([#432](https://github.com/zackees/ci.yml/issues/432); conditions in "Merge queue and the end-of-queue cache janitor" below). Verified reuse means all of:
@@ -535,6 +564,7 @@ The **Status** column below reflects what `ci_lint` actually checks today, verif
 | `GEN-024` | A job on a Linux runner `needs:` the Linux gate (or another job) only for ordering: it consumes nothing from it except deterministic, event-derived outputs (`needs.<gate>.outputs.mode`/`sha`/ref) that it could re-derive itself, and downloads no artifact or cache the upstream job writes. "Gate first to save expensive runners" applies only to macOS, Windows and ARM jobs. Static signal: a Linux `runs-on` plus a `needs:` whose only uses are `needs.<gate>.outputs.{mode,sha}`. Evidence: [zackees/kernal-api#369](https://github.com/zackees/kernal-api/pull/369), PR run 36346780139 (12m00s) -> 36514594793 (9m27s). | Candidate -- decided policy ([#83](https://github.com/zackees/ci.yml/issues/83)), not yet enforced by ci-lint |
 | `GEN-025` | A trailing aggregate/sentinel job (steps only test `needs.*.result` or assert a pass ran, seconds of work, typically `if: always()`) adds a runner-queue hop to the PR critical path when a work job could carry the aggregation as its last step (option b, kernal-api#375) or the work jobs (non-matrix, no `if:`) could be required directly (option a). Measured: 37 s, 1m53s, and 2m52s (~40% of run 36522485518's 7m31s) of queue wait for ~3 s of work. Exempt: the repository's single `CI OK` / `ci-lint gate` aggregator over a plan-dependent set of jobs or matrix legs (see "Trailing aggregate jobs and the runner-queue hop"). Proposed detection: static `needs_review` for such a job whose needed jobs all lack `if:` and a matrix; runtime, report trailing-aggregate queue time separately in `PERF-001`. | Candidate -- decided policy ([#86](https://github.com/zackees/ci.yml/issues/86)), not yet enforced by ci-lint |
 | `GEN-026` | A status badge or a per-target sweep reflects a non-default ref ([#124](https://github.com/zackees/ci.yml/issues/124); see "Status badges and per-target sweeps run on the default branch"): a workflow badge URL without `?branch=<default>`, or one with `event=push` on a dispatch/`workflow_call`-only workflow; per-board workflows whose main-branch runs do not come from a path-selected dispatch on `main` plus a scheduled full sweep that skips when there are no new commits; the full matrix running on a branch without a label (e.g. `ci-full`) or a manual dispatch; per-board jobs each recompiling the tool instead of downloading one uploaded build; a sweep that saves caches from a non-default ref (`CACHE-003`); or no documented loop-until-empty cancel one-liner for run storms. Related fan-out proposal [#122](https://github.com/zackees/ci.yml/issues/122) is referenced, not adopted. | Candidate -- decided policy ([#124](https://github.com/zackees/ci.yml/issues/124)), not yet enforced by ci-lint |
+| `GEN-027` | In a repository with path-scoped lanes, a multi-PR series batches its build-system and test-registration changes (export lists, CMake, `build.rs`, test registrations) into one front-loaded PR per subsystem, plus an optional batched switch-over PR. Later implementation PRs touch only source and stay in the cheap lane, so the series pays for the full matrix about twice instead of N times. Required coverage is unchanged, and platform-implementation changes still select native coverage under "Selecting full PR coverage". Agent/PR-planning guidance (obs-rust/obs-studio#2288). | Candidate -- decided policy ([#426](https://github.com/zackees/ci.yml/issues/426)), not yet enforced by ci-lint |
 | `PY-001` | Python benchmark inputs, results, or reports use raw dictionaries as internal models instead of dataclasses; boundary dictionaries use `Any` or lack concrete value types (including lists of records); or wire data is used without conversion and validation at the boundary. | Enforced by ci-lint (static precheck) -- an AST scan of the file(s) named by `[suites.perf].run` (and any local `ci/*.py` it references one level deep) for `typing.Any` and for a `result`/`record`/`benchmark`/`bench`-named function returning a bare/subscripted `dict`; a repository with no `[suites.perf]` declared is not scanned. `ci_lint`'s own source follows the rule by construction (AGENTS.md's working rule; see e.g. `ci_lint/perf.py`'s `JsonRecord` typing) |
 | `PY-002` | A heterogeneous `tuple[A, B, ...]` or a non-wire-boundary `dict[...]`/`Mapping[...]` annotation on a function return or a dataclass field; on a parameter or annotated variable, a heterogeneous tuple or a nested/untyped map (`ci_lint.typed_records`, also `ci-lint py lint`). | Enforced by ci-lint for its own source (selftest ratchet, `ci_lint/tests/typed_records_baseline.json`: counts only go down, new modules start at 0; burn-down #193); fleet repositories: `ci-lint py lint --baseline` ratchet |
 | `PY-003` | Capture-then-wait subprocess output: `run`/`call`/`check_call` with `capture_output=True` or `stdout`/`stderr`/`stdin=PIPE`; `check_output`, `getoutput`, `getstatusoutput` (`ci_lint.subprocess_capture`). Iterating a `Popen`/asyncio pipe while the child runs is allowed; `running-process` is strongly encouraged. | Enforced by ci-lint: zero in `ci_lint` itself (selftest); any repository via `ci-lint py lint --rules PY-003 [--baseline F]` (ratchet). soldr runs it in its local gate's guards lane |
