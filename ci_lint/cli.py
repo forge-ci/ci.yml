@@ -43,6 +43,7 @@ from ci_lint.cache.ops import trim as cache_trim
 from ci_lint.cache.save_evidence import SaveEvidenceError, run_save_check
 from ci_lint.cache.save_evidence import render_text as render_save_check_text
 from ci_lint.cache.save_evidence import to_json_dict as save_check_to_json_dict
+from ci_lint.cache.rework import ReworkError, render_rework_text, run_rework
 from ci_lint.cache.save_ok import SaveOkInputError, SaveOkRequest, evaluate_save_ok
 from ci_lint.cargo_messages import JsonValue, load_artifacts_file
 from ci_lint.cargo_scan import discover_workspace
@@ -1008,6 +1009,20 @@ def _cmd_cache_audit(args: argparse.Namespace) -> int:
     return 1 if any(f.status == Status.VIOLATION for f in report.findings) else 0
 
 
+def _cmd_cache_rework(args: argparse.Namespace) -> int:
+    """CACHE-035 (#148 priority 1) from `--log` evidence -- pure filesystem,
+    no token: rebuild-after-exact-hit and cross-step recompiles, both
+    `needs_review` evidence for the diagnosis."""
+
+    try:
+        report = run_rework(args.log or [])
+    except ReworkError as exc:
+        print(f"ci-lint cache rework: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(report.to_json_dict(), indent=2) if args.json else render_rework_text(report))
+    return 1 if report.findings else 0
+
+
 def _cmd_cache_save_check(args: argparse.Namespace) -> int:
     """CACHE-011/CACHE-012 (issue #7) from `--log` evidence -- pure
     filesystem, no GITHUB_TOKEN/GITHUB_REPOSITORY required (unlike `cache
@@ -1436,6 +1451,21 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_cache_save_check.add_argument("--json", action="store_true")
     p_cache_save_check.set_defaults(func=_cmd_cache_save_check)
+
+    p_cache_rework = cache_sub.add_parser(
+        "rework",
+        help="CACHE-035 (issue #148) from real job-log evidence: rebuild after an exact cache hit, "
+        "and the same crate compiled in more than one step",
+    )
+    p_cache_rework.add_argument(
+        "--log",
+        action="append",
+        default=[],
+        help="a job log (gh run view --job <id> --log) or captured stdout of the same; repeatable, "
+        "all logs of one run/job for the cross-step check",
+    )
+    p_cache_rework.add_argument("--json", action="store_true")
+    p_cache_rework.set_defaults(func=_cmd_cache_rework)
 
     p_cache_trim = cache_sub.add_parser("trim", help="delete CACHE-008 entries (closed/merged + stale-base PR deltas)")
     p_cache_trim.add_argument("--repo", default=".")

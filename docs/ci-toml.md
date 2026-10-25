@@ -632,6 +632,29 @@ extracted_files=0 extracted_bytes=0`, reproduced on repeated pushes since
 the writer that should replace it is the same broken one `CACHE-011`
 names). Exit 1 if any finding, 2 if a `--log` file is unreadable, 0 clean.
 
+### `ci-lint cache rework` (runtime, from `--log` evidence)
+
+`ci-lint cache rework --log <file> [--log <file> ...] [--json]` --
+CACHE-035, #148 priority 1: two deterministic rework signals from real
+job logs (same `--log` convention as `save-check`; formats verified
+against bosn run `40172648545` and talos-hq/clud run `40188114016`):
+
+| Rule | Fires on |
+| --- | --- |
+| `CACHE-035` A (rebuild after an exact hit) | the restore evidence reports at least one layer `HIT` (or an `N/M exact-hit` summary) AND cargo still printed `Compiling <crate> v<ver>` in the same log -- the store existed and was restored, and rustc ran anyway (kernal-api's "cache that claimed to work", worth ~6 min/PR there) |
+| `CACHE-035` B (cross-step recompile) | the same `<crate> v<ver>` compiled under two or more distinct step names across the given logs -- one compile per crate per job; a second step paying it again is rework (RUST-016's family) |
+
+Both report `needs_review`: a recompile-after-hit can have causes outside
+the log's view (feature/flag drift, an unkeyed input), so this is
+evidence for the diagnosis -- never a silent pass and never an
+auto-delete. The third #148 signal (serial-execution ratio) needs step
+timing the log body does not carry reliably and is **not implemented**.
+The reader strips ANSI, accepts `gh --log` two-tab TSV with the glued
+ISO timestamp (and the four-field variant), and bare stdout. Exit 1 if
+any finding, 2 if a `--log` file is unreadable, 0 clean. Pure
+filesystem -- no token. Pair with `cache save-check` (the writer side);
+hit-rate *reporting* in step summaries is #411's separate proposal.
+
 ### `ci-lint cache trim` / `janitor` / `heal` / `preprune` (live, read-write)
 
 On GitHub, all four need `actions: write`; `--dry-run` (or omitting a delete
@@ -1005,6 +1028,7 @@ when neither PyYAML nor `yq` is available).
 | `CACHE-010` (issue #7) | Static: a workflow/job/step env sets a kill-switch var (`ZCCACHE_DISABLE`, `SOLDR_NO_CACHE`, `SOLDR_CACHE_DISABLE`, `SOLDR_DYLINT_NO_CACHE`) truthy while `ci.toml` declares a `[cache.family]` via a `setup-soldr:*`/`zccache*` backend, or `CCACHE_DISABLE` truthy while it declares a `via = "ccache"` family (#393). | Remove the env var (or set it falsy); if intentional, retire the matching `[cache.family]` entry instead. |
 | `CACHE-011` (issue #7) | Runtime, `ci-lint cache save-check --log ... --conclusion success`: a successful run's log shows a declared layer's save skipped for a non-exact-hit reason, or `saved id=-1`. | Inspect the writer job's cache-save gate for that layer (setup-soldr's success-marker identity check, or the invocation path that should write it). |
 | `CACHE-012` (issue #7) | Runtime, `ci-lint cache save-check`: a layer's restore reports an unusable (0-extracted) payload on >= 2 consecutive `--log` files with no writer save in between. | Delete the poisoned entry (`ci-lint cache heal`) AND fix the writer flow (see the matching `CACHE-011` finding). |
+| `CACHE-035` (#148) | Runtime, `ci-lint cache rework --log ...`: (A) the restore reports layer `HIT`/`N/M exact-hit` yet cargo printed `Compiling <crate> v<ver>`; (B) the same crate+version compiled under >= 2 distinct steps across the given logs. Both `needs_review`. | Compare the crate's inputs against the cache key's scope (flags, target, toolchain digest, unkeyed files) and pair with `save-check`; for B, share one `target/` or order the steps (RUST-016's family). Serial-ratio signal: not implemented. |
 | `RUST-002` (round-6E) | Dylint invoked from more than one job; a Dylint job whose `runs-on` doesn't resolve to Linux (`needs_review` for an unresolvable matrix/expression); bare `cargo dylint`/`cargo-dylint`/`dylint-link` (not `soldr dylint`/`soldr cargo dylint`) in a `run:` line or one level into a `ci/*.py` script (GEN-004's own follow-one-level convention, reused); `cargo install cargo-dylint`/`dylint-link`; `--workspace` without `--all` on any Dylint-related invocation. | Consolidate into one Linux `dylint` job; wrap every invocation through `soldr dylint`/`soldr cargo dylint`; drop the `cargo install`; add `--all`. |
 | `LAYOUT-001` | A host selector (`cfg(...)`, `sys.platform`, ...) outside `[allow].platform-code`/`platform-selector`. | Move it behind the platform facade. |
 | `RUST-005` | More integration-test targets exist than are declared in `[rust.tests].binaries`. | Declare each target, or consolidate `tests/*.rs`. |
