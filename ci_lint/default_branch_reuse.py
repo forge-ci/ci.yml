@@ -173,6 +173,9 @@ class ReuseDecision:
     runs: tuple[RunEvidence, ...] = ()
     jobs: tuple[JobEvidence, ...] = ()
     api_calls: int = 0
+    # The commit the proving runs ran on: the PR head, or the pushed commit
+    # itself for merge_group evidence. `ci-lint gate` re-verifies against it.
+    proving_sha: str | None = None
 
     @property
     def reuse(self) -> bool:
@@ -488,6 +491,7 @@ def _decide(req: ReuseRequest, api: _Api | None) -> ReuseDecision:
         pr, head_sha = _associated_pr(api, req)
         tree = _tree_of(api, req.repo, req.sha)
         proof = f"tree {tree[:12]} == PR #{pr} head {head_sha[:12]}"
+        proving_sha = head_sha
         try:
             evidence = _pr_head_evidence(api, req, pr, head_sha, tree)
         except _Stop as head_stop:
@@ -500,6 +504,7 @@ def _decide(req: ReuseRequest, api: _Api | None) -> ReuseDecision:
                 if queue_stop.reason == "no-successful-run":
                     raise head_stop from None  # no queue run: the PR-head reason stands
                 raise
+            proving_sha = req.sha
             proof = f"merge_group run on {req.sha[:12]} itself (PR #{pr}; {head_stop.reason} on the head)"
         jobs = _check_jobs(api, req, evidence)
     except _Stop as stop:
@@ -510,7 +515,9 @@ def _decide(req: ReuseRequest, api: _Api | None) -> ReuseDecision:
         f"{proof}; "
         f"{len(jobs)} required job(s) green in run(s) {', '.join(str(r.run_id) for r in evidence)}"
     )
-    return ReuseDecision(req, True, VERIFIED, detail, pr, head_sha, tree, tuple(evidence), jobs, api.calls - start)
+    return ReuseDecision(
+        req, True, VERIFIED, detail, pr, head_sha, tree, tuple(evidence), jobs, api.calls - start, proving_sha
+    )
 
 
 # ── rendering ──────────────────────────────────────────────────────────────
@@ -535,6 +542,7 @@ def to_json_dict(d: ReuseDecision) -> dict[str, JsonValue]:
         "detail": d.detail,
         "pr": d.pr,
         "pr_head_sha": d.pr_head_sha,
+        "proving_sha": d.proving_sha,
         "tree": d.tree,
         "run_id": first.run_id if first else None,
         "run_url": first.run_url if first else None,

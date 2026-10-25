@@ -149,6 +149,7 @@ class VerifiedTest(unittest.TestCase):
         self.assertEqual([r.run_id for r in d.runs], [RUN_1643])
         self.assertEqual([j.name for j in d.jobs], list(SHARDED))
         self.assertEqual(d.api_calls, 5)
+        self.assertEqual(d.proving_sha, HEAD_1643)
 
     def test_flake_class_pr1575_would_have_been_skipped(self) -> None:
         d = run(load("clud-pr1575.json"), req(SHA_1575, "2026-09-29T21:11:10Z", PRE_SHARD))
@@ -244,6 +245,8 @@ class QueueEvidenceTest(unittest.TestCase):
         self.assertEqual([r.run_id for r in d.runs], [QUEUE_RUN])
         self.assertIn("merge_group run on", d.detail)
         self.assertIn("tree-mismatch on the head", d.detail)
+        self.assertEqual(d.proving_sha, SHA_1630)
+        self.assertEqual(to_json_dict(d)["proving_sha"], SHA_1630)
 
     def test_queue_evidence_is_opt_in(self) -> None:
         d = run(queue_table(), req(SHA_1630, QUEUE_NOW))

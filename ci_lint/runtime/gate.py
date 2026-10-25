@@ -68,7 +68,9 @@ A required job whose `needs` result is `skipped` is SUCCESS iff:
      for each digest in `plan["lane_digests"]` (the plan-derived naming
      `required-jobs = "plan"` produces), AND
   2. a live `GET /repos/{r}/actions/jobs/{job_id}` still returns
-     `conclusion == "success"` and `head_sha == pr_head_sha`.
+     `conclusion == "success"` and `head_sha == proving_sha` (the PR head, or the pushed commit for
+     merge_group evidence; `pr_head_sha` when the document predates the
+     field).
 
 Without a token, an otherwise-matching job is `needs_review` -- never a
 silent pass, exactly as for title-edit reuse.
@@ -203,6 +205,9 @@ class DefaultBranchReuse:
 
     pr: int | None
     pr_head_sha: str | None
+    # Where the proving jobs ran: `proving_sha` when the document carries it
+    # (merge_group evidence runs on the pushed commit), else the PR head.
+    proving_sha: str | None
     run_id: int | None
     run_url: str | None
     tree: str | None
@@ -310,10 +315,13 @@ def parse_default_branch_reuse(doc: JsonValue, *, sha: str | None) -> ParsedDefa
 
     pr = doc.get("pr")
     run_id = doc.get("run_id")
+    pr_head_sha = doc.get("pr_head_sha") if isinstance(doc.get("pr_head_sha"), str) else None
+    proving_sha = doc.get("proving_sha") if isinstance(doc.get("proving_sha"), str) else pr_head_sha
     return ParsedDefaultBranchReuse(
         reuse=DefaultBranchReuse(
             pr=pr if isinstance(pr, int) else None,
-            pr_head_sha=doc.get("pr_head_sha") if isinstance(doc.get("pr_head_sha"), str) else None,
+            pr_head_sha=pr_head_sha,
+            proving_sha=proving_sha,
             run_id=run_id if isinstance(run_id, int) else None,
             run_url=doc.get("run_url") if isinstance(doc.get("run_url"), str) else None,
             tree=doc.get("tree") if isinstance(doc.get("tree"), str) else None,
@@ -345,7 +353,7 @@ def _default_branch_proving_jobs(
     if workflow_jobs is None:
         job = reuse.job_for(job_id, _default_branch_lane_digests(plan))
         return (job,) if job is not None else ()
-    if not reuse.pr_head_sha or reuse.run_id is None:
+    if not reuse.proving_sha or reuse.run_id is None:
         return ()
     try:
         names = workflow_jobs.for_job(job_id)
@@ -375,7 +383,7 @@ def _verify_default_branch_job(
     payload = job_payload if isinstance(job_payload, dict) else {}
     if payload.get("conclusion") != "success" or payload.get("name") != job.name:
         return ReuseVerdict(status="fail", run_id=reuse.run_id)
-    if reuse.pr_head_sha is not None and payload.get("head_sha") != reuse.pr_head_sha:
+    if reuse.proving_sha is not None and payload.get("head_sha") != reuse.proving_sha:
         return ReuseVerdict(status="fail", run_id=reuse.run_id)
     if native and payload.get("run_id") != reuse.run_id:
         return ReuseVerdict(status="fail", run_id=reuse.run_id)
