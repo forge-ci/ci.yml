@@ -146,38 +146,80 @@ When `[cache].budget` is declared, the merge queue run **ends with the cache jan
 
 **Decision (`#222`): a superseded toolchain generation on the current lock is dead weight, not a current entry.** A soldr release rewrites setup-soldr's toolchain-signature digest and the cook-base `soldr` component *without touching `Cargo.lock`*, so one lock grows two full cache sets and every trailing-hash shape keeps them apart (measured: zccache#1875 held 12.41 GB live across a 0.9.25 → 0.9.27 bump, its pre-prune blind, GitHub's LRU the only eviction that ran). `CACHE-006` therefore also applies the generation rule zccache adopted (zccache#1876): a default-branch base entry created **before the generation epoch** -- the earliest default-branch `soldr-mini` save of the highest present soldr version, less 10 minutes of slack -- is superseded once a replacement of its restore family (build-cache: os/arch/suffix/lock with the mid-key digest dropped; registry: format/os/arch/lock with the toolchain tail dropped; dylint outputs: stripped digest; cook bases: explicit soldr/rustc version, any lock) exists **after** it. The janitor deletes these through `CACHE-006`; `preprune` must retire them **before** its forecast verdict, so the cleanup and the budget math see the same world. Post-epoch entries are never targets -- concurrent job shapes stay untouched -- and with no `soldr-mini` entries the check stays silent. Recorded limitation: a soldr **rollback** to a lower version re-seeds the epoch once on the way down.
 
-### Content-aware checkout merging (upcoming policy, CACHE-028)
+### Content-aware checkout merging (CACHE-028)
 
-**Candidate ([issue #281](https://github.com/zackees/ci.yml/issues/281)):**
-when reusing a verified source baseline alongside warm build caches, materialize
-that baseline first and merge an authoritative staged Git checkout by content.
-Leave byte-identical files with unchanged relevant metadata untouched, retaining
-their actual mtimes. Changed contents must be written with fresh mtimes, including
-same-size changes with equal or backdated checkout timestamps. Reordering a
-build-output cache restore alone is insufficient: it supplies no source baseline.
+**Decision ([issue #281](https://github.com/zackees/ci.yml/issues/281)):** a
+source-baseline reuse path, which materializes a cached source tree next to warm
+build caches, must merge the authoritative staged Git checkout into that baseline
+**by content**. Byte-identical files whose relevant metadata is unchanged are not
+written, so they keep their real mtimes. Changed contents are written with fresh
+mtimes, and that includes same-size changes whose checkout timestamps are equal or
+backdated. Reordering a build-output cache restore does not satisfy this, because
+an output cache contains no source baseline.
 
-The completed source inventory, file contents, executable bits and symlink
-targets must match the requested Git tree before building or attesting. Reconcile
-tracked deletions and type changes; protect `.git`, build outputs and cache stores.
-A missing or invalid baseline falls back to the ordinary verified checkout.
-Use an owned writable source materialization; this does not waive `GEN-013`'s
-prohibition on copying onto a read-only restored output tree. Source-cache trust,
-writer provenance and budget requirements continue to apply.
+Before any build or attestation, the merged tree must match the requested Git tree:
+source inventory, file contents, executable bits and symlink targets. Tracked
+deletions and type changes are reconciled. `.git`, build outputs and cache stores
+are protected. A missing, corrupt or invalid baseline counts as a miss and falls
+back to the ordinary verified checkout. The merge writes into an owned, writable
+source materialization. It does not waive `GEN-013`'s ban on copying onto a
+read-only restored output tree. Source-cache trust, writer provenance, `CACHE-007`
+payload classes and budget rules all still apply. Restored Git hooks or config, and
+cached tools, are never executed on credentialed hosts.
 
-A checksum-based merge with timestamp copying disabled is one implementation
-option. A local probe verified `rsync -rlpc --no-times` preserved identical-file
-inodes and nanosecond mtimes and copied same-size/same-mtime changed contents;
-`rsync -ac` instead copied fresh checkout timestamps onto identical files.
-These flags alone do not implement tracked-inventory reconciliation or Git-tree
-verification. Do not substitute size-only comparison, ignoring existing files,
-or fabricated old timestamps for content correctness. See the
-[official rsync semantics](https://download.samba.org/pub/rsync/rsync.1).
+**Where it lives.** The mechanism belongs in shared workspace preparation:
+setup-soldr for GitHub-hosted runs, and bosn/act2 for local runs. Repositories do
+not hand-roll it in their own workflows or as act-only workarounds. A checksum
+merge with timestamp copying turned off is one acceptable building block. A local
+probe confirmed that `rsync -rlpc --no-times` keeps identical-file inodes and
+nanosecond mtimes and copies same-size/same-mtime changes, while `rsync -ac` stamps
+fresh checkout times onto identical files. Those flags alone do not reconcile the
+tracked inventory or verify the Git tree. Size-only comparison, `--ignore-existing`
+and archive mode with timestamp preservation are banned as correctness shortcuts
+([rsync semantics](https://download.samba.org/pub/rsync/rsync.1)).
 
-Promotion requires adversarial invalidation tests and a measured net improvement
-on the unchanged complete PR workflow, including checkout/checksum overhead and
-all-feature/all-target Dylint coverage. Full release validation remains required;
-attestations never replace release checks. This is an upcoming contract, with no
-checker enforcement or demonstrated end-to-end speedup yet.
+**Current state (2026-10-25): no content-aware merge has shipped.** setup-soldr,
+soldr, bosn, act2 and `actions/checkout` have none. The only work toward one is an
+unactivated isolated producer pilot on soldr `fef61b6`, recorded in #281's
+comments. That pilot passed workspace check and Dylint `--all`, and packed
+344,360,418 bytes in 35.60 s. It has no publisher grant, no fresh stock consumer
+and no net-benefit result, so it is not usable.
+
+**Sanctioned interim:**
+
+1. **Content-keyed compilation caching is the baseline.** zccache keys compilation
+   on content (blake3). A fresh checkout with new mtimes and a wiped `target/`
+   still got a 100% hit rate (setup-soldr#238, closed). Fresh checkout mtimes
+   therefore cost re-invocations and build-script reruns, not compilations.
+2. **`source-mtime-normalize: true` on `zackees/setup-soldr@v0` is the permitted
+   opt-in stopgap** for Rust repositories that restore a warm `target/`/Dylint
+   output tree and can show mtime-driven fingerprint invalidation. clud already
+   uses it. It sets tracked Rust build inputs to their last-commit time
+   (`git log -1 --format=%ct`) and leaves untracked files, `target/` and `.git`
+   alone. This is a Git-derived timestamp, not a fabricated one. It is still not
+   a CACHE-028 merge: it rewrites every tracked input's metadata and cannot
+   preserve a baseline's actual mtimes. Repositories that enable it keep their
+   full checks.
+3. **Hand-written timestamp replay, invented old mtimes, and repository-local
+   rsync merges in workflow YAML are not allowed** (see "Where it lives" above).
+4. **Fix build-script hygiene first.** A `build.rs` that watches a broad path,
+   such as kernal-api#403's unchanged watched `Cargo.toml` that cost 97.10 s of
+   Dylint after an exact cache hit, is fixed in the repository with narrow
+   `rerun-if-changed` inputs. A merge mechanism is not the fix for it.
+
+**Adoption targets.** Repositories with a warm Dylint/target restore whose
+build-script rerun is measured on unchanged inputs: kernal-api (#403, the
+motivating case) and soldr (the pilot workspace). Other repositories opt in only
+with their own measured evidence.
+
+**Promotion to enforcement** (static and live checks in `ci-lint`, and making the
+mechanism the default in setup-soldr) needs all of the following: adversarial
+invalidation tests (changed `build.rs`/`Cargo.toml`/sidecars/features/config,
+additions, deletions, renames, exec-bit and symlink/type changes, and a corrupt
+baseline treated as a miss); validated ancestor and PR→main payload provenance;
+and a measured net improvement on the unchanged complete PR workflow, counting
+checkout and checksum overhead and keeping all-feature/all-target Dylint coverage.
+Full release validation stays required. Attestations never replace release checks.
 
 ## Secrets and publishing
 
@@ -225,28 +267,25 @@ checker enforcement or demonstrated end-to-end speedup yet.
 
 **Enforcement is candidate.** A later static `ci_lint` check would scan the surfaces `ci_lint.gate_bare_tools` already reads, one level into `ci/*.py`, and report a bare `docker` invocation as a violation (statically detectable, so not `needs_review`). It would exempt `bosn`/`bosn-docker`, `docker://` refs, shipping Dockerfiles/compose files, and `.github/workflows/*` steps. Agents should also install a PreToolUse `Bash` hook that refuses `docker ...` and points to `bosn`. The bosn gap audit (#165 item 4) must finish before the rule becomes enforced.
 
-## Local workflow execution uses act2 (candidate ACT-002)
+## Local workflow execution uses act2 (ACT-002)
 
-**Decision ([issue #213](https://github.com/zackees/ci.yml/issues/213)):** a repository that runs GitHub Actions workflows locally -- through bosn's CI engine or a repository wrapper such as zackees/clud's `ci/act_ci.sh` -- uses **act2** ([zackees/act2](https://github.com/zackees/act2), the fleet's fork of nektos/act), not upstream act. act2 is pinned by version and sha256 digest, the way bosn pins act today (`crates/bosn-core/src/act.rs`: `ACT_VERSION`, `act_binary_digest`, and the engine/runner digests).
+**Decision ([issue #213](https://github.com/zackees/ci.yml/issues/213)):** a repository that runs GitHub Actions workflows locally uses **act2** ([zackees/act2](https://github.com/zackees/act2), the fleet's fork of nektos/act) through **bosn's CI engine** (`bosn ci run`), not upstream act and not a repository-owned act wrapper. act2 is pinned in exactly one place, bosn, by version and sha256 digest (`crates/bosn-core/src/act.rs`: `ACT_VERSION`, `act_binary_digest`, plus the engine/runner digests). A repository does not pin act or act2 itself.
 
-**One action-cache behavior, no switch.** act2 keeps only the content-addressed bare-repository action cache; the old working-tree cache and the `--use-new-action-cache` flag are removed. Callers pass no legacy cache flags (`--use-new-action-cache`, and `--action-offline-mode` if act2 drops it) and carry no compatibility toggles. Legacy cache behavior is not supported.
+**Current state (2026-10-25).** act2 has shipped 33 releases on the `v0.2.89-act2.N` line (latest `v0.2.89-act2.33`, 2026-10-24); bosn main pins `ACT_VERSION = "0.2.89-act2.33"`; zackees/clud is migrated to `bosn ci` (zackees/clud#1748, #1776) and zackees/template-python-rust-cmd runs its local lanes through bosn. The one remaining direct upstream-act caller found in the fleet is zackees/zccache's `ci/docker/act/run_act_test_action.sh` (bare `act` with `--action-offline-mode --action-cache-path`); it is a finding, migrated by replacing it with `bosn ci run`.
+
+**One action-cache behavior, no switch.** Callers pass no legacy cache flags (`--use-new-action-cache`, `--action-offline-mode`, `--action-cache-path`) and carry no compatibility toggles; bosn main already passes none. act2 still parses those two flags (`cmd/root.go`) and gates the new cache on them; removing them and making the content-addressed bare-repository cache the only path is act2's remaining criterion-1 work, not a reason for a caller to keep passing them. The rollout stopgap (bosn passing `--use-new-action-cache` before act2 shipped) is over: it is no longer sanctioned anywhere.
 
 act2's acceptance criteria:
-1. The bare-repository cache is the only cache.
-2. **Resolve once.** A `uses:` ref that is a full SHA already in the cache makes no network call. Tag and branch refs are resolved at most once per run (or under a short TTL), or the caller (bosn) resolves every ref at run start and passes pinned SHAs. This removes the per-job × per-action GitHub round trips and the rate-limit exposure of bosn's `max(1, ncpu*2)` concurrent slots (zackees/bosn#358, zackees/bosn#376).
-3. **Cross-process safety.** A per-repository file lock around init and fetch: in act v0.2.88 `git.PlainInit` races and go-git's shallow/packfile writes are not multi-process safe (`pkg/runner/action_cache.go`, `action_cache_offline_mode.go`). Reads by SHA need no lock.
-4. **Unpack once.** Each SHA is unpacked once into an immutable, read-only directory keyed by SHA, so `GetTarArchive` does not re-walk the git tree on every file read and copy.
+1. The bare-repository cache is the only cache (open: the flags above still exist in act2).
+2. **Resolve once.** A `uses:` ref that is a full SHA already in the cache makes no network call; tag and branch refs are resolved at most once per run, or bosn resolves them at run start and passes pinned SHAs (zackees/bosn#358, zackees/bosn#376).
+3. **Cross-process safety.** A per-repository file lock around init and fetch; reads by SHA need no lock.
+4. **Unpack once.** Each SHA is unpacked once into an immutable directory keyed by SHA.
 5. **Tests:** N concurrent jobs sharing one cache, zero network calls when warm, a run killed mid-fetch, and an unwritable cache directory.
-6. **Runner parity.** act2 sets `RUNNER_ENVIRONMENT` the way GitHub does, beside the `RUNNER_OS`/`RUNNER_ARCH`/`RUNNER_TEMP`/`RUNNER_TOOL_CACHE` it already sets: `github-hosted` for a container platform (act's runner images emulate GitHub-hosted runners) and `self-hosted` for act's `-self-hosted` host mode. Upstream act sets no `RUNNER_ENVIRONMENT` at all, so every action whose default keys on it (for example `astral-sh/setup-uv`'s `enable-cache: auto`, which caches only on GitHub-hosted runners) silently behaves as if on an unknown runner, and repositories compensated with per-step overrides (zackees/clud's `enable-cache: true`). Tests: one job per platform kind asserting the value.
+6. **Runner parity (shipped).** act2 sets `RUNNER_ENVIRONMENT` as GitHub does -- `github-hosted` for a container platform, `self-hosted` for `-self-hosted` host mode -- unless the caller already set it (`pkg/runner/run_context.go`, `setRunnerEnvironment`; released in `v0.2.89-act2.1`). Repositories therefore drop per-step compensations such as forcing `astral-sh/setup-uv`'s `enable-cache: true`; local-runner behavior keys on `ACT=true`, per "Two signals, two jobs" (#227) and ACT-003.
 
-Evidence: the old cache failed 3 of 4 concurrent runs with `lstat /root/.cache/act/actions-cache-restore@v4/…: no such file or directory` (zackees/clud#1724), and bosn's own engine still invokes act with that cache on a machine-wide volume (`crates/bosn-service/src/ci/engine.rs`, no cache-mode flag). act's new cache does a depth-1 network fetch for every action in every job, and its "offline mode" still tries the network first. Upstream releases about monthly, and requests for more control over action fetching (e.g. nektos/act#2672) stay open.
+Evidence: the old cache failed 3 of 4 concurrent runs with `lstat /root/.cache/act/actions-cache-restore@v4/…: no such file or directory` (zackees/clud#1724); upstream act sets no `RUNNER_ENVIRONMENT`, does a depth-1 fetch for every action in every job, and its offline mode still tries the network first. Upstream releases about monthly and requests for more control over action fetching (nektos/act#2672) stay open, so the lock and resolve-once changes are offered upstream as PRs to keep act2's patch set small, but the fleet does not wait on them.
 
-Rollout ([#213](https://github.com/zackees/ci.yml/issues/213)):
-- (a) Stopgap: bosn's engine passes the safe cache flag unconditionally until act2 ships -- the only sanctioned use of a legacy flag, removed in (c).
-- (b) act2 implements criteria 1–5, with CI and release binaries.
-- (c) bosn switches its pins to act2, measuring job startup before and after.
-- (d) Repository wrappers (clud's `act_ci.sh`) move to act2, or better, to bosn's engine, so act is invoked in one place.
-- (e) The lock and resolve-once changes go upstream to nektos/act as PRs, so act2 tracks upstream with a small patch set.
+Enforcement (ACT-002) is **candidate**. A static `ci_lint` check would scan the local-CI surfaces `RUST-001`'s `ci_lint.gate_bare_tools` already reads (`ci/*` wrappers, `bosn.toml` tasks, local-gate lanes) and flag, as violations: a bare `act` invocation instead of `bosn ci run`; any legacy cache flag (`--use-new-action-cache`, `--action-offline-mode`, `--action-cache-path`); and a repository-owned act/act2 pin.
 
 ## Stock actions work out of the box under act2 (candidate ACT-003)
 
@@ -439,6 +478,16 @@ Two lanes that read everything stay cheap or unexcludable: guards (repository sc
 | revert to an already-passed tree | **0.7 s** |
 
 Without the cache, a warm full run takes ~525 s. The first run's tests lane was cold because bosn scopes volumes per workspace path; sharing them across worktrees and ancestor commits is [zackees/bosn#327](https://github.com/zackees/bosn/issues/327).
+
+## An oversize skip on the default branch is never silent (candidate CACHE-022)
+
+**Decision ([#153](https://github.com/zackees/ci.yml/issues/153)):** a default-branch cache writer whose save is skipped because its payload exceeds the save cap (setup-soldr `cache-payload-max-bytes`, `cache-payload-oversize-action: skip`, the default) must not stay green and quiet. The skip freezes the family: every later PR restores the last saved store and misses on every crate changed since, and the slowdown compounds per merge. zackees/clud's Linux x64 build cache was frozen this way from 2026-09-28 (run 36657206257: `build-cache cache payload is 6.19GB ... exceeding cache-payload-max-bytes=6.00GB; skipping cache save`) with nothing alerting.
+
+- **Default-branch writers set `cache-payload-oversize-action: fail`**, or run a step that turns the oversize warning into a failure or a `$GITHUB_STEP_SUMMARY` error. PR-context saves may keep `skip`: they are disposable `pr-<N>` entries and the base stays fresh.
+- **A store-size budget is not a substitute.** `ZCCACHE_CACHE_SIZE_BYTES` was inert in CI until soldr#3612 forwarded it across the daemon spawn (soldr#3503); a budget bounds growth, but only `fail` (or a verified-under-cap payload) proves the save happened.
+- **Raising the cap only postpones the freeze** (setup-soldr#209/#279 went 2 GiB -> 6 GiB) and grows a pool that `CACHE-004` already bounds.
+
+Relationship to existing rules: `CACHE-011` flags any green run whose log shows a non-exact-hit save skip, from logs a caller hands it; `CACHE-004` bounds the declared footprint. `CACHE-022` adds what neither covers -- the static default (`skip` on a default-branch writer) and the live staleness signal (the family's newest default-branch entry older than the newest default-branch push, with an oversize-skip line in that push's log), so the freeze is found without anyone collecting logs first.
 
 ## Cache compression tiers (candidate CACHE-023)
 
@@ -639,7 +688,7 @@ The **Status** column below reflects what `ci_lint` actually checks today, verif
 | `CACHE-032` | `[cache.promote] mode = "ancestor"` declared while setup-soldr's ancestor pilot (#566) is merged and **unreleased** -- `git tag --contains afdd8bf` is empty and no released tag's `action.yml` declares `auto-key`, so every SHA-pinned setup-soldr predates it (soldr pins `a07bab94`, bosn `fe965fc7`). `SEC-004` requires a 40-hex pin, so the opt-in is unreachable and **silently inert**: `cache-key: auto` parses as an ordinary input, the pilot never runs, restores fall back. Since 2026-10-10 the sanctioned `zackees/setup-soldr@v0` float resolves to `b05310a` (setup-soldr#574), which carries the pilot, so `@v0` is the one `SEC-004`-legal way to reach it. Any 40-hex pin older than `b05310a` is still inert. `RUST-014` cannot catch this -- it keys off releases marked critical, and this feature is ahead of the tags. | Enforced by ci-lint (static precheck, `needs_review`: `ci_lint.rules.cache_static.check_cache_032`) -- `needs_review` because the gate is a release cadence, not a repository defect, so the finding must clear itself when a tag carries #566; its claim is that the declared opt-in is unreachable, not that promotion is failing |
 | `CACHE-014` | M2-17 (ci.yml#42, zackees/ci.yml#6 follow-up): `[cache.pr].max-per-pr` sized wrong for the repository's scale -- `max-per-pr x [cache.pr].expected-open-prs > [cache.pr].budget` (a fleet of open PRs each hitting the cap blows the PR budget), and/or `max-per-pr < [cache.pr].measured-largest-delta` (the cap silently truncates an already-observed delta). Each half fires only when its optional input (`expected-open-prs`/`measured-largest-delta`) is set; see docs/ci-toml.md "Sizing `[cache.pr]` for repository scale" for the sizing formula and the clud-scale evidence. | Enforced by ci-lint (static precheck) |
 | `ACT-001` | A local `act` run saved or restored a family the remote policy forbids, or reported a skipped lane as passed. | Enforced by ci-lint (runtime: `ci-lint act audit --store-dir <dir>`, `ci_lint.act_audit`, checking the local act cache-server's bbolt index and on-disk usage against `ci.toml`'s `[cache].budget`/`[cache].retired`; not run automatically inside `precheck` -- it needs a real local act cache-store path, so `--local` still reports it "skipped (local)" there, see "Local CI" above) |
-| `ACT-002` | A local GitHub Actions run (bosn's CI engine, or a repository wrapper such as `ci/act_ci.sh`) invokes upstream nektos/act instead of the version- and sha256-pinned act2, or passes a legacy action-cache flag (`--use-new-action-cache`, `--action-offline-mode`) (#213; see "Local workflow execution uses act2" above). act2 must also set `RUNNER_ENVIRONMENT` as GitHub does (criterion 6). | Candidate |
+| `ACT-002` | A local GitHub Actions run invokes act other than through bosn's CI engine (which pins act2 by version and sha256), e.g. a bare `act` in a `ci/*` wrapper, `bosn.toml` task or local-gate lane; passes a legacy action-cache flag (`--use-new-action-cache`, `--action-offline-mode`, `--action-cache-path`); or carries a repository-owned act/act2 pin (#213; see "Local workflow execution uses act2" above). act2 sets `RUNNER_ENVIRONMENT` as GitHub does (criterion 6, shipped). | Candidate -- decided policy ([#213](https://github.com/zackees/ci.yml/issues/213)), not yet enforced by ci-lint |
 | `ACT-003` | A workflow or composite action carries an act-only workaround (an `env.ACT`/`ACT` condition, or a cache input forced on only for the local runner) without a linked open exception issue in zackees/ci.yml cross-referenced with zackees/act2 and zackees/bosn (see "Stock actions work out of the box under act2" above). | Candidate |
 | `TEST-001` | Job level: a required job's `needs[job].result == "skipped"` without being a live-verified reuse of an already-green run for the identical digest and head SHA counts as a failure. Suite level: any test ignored/skipped (Rust `#[ignore]`, pytest `skip`/`xfail(strict=False)`) inside a suite ci.toml marks `required = true` -- zackees/zccache#1760's `action_surface`/`test_cli.py` shape, where the CLI was never actually on PATH and CI stayed green. | Enforced by ci-lint (job level: runtime, `ci-lint gate`; suite level: runtime, `ci-lint suite check`, from a libtest-format log and/or a pytest JUnit XML report) |
 | `TEST-002` | Zero tests executed in a required suite (a harness with zero test functions, or every test skipped, still counted as "ran" before this, which the template's 0-Rust-test baseline exposed). | Enforced by ci-lint (runtime, `ci-lint suite check`, from the same evidence as suite-level `TEST-001`); `RUST-012` separately catches the narrower static case of an *empty enabled harness with `test = false` unset* |
@@ -661,10 +710,11 @@ The **Status** column below reflects what `ci_lint` actually checks today, verif
 | `GATE-011` | A `ci-attestations.yml` gate whose `fidelity` is unknown, or a `<ecosystem>/<platform>/test` gate proven by an `emulation` lane (#202). `fidelity` is `native` (default: the real platform or the same host triple), `vm` (the real OS in a local VM: dockur/windows, the macOS Recovery guest) or `emulation` (a translation layer: Wine, Darling). Only native and vm lanes may prove a `test` check. An emulation lane attests a narrower, distinctly named check (e.g. `.../unit`) whose scope the lane states. Release always runs natively. | Enforced by ci-lint (static: `local-gate lint`, through the GATE-010 definition parse) |
 | `GATE-012` | A check that cannot run under bosn → act gates or waits on a PR (#206): a missing `.coderabbit.yaml`, or one leaving `reviews.auto_review.enabled`/`commit_status` on or `request_changes_workflow`/`fail_commit_status` true; a job of a PR-triggered workflow (or a local reusable workflow it calls) using a registered act-impossible action (`github/codeql-action/*`, Pages deploys, attestations, PyPI trusted publish, Codecov/Coveralls/Sonar, dependency review) or `id-token: write` without an `if:` confining it to non-PR events or an opt-in label (unrecognized `if:` is `needs_review`); a wait-on-check action, `run:` or `ci/` script waiting on or polling for an app check such as `CodeRabbit`; live, a required status check naming an app check or bound to an app other than GitHub Actions. Item 5 (a job act cannot run declares `CI_REMOTE_ONLY: <reason>`; a local runner reports it `remote_only`, never a failure) is honoured by bosn ci (zackees/bosn#400) and not yet checked by ci-lint. | Enforced by ci-lint (static: `ci-lint remote-only`, `precheck` group 18, `local-gate lint`; live audit: `ci-lint audit`); item 5 is runner-side |
 | `GATE-013` | A PR gate/verify/aggregator job (one whose result is a required check, e.g. `CI OK` or a `local-gate verify` job) with `if: always()`: it runs on every superseded or cancelled run and reports red although nothing failed (mimalloc-pprof: ~270 red gate jobs in one week, run 36342295043). Static `needs_review`; use `if: ${{ !cancelled() }}` and, where the job decides from the head, an explicit check that `github.event.pull_request.head.sha` is still the PR head. | Candidate |
+| `CACHE-022` | A default-branch cache writer whose oversize-payload save skip stays silent ([#153](https://github.com/zackees/ci.yml/issues/153)). Static: a setup-soldr call in a job that saves on `push`/default-branch events with `cache-payload-oversize-action` unset or `skip` (and no step that fails or reports an oversize warning) is `needs_review`; a `ZCCACHE_CACHE_SIZE_BYTES` budget alone does not clear it. Live: a declared family's newest default-branch entry is older than the newest default-branch push and that push's log carries `exceeding cache-payload-max-bytes ... skipping cache save` -- a violation citing the log line and the entry's `created_at`. PR-context saves are exempt. Distinct from `CACHE-011` (any green skip, given logs) and `CACHE-004` (footprint budget): this finds the frozen base without needing logs to be collected first. Evidence: zackees/clud's Linux x64 build cache frozen 2026-09-28 (run 36657206257, 6.19 GB over a 6.00 GB cap). | Candidate -- decided policy ([#153](https://github.com/zackees/ci.yml/issues/153)), not yet enforced by ci-lint |
 | `CACHE-023` | A cache save whose zstd level ignores its tier (#173): a PR-path save above level 3, or a long-lived default-branch family below the measured remote recommendation. | Candidate |
 | `CACHE-026` | A cache guard that fails the run instead of disabling cache writes: a barrier, budget, pre-prune or freshness step (e.g. a wait on an exact-SHA pre-prune, a projected-peak forecast, `main advanced to <sha>`) that exits non-zero in a build/test workflow, so a cache-governance condition turns every workflow on the SHA red without any test failing. The guard must succeed and expose a `cache_writes` output consumed by every save. Evidence: zackees/zccache, 2026-09-25..10-02, ~93 of the last 100 failed `main` push runs failed only in `Cache pre-prune barrier / Wait for exact-SHA cache pre-prune` (push pass rate 53%); zackees/soldr's `Cache Budget` workflow: 53 of its 7-day failures. | Candidate |
 | `CACHE-027` | A cache family that PR runs restore but no `push`/default-branch run ever saves, so every PR starts cold (mimalloc-pprof zccache hit rate 0.0%, run 36809571898; llvm-ld Windows 0/1791 hits, run 36867883784, zackees/llvm-ld#72). Live evidence: the family has no default-branch entry while PR restores keep missing; fix by saving it from a main push (or the PR-scoped `pr-<N>` key, CACHE-013) or dropping the restore. | Candidate |
-| `CACHE-028` | A source-baseline reuse path rewrites byte-identical tracked build inputs or copies fresh checkout timestamps onto them, or preserves old timestamps for changed contents. Merge the authoritative staged checkout by content into an owned writable baseline; verify the resulting Git tree, metadata and tracked inventory, preserve fresh invalidation for changes, and measure full-workflow net benefit before adoption. See [issue #281](https://github.com/zackees/ci.yml/issues/281) and "Content-aware checkout merging" above. | Candidate |
+| `CACHE-028` | A source-baseline reuse path rewrites byte-identical tracked build inputs or copies fresh checkout timestamps onto them, or keeps old timestamps on changed contents. Merge the authoritative staged checkout by content into an owned writable baseline inside shared preparation (setup-soldr/bosn/act2, never repo-local workflow YAML). Verify the resulting Git tree, metadata and tracked inventory, treat a bad baseline as a miss, and keep fresh invalidation for changes. No mechanism has shipped yet. The sanctioned interim is zccache content keying plus opt-in setup-soldr `source-mtime-normalize: true`. Hand-written timestamp replay and repo-local rsync merges are not allowed. See [issue #281](https://github.com/zackees/ci.yml/issues/281) and "Content-aware checkout merging" above. | Candidate -- decided policy ([#281](https://github.com/zackees/ci.yml/issues/281)), not yet enforced by ci-lint |
 | `GHAPI-001` | Machine-local CI tooling (a skill, tool, watcher, lander or `ci/` script) re-reads a GitHub collection it already holds without a time or cursor bound, or bypasses the per-machine broker (#224). Incremental re-queries bounded by the cache's high-water mark (`since=`, `created>=`/`updated` filters, stop-at-cached pagination, `If-Modified-Since`/`If-None-Match`) are allowed; unbounded re-fetches, uncached terminal state, and per-process caches that are not shared across the machine are violations. | Enforced by ci-lint (static precheck, `precheck` group 19: unbounded GitHub re-read loops and gh watch loops in `run:`, `ci/` and skill/tool scripts); the broker-bypass and machine-shared-cache clauses are candidate until the broker ships (zackees/clud#1743) |
 
 An exception must name the repository, rule ID, reason, owner, compensating coverage, and review date. The documented Soldr dependency cycle in `zackees/running-process` is an example to evaluate for an exception. Exceptions are reviewed when their date arrives or the dependency changes; they do not erase historical findings. `ci.toml`'s `[[exceptions]]` array implements this mechanically for a `ci_lint`-checked repository (`rule`, `path`, `reason`, `issue`, `expires` -- `CT-005` fails an expired entry).
