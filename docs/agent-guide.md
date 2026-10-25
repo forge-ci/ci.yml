@@ -13,6 +13,18 @@ Use this guide when investigating or implementing fleet CI checks. The goal is t
 
 GitHub documents the [workflow run](https://docs.github.com/en/rest/actions/workflow-runs) and [workflow job](https://docs.github.com/en/rest/actions/workflow-jobs) APIs needed for timing collection. Reusable workflows can hide jobs behind a caller, so inspect their definitions as well as the caller; see [GitHub's reuse reference](https://docs.github.com/en/actions/reference/workflows-and-actions/reusing-workflow-configurations).
 
+## CI-side diagnostics when local reproduction misleads (fingerprint recipe, #148)
+
+Diagnosing a cache/build **fingerprint** mismatch locally is often wrong evidence before CI evidence is: soldr and plain cargo resolve different registry paths (observed as `PathToSourceChanged`), and a developer host may lack what the runner ships (a NixOS host: `libz`, X11, build-ids) -- both directions of "reproduces locally" / "does not reproduce locally" have lied (#148). Recipe, cheapest first:
+
+1. **Read the CI fingerprint evidence before touching a checkout**: the failing job's cache restore/save lines (`exact hit` vs `saved id=…`), the marker identity the step wrote (e.g. the Dylint host-qualified marker), the toolchain and `--version` pins in that step, and its environment. The inputs that mismatched are named there.
+2. **Reproduce in CI, not on the host**: push a **throwaway draft PR** scoped to the failing path so only the job under investigation runs (drafts notify no watchers; close it when done). CI-side diagnostics in a draft PR were repeatedly faster and more reliable than local attempts (#148).
+3. **Exercise workflow logic without a runner**: extract the workflow's `run:` blocks and execute them under `bash -eo pipefail` with fake tools on `PATH`. This has caught real bugs a green local run missed -- a background apt subshell under `-e` would have hung a wait step for ten minutes ([kernal-api-ci-speed.md](case-studies/kernal-api-ci-speed.md), process lessons).
+4. **Isolate tool state when a pin must be validated locally**: an isolated `SOLDR_CACHE_DIR` (and equivalents) -- mixed tool versions sharing a global state dir break the very wrapper under test (soldr#3456).
+5. **Keep run IDs for every claim**: before/after pairs only; a summary total is not evidence of which phase set the wall time.
+
+("Fingerprint" here means the build/cache key inputs -- toolchain, lockfile, marker identity, environment -- not the issue-fingerprint marker in [Findings and issue lifecycle](#findings-and-issue-lifecycle).)
+
 ## Audit platform coverage selection instructions
 
 Inspect repository instructions, every platform skill and bundled agent
