@@ -54,6 +54,7 @@ from ci_lint.fbuild_coverage import render_text as render_fbuild_coverage_text
 from ci_lint.fbuild_coverage import to_json_dict as fbuild_coverage_to_json_dict
 from ci_lint.finding import Finding, Status
 from ci_lint.fleet_cli import register as register_fleet
+from ci_lint.gh_repo_cache import register as register_gh_cache
 from ci_lint.reuse_cli import register as register_reuse
 from ci_lint.attest_cli import register as register_attest
 from ci_lint.local_gate_cli import register as register_local_gate
@@ -1617,6 +1618,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_rust_toolchain_build.set_defaults(func=_cmd_rust_toolchain_build_check)
 
     register_fleet(sub)
+    register_gh_cache(sub)
     register_reuse(sub)
     register_local_gate(sub)
     register_attest(sub)
