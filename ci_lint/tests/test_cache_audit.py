@@ -14,6 +14,7 @@ from dataclasses import replace
 
 from ci_lint.cache.audit import (
     _TRAILING_HASH_RE,
+    _check_cache_001,
     _check_cache_005,
     _check_cache_006,
     _shape,
@@ -843,6 +844,80 @@ class Cache005DeclaredMinTest(unittest.TestCase):
         )
         classified = (ClassifiedEntry(entry=entry, family_id=None, is_delta=False, delta=None, is_retired=False),)
         self.assertEqual(1, len(_check_cache_005(self._with_min("0B"), classified)))
+
+
+class CacheAttestationSideEntryTest(unittest.TestCase):
+    """zackees/ci.yml#412: `ci-lint attest keys` writes one ~440 B side entry
+    per gate, keyed `att1-<gate>-<lineage>` (attest_cli.SIDE_FAMILY). The
+    attestation family is known to ci-lint itself: CACHE-005's 1 KB floor
+    never judges it (bosn#721 planned 78 of 196 as poisoned, and CACHE-005
+    bypasses the newest-entry guard, so the janitor fought
+    `attest resolve --require-gate`), and CACHE-001 never calls it
+    undeclared (obs-studio's janitor deleted the lineage outright). A
+    declared family `min` still wins over the builtin exemption, so a
+    repository can opt the family back under a floor of its own."""
+
+    KEY = "att1-rust.x86_64-unknown-linux-gnu.test-m2189-c1-18204251ce"
+    PR_KEY = "att1-rust.x86_64-unknown-linux-gnu.test-m2189-c1-18204251ce-pr-3532"
+
+    def setUp(self) -> None:
+        ci, findings = load_ci_toml(REPO)
+        assert ci is not None, findings
+        self.ci = ci
+
+    def _entry(self, key: str = KEY, size: int = 440) -> CacheEntry:
+        return CacheEntry(
+            id=7, ref=MAIN_REF, key=key, version="v", size_in_bytes=size,
+            created_at="2026-10-24T00:00:00Z", last_accessed_at="2026-10-24T00:00:00Z",
+        )
+
+    def _undeclared(self, key: str = KEY) -> ClassifiedEntry:
+        return ClassifiedEntry(
+            entry=self._entry(key), family_id=None, is_delta=False, delta=None, is_retired=False
+        )
+
+    def _declared(self, min_value: str | None, size: int = 440) -> tuple[CiToml, tuple[ClassifiedEntry, ...]]:
+        # The issue's exact shape: a family declared for the attestation
+        # entries (prefix matches) without a `min`.
+        fam = replace(self.ci.cache.family["soldr-mini"], prefix="att1-", min=min_value)
+        ci = replace(self.ci, cache=replace(self.ci.cache, family={**self.ci.cache.family, "soldr-mini": fam}))
+        entry = self._entry(size=size)
+        classified = (ClassifiedEntry(entry=entry, family_id="soldr-mini", is_delta=False, delta=None, is_retired=False),)
+        return ci, classified
+
+    def test_floor_never_judges_undeclared_attestation_entries(self) -> None:
+        self.assertEqual([], _check_cache_005(self.ci, (self._undeclared(),)))
+
+    def test_declared_family_without_min_is_still_exempt(self) -> None:
+        ci, classified = self._declared(min_value=None)
+        self.assertEqual([], _check_cache_005(ci, classified))
+
+    def test_declared_min_still_wins_over_the_builtin_exempt(self) -> None:
+        ci, classified = self._declared(min_value="500B", size=440)
+        found = [f.message for f in _check_cache_005(ci, classified)]
+        self.assertEqual(1, len(found))
+        self.assertIn("below [cache.family.soldr-mini].min", found[0])
+
+    def test_non_attestation_tiny_entry_keeps_the_floor(self) -> None:
+        entry = ClassifiedEntry(
+            entry=self._entry(key="unknown-x", size=10),
+            family_id=None, is_delta=False, delta=None, is_retired=False,
+        )
+        self.assertEqual(1, len(_check_cache_005(self.ci, (entry,))))
+
+    def test_cache_001_never_calls_attestation_entries_undeclared(self) -> None:
+        self.assertEqual([], _check_cache_001((self._undeclared(),)))
+        # Control: any other undeclared key is still a finding.
+        self.assertEqual(1, len(_check_cache_001((self._undeclared(key="unknown-x"),))))
+
+    def test_attestation_entries_remain_pr_reclaimable(self) -> None:
+        # The exemption is only from CACHE-001/CACHE-005: a pr-<N>-tagged
+        # side entry is still claimed by its PR, so CACHE-008 reclaims it
+        # when the PR closes (janitor plans come from findings, so this is
+        # the lineage's remaining bounded-shed path).
+        classified = classify(self.ci, [self._entry(key=self.PR_KEY)])
+        self.assertEqual(3532, classified[0].pr)
+        self.assertTrue(classified[0].pr_in_key)
 
 
 class Cache006LruFamilyTest(unittest.TestCase):

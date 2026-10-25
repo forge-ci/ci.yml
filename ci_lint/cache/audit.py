@@ -67,6 +67,17 @@ _RUST_004_JOBS_PER_PAGE = 50
 # below 1KB (issue #6 §6: clud's 253-byte entry). A declared `min` replaces
 # the floor (#417), so a tiny-by-design family declares `min = "0B"`.
 TINY_BYTES = 1024
+
+# The attestation side-entry family `ci-lint attest keys` writes
+# (`att1-<gate>-<lineage>`, ~440 B per gate; attest_cli.SIDE_FAMILY) is a
+# known ci-lint family (#412): CACHE-005's floor never judges it -- a declared
+# family `min` still wins -- and CACHE-001 never calls it undeclared, so the
+# janitor cannot delete the lineage `attest resolve --require-gate` needs.
+# Measured on bosn (bosn#721): the floor planned 78 of 196 att1-* entries as
+# poisoned, and CACHE-005 bypasses the newest-entry guard, so janitor and
+# resolver fought each other; on obs-studio the undeclared path deleted the
+# lineage outright.
+ATTEST_SIDE_PREFIX = "att1-"
 BUDGET_WARN_RATIO = 0.90
 
 # `delta-v1-pr-<N>-<family>-<platform>-b<base8>[-g<gen8>]` (#23 §5 delimited
@@ -258,6 +269,8 @@ def _check_cache_001(classified: tuple[ClassifiedEntry, ...]) -> list[Finding]:
     for c in classified:
         if c.is_retired or c.family_id is not None:
             continue
+        if c.entry.key.startswith(ATTEST_SIDE_PREFIX):
+            continue  # a known ci-lint family (#412): never undeclared
         kind = "PR delta for an" if c.is_delta else "cache"
         findings.append(
             Finding(
@@ -311,6 +324,13 @@ def _check_cache_005(ci: CiToml, classified: tuple[ClassifiedEntry, ...]) -> lis
             # declares `min = "0B"`.
             if entry.size_in_bytes < min_bytes:
                 reason = f"{entry.size_in_bytes}B is below [cache.family.{c.family_id}].min ({fam.min})"
+        elif entry.key.startswith(ATTEST_SIDE_PREFIX):
+            # A known ci-lint family (#412): attestation side entries are
+            # ~440 B by design, with or without a family declaration, so
+            # the floor never judges them (a declared `min`, handled above,
+            # still wins). This is the route the janitor and
+            # `attest resolve --require-gate` need to stop fighting.
+            continue
         elif entry.size_in_bytes <= TINY_BYTES:
             reason = f"{entry.size_in_bytes}B is at or below the {TINY_BYTES}B poison-guard floor"
         if reason is not None:

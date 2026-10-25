@@ -318,12 +318,30 @@ open question, and any normalization has to pick one rather than assume they alr
 | `max` | string (size) | The per-instance cap, used directly in `CACHE-004`'s arithmetic and (round-4A) `cache save-ok`'s rule 6 and `cache preprune`'s live forecast. |
 | `lockfile` | bool (default `false`) | If true, this family's steady-state size is counted **twice** in `CACHE-004` (steady state, plus the lockfile-change peak where old and new coexist), and (round-4A) `cache preprune` only prunes superseded entries of `lockfile = true` families. |
 | `per` | string (optional) | Cardinality multiplier. A **strict enum**: `"none"` (the default, same as omitting it) -> `1`; `"platform"` -> number of declared platforms; `"cross-platform"` -> platforms minus one; `"os"` -> number of distinct platform groups. Any other value (e.g. `"target"`) is `CT-002` -- never a silent fallback to `1`, which would undercount `CACHE-004`'s arithmetic without warning. |
-| `min` | string (size, optional) | Round-4A: the poison-guard floor `cache save-ok`'s rule 6 and the live `cache audit`'s `CACHE-005` both check payload/entry size against. A family that declares no `min` treats a live entry at or below 1KB as poisoned; a declared `min` replaces that floor (#417), so a family whose entries are tiny by design (soldr verdict records, empty pass markers) declares `min = "0B"`. |
+| `min` | string (size, optional) | Round-4A: the poison-guard floor `cache save-ok`'s rule 6 and the live `cache audit`'s `CACHE-005` both check payload/entry size against. A family that declares no `min` treats a live entry at or below 1KB as poisoned; a declared `min` replaces that floor (#417), so a family whose entries are tiny by design (soldr verdict records, empty pass markers) declares `min = "0B"`. One family is exempt from the floor without any declaration: ci-lint's own attestation side entries (`att1-*`, ~440 B per gate, #412) are a known ci-lint family -- a declared `min` for a family matching them still wins. |
 | `evict` | string (optional) | zackees/ci.yml#23 §4.2: `"lru"` marks an evictable family (e.g. experiment lanes) -- `cache janitor` LRU-evicts its entries, least recently used first, down to its declared footprint (`max` × cardinality), always keeping its single newest entry. Omitted (the default): the janitor keeps the newest entry per key prefix (`CACHE-006`); an `"lru"` family is exempt from `CACHE-006`, because its keys may be content-addressed (#421). Any other value is `CT-002`. |
 | `shapes` | table of `{ max = "<size>" }` (optional) | Per-shape ceilings for a family whose entries differ in size. When present the family's footprint is the **sum** of these and its cardinality is the number of them, instead of `max x cardinality`. |
 | `key` | array of strings (optional) | Key components, e.g. `["os", "python", "uv.lock"]`. Scanned by `CACHE-002` for volatile tokens the same way a workflow's `with.key` is, and (round-4A, `via = "ci-lint"` families only) built by `ci-lint cache key <family>` -- `"os"` resolves to `--platform`'s id, `"python"` to `[python].pythons[0]` (the floor version), anything else to the first-16-hex-chars of that repo-relative file's sha256. |
 
 `CACHE-004`'s formula: `worst = Σ(family.max × cardinality) + Σ(family.max × cardinality, families with lockfile=true) + [cache.pr].budget` -- unless **every** writer flow (`cache = "write"`) sets `pre-prune = true`, in which case the middle (lockfile-change-peak) term is dropped: `worst = Σ(family.max × cardinality) + [cache.pr].budget`. Either way, `worst > [cache].budget` is always a violation; pre-prune narrows the sum, it never waives the comparison. Precheck always prints the arithmetic and which formula it applied.
+
+**A GATE-010 repository's attestation side entries (#412).** `ci-lint attest
+keys` publishes one ~440 B cache entry per gate, keyed `att1-<gate>-<lineage>`
+(`docs/ci-attestations.md`). ci-lint knows this family intrinsically: neither
+`CACHE-001` (undeclared) nor `CACHE-005` (the 1 KB poison floor) ever fires on
+`att1-*`, with or without a declaration, so a janitor-enabled repository no
+longer deletes the very lineage `attest resolve --require-gate` needs
+(bosn#721; obs-studio's undeclared janitor was losing it outright). Declare
+the family anyway when you want it inside the budget arithmetic and bounded by
+a cap -- the exemption is only from those two rules, and a `pr-<N>`-tagged side
+entry is still reclaimed by `CACHE-008` when its PR closes:
+
+```toml
+[cache.family.attest]
+prefix = "att1-"
+max = "1MB"      # optional: brings att1-* into CACHE-004's arithmetic
+evict = "lru"    # optional: bound growth by footprint instead of CACHE-006
+```
 
 ### Sizing `[cache.pr]` for repository scale (M2-17, ci.yml#42)
 
@@ -546,9 +564,9 @@ PR-title-shaped string (`"[ci-cache-save]"`) or a bare list
 
 | Rule | Fires on |
 | --- | --- |
-| `CACHE-001` | a key matching no declared family prefix (and not a delta, not retired) |
+| `CACHE-001` | a key matching no declared family prefix (and not a delta, not retired, not a ci-lint attestation side entry: `att1-*` is a known ci-lint family, #412) |
 | `CACHE-003` | a declared **base**-layer family's key saved on a ref other than `refs/heads/<--default-branch>` |
-| `CACHE-005` | an entry below its family's declared `min`, else <= 1KB |
+| `CACHE-005` | an entry below its family's declared `min`, else <= 1KB -- except `att1-*` attestation side entries, which are tiny by design and never judged by the floor (#412; a declared `min` still applies) |
 | `CACHE-006` | >= 2 entries of the same family whose keys differ only in a trailing lockfile/version hash (best-effort: strips trailing hyphen-hex segments and groups what's left; a `setup-soldr-cargoregistry-` key keeps its trailing toolchain digest in the shape and only its Cargo.lock hash is a generation, since per-job digests are live at once -- ci.yml#88) -- all but the most-recently-accessed are flagged |
 | `CACHE-008` | an entry of a closed/merged PR -- its key carries a delimited `pr-<N>` component (#23 §5; the legacy `delta-v1-pr<N>-...` form is still recognized) or it was saved on `refs/pull/<N>/merge` -- or a PR delta whose PR is closed/merged (one GraphQL query, all referenced PR numbers batched via aliased fields), or whose `b<base8>` matches none of the family's live base entries' own key hashes |
 | `CACHE-009` | a key matching a `[cache].retired` prefix |
