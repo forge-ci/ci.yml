@@ -70,10 +70,10 @@ from ci_lint.lane_cache import (
     LaneConfig,
     ToolVersions,
     check_lanes_static,
-    cache_dir,
     lane_key,
     lane_log_dir,
     lookup,
+    run_lock_path,
     parse_lanes,
     record,
     tree_entries,
@@ -787,7 +787,7 @@ def run_gate(
     repo: Path, config: GateConfig, *, stamp: bool = True, force: bool = False, use_cache: bool = True
 ) -> RunOutcome:
     try:
-        with hold_gate_run_lock(cache_dir(repo).parent / "run.lock"):
+        with hold_gate_run_lock(run_lock_path(repo)):
             return _run_gate(repo, config, stamp=stamp, force=force, use_cache=use_cache)
     except (OSError, GitError, ValueError, subprocess.SubprocessError) as error:
         return RunOutcome(2, f"local-gate run: {error}")

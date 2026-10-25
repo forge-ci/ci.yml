@@ -1,4 +1,10 @@
-"""One local gate per clone, held through execution and commit stamping."""
+"""One local gate per worktree, held through execution and commit stamping.
+
+Re-scoped from the clone in zackees/ci.yml#397: sibling worktrees gate
+concurrently (their real shared state -- the lane-cache records -- is
+written atomically, and the lane logs were always per-worktree), while one
+worktree still runs exactly one gate at a time.
+"""
 
 import errno
 import os
@@ -9,7 +15,7 @@ from typing import BinaryIO
 
 
 class GateRunBusy(OSError):
-    """Another process owns the clone's gate execution lock."""
+    """Another process owns this worktree's gate execution lock."""
 
 
 def _acquire(handle: BinaryIO) -> None:
@@ -49,7 +55,7 @@ def hold(path: Path) -> Iterator[None]:
             _acquire(handle)
         except OSError as error:
             if error.errno in (errno.EACCES, errno.EAGAIN):
-                raise GateRunBusy("another local gate is running for this clone; retry after it finishes") from error
+                raise GateRunBusy("another local gate is running for this worktree; retry after it finishes") from error
             raise
         try:
             yield

@@ -2,7 +2,8 @@
 
 An existing PR follows its branch update. The immutable SHA is the transport
 source; worktree HEAD is never substituted. A lease protects competing remote
-updates. The clone's gate lock spans validation and transport.
+updates. The worktree's gate lock (zackees/ci.yml#397) spans validation and
+transport.
 """
 
 import re
@@ -11,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ci_lint.gate_run_lock import hold
-from ci_lint.lane_cache import cache_dir
+from ci_lint.lane_cache import run_lock_path
 from ci_lint.local_gate import GitError, ZERO_SHA, _git, check_push, load_gate_config_at, tracked_changes
 from ci_lint.proc import run_captured
 
@@ -135,7 +136,7 @@ def publish(repo: Path, *, sha: str, remote: str = "origin") -> PublishOutcome:
             raise ValueError("--sha must be the full stamped commit id")
         if re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.-]*", remote) is None:
             raise ValueError("--remote must name a configured Git remote")
-        with hold(cache_dir(repo).parent / "run.lock"):
+        with hold(run_lock_path(repo)):
             return _publish(repo, sha, remote)
     except (OSError, GitError, ValueError, subprocess.SubprocessError) as error:
         return PublishOutcome(2, f"local-gate push: {error}")
