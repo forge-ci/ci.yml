@@ -38,6 +38,7 @@ import re
 import shutil
 import subprocess
 import time
+import tomllib
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -49,7 +50,11 @@ from ci_lint.globs import glob_to_regex
 from ci_lint.proc import run_captured
 from ci_lint.toml_cursor import Cursor, TomlValue
 
-KEY_VERSION = "gate-007/v1"
+# v2 (#401): a lane that does not run ci-lint hashes ci.toml SEMANTICALLY
+# (parsed, minus the top-level `linter` pin, sorted-key JSON) instead of by
+# blob sha, so a pin-only bump stops invalidating every lane on the machine.
+# Old v1 entries are not reusable across the semantics change.
+KEY_VERSION = "gate-007/v2"
 # EX_TEMPFAIL: an `optional` lane's way to say "cannot run on this host".
 NOT_APPLICABLE_EXIT = 75
 LANE_WEIGHTS: tuple[str, ...] = ("heavy", "light")
@@ -261,6 +266,53 @@ def tree_entries(repo: Path, tree: str) -> list[TreeEntry]:
     return sorted(out)
 
 
+def tree_file(repo: Path, tree: str, path: str) -> bytes | None:
+    """The blob bytes of `path` inside `tree`, or `None` when the tree has
+    no such path. Lets `lane_key` hash a file's *content* semantically
+    (#401) while every other input keeps its `(path, blob sha)` form."""
+
+    try:
+        return _git(repo, "cat-file", "blob", f"{tree}:{path}").encode()
+    except subprocess.CalledProcessError:
+        return None
+
+
+# The invocation shapes that make a lane execute ci-lint itself: a direct
+# `ci-lint`/`ci_lint` token, or the pinned `...ci.yml@<sha>` package form
+# (`uvx --from git+https://github.com/zackees/ci.yml@<sha> ci-lint ...`).
+_CI_LINT_TOKENS = ("ci-lint", "ci_lint", "ci.yml@")
+
+
+def lane_runs_ci_lint(lane: LaneConfig) -> bool:
+    """#401: does this lane execute ci-lint, and therefore depend on
+    ci.toml's top-level `linter` pin? Detected from the lane's own argv and
+    declared tools: a `ci-lint`/`ci_lint` token, or the pinned
+    `...ci.yml@<sha>` package form (`uvx --from git+.../ci.yml@<sha>
+    ci-lint ...`) -- the invocation shapes soldr#3556's consumers use. This
+    is an argv heuristic, so a lane that reaches ci-lint some other way
+    would miss a pin-only invalidation; that residual is the known cost of
+    the decided design (#401: semantic hashing, not a per-lane knob the
+    consumer could get wrong)."""
+
+    return any(token in part for part in (*lane.run, *lane.tools) for token in _CI_LINT_TOKENS)
+
+
+def semantic_ci_toml_sha(data: bytes) -> str:
+    """#401: ci.toml's key contribution for a lane that does not run
+    ci-lint: sha256 over the parsed document minus its top-level `linter`
+    pin, as sorted-key JSON (datetimes stringified). A pin-only bump then
+    leaves the key untouched; any other field change still changes it.
+    An unparseable document hashes its bytes instead -- fail closed to
+    byte sensitivity rather than pretend we understood the file."""
+
+    try:
+        parsed = tomllib.loads(data.decode("utf-8"))
+    except (tomllib.TOMLDecodeError, UnicodeDecodeError):
+        return hashlib.sha256(data).hexdigest()
+    parsed.pop("linter", None)
+    return hashlib.sha256(json.dumps(parsed, sort_keys=True, default=str).encode()).hexdigest()
+
+
 def mandatory_paths(lane: LaneConfig, gate_run: tuple[str, ...], gate_source: str, paths: set[str]) -> set[str]:
     named = {posixpath.normpath(token.replace("\\", "/")) for token in (*gate_run, *lane.run)} & paths
     named.add(gate_source)
@@ -358,7 +410,13 @@ def lane_key(
     versions: ToolVersions,
     environ: Mapping[str, str] | None = None,
     provider: ExecutionPins | None = None,
+    ci_toml: bytes | None = None,
 ) -> LaneKey:
+    """... (#401): when the caller supplies `ci_toml` (the tree's own
+    ci.toml bytes) and the lane does not run ci-lint, ci.toml contributes
+    its semantic digest (minus the `linter` pin) instead of its blob sha.
+    No `ci_toml` argument -> byte hashing, exactly as before."""
+
     env = os.environ if environ is None else environ
     inputs = lane_inputs(entries, lane, gate_run, gate_source)
     header = KeyHeader(
@@ -372,11 +430,12 @@ def lane_key(
     if provider is None:
         document.pop("provider")
     h = hashlib.sha256(json.dumps(document, sort_keys=True).encode())
+    ci_sha = semantic_ci_toml_sha(ci_toml) if ci_toml is not None and not lane_runs_ci_lint(lane) else None
     for entry in inputs:
         h.update(b"\0")
         h.update(entry.path.encode())
         h.update(b"\0")
-        h.update(entry.sha.encode())
+        h.update((ci_sha if ci_sha is not None and entry.path == "ci.toml" else entry.sha).encode())
     return LaneKey(key=h.hexdigest(), inputs=len(inputs), tools=header.tools)
 
 

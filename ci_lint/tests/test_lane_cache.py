@@ -27,6 +27,7 @@ from ci_lint.lane_cache import (
     record,
     run_audit,
     tree_entries,
+    tree_file,
 )
 from ci_lint.local_gate import (
     Attestation,
@@ -546,6 +547,81 @@ class KeyTest(LanedRepo):
         self.assertEqual(parse_attestation(f"s\n\n{att.trailer()}\n"), att)
         legacy = parse_attestation(f"s\n\nLocal-Gate: v1 tree={TREE} secs=5\n")
         assert legacy is not None and legacy.lanes is None
+
+
+class LinterPinKeyTest(LanedRepo):
+    """zackees/ci.yml#401: a pin-only bump of ci.toml's top-level `linter`
+    must not invalidate lanes that never run ci-lint -- soldr#3556 measured
+    ~24 minutes of heavy-lane reruns per pin bump for a pin that only the
+    guards lane consumes. A lane whose argv/tools invoke ci-lint keeps the
+    full pin in its key, any OTHER ci.toml field change still moves every
+    lane, and KEY_VERSION bumped to gate-007/v2 across the semantics
+    change."""
+
+    PIN_A = f'linter = "zackees/ci.yml@{"a" * 40}"\n\n[cache]\nbudget = "9GB"\n'
+    PIN_B = f'linter = "zackees/ci.yml@{"b" * 40}"\n\n[cache]\nbudget = "9GB"\n'
+    BUDGET_CHANGE = f'linter = "zackees/ci.yml@{"a" * 40}"\n\n[cache]\nbudget = "8GB"\n'
+
+    def _keys_for(self, toml_text: str, lane: LaneConfig) -> str:
+        path = self.repo / "ci.toml"
+        if not path.exists() or path.read_text(encoding="utf-8") != toml_text:
+            self.write("ci.toml", toml_text)
+            self.commit(f"ci.toml {toml_text.splitlines()[0][:44]}")
+        cfg = self.config()
+        return lane_key(
+            tree_entries(self.repo, "HEAD"), lane,
+            gate_run=cfg.run, gate_source=cfg.source,
+            versions=ToolVersions([ToolVersion("git", "1")]),
+            ci_toml=tree_file(self.repo, "HEAD", "ci.toml"),
+        ).key
+
+    def test_pin_only_bump_moves_only_ci_lint_lanes(self) -> None:
+        plain = LaneConfig("plain", ("python", "gate.py", "--lane", "lint"), tools=("git",))
+        cilint = LaneConfig(
+            "guards",
+            ("uvx", "--from", f"git+https://github.com/zackees/ci.yml@{'c' * 40}", "ci-lint", "selftest"),
+            tools=("git",),
+        )
+
+        plain_a = self._keys_for(self.PIN_A, plain)
+        cilint_a = self._keys_for(self.PIN_A, cilint)
+        plain_b = self._keys_for(self.PIN_B, plain)
+        cilint_b = self._keys_for(self.PIN_B, cilint)
+
+        # GREEN (acceptance): the pin-only bump leaves a non-ci-lint lane's
+        # key equal, and still changes a ci-lint lane's.
+        self.assertEqual(plain_a, plain_b, "a pin-only bump must not invalidate a non-ci-lint lane (#401)")
+        self.assertNotEqual(cilint_a, cilint_b, "a lane that runs ci-lint keeps the full pin")
+
+        # Any OTHER ci.toml field change still moves both lanes.
+        self.assertNotEqual(self._keys_for(self.BUDGET_CHANGE, plain), plain_a, "budget change moves every lane")
+        self.assertNotEqual(self._keys_for(self.BUDGET_CHANGE, cilint), cilint_a, "budget change moves every lane")
+
+    def test_semantic_hash_ignores_comments_but_not_values(self) -> None:
+        # The semantic contribution is parse-based: a comment-only edit of
+        # ci.toml also leaves a non-ci-lint lane's key equal (the residual
+        # of the decided design -- lanes do not read comments), while a
+        # value edit moves it.
+        plain = LaneConfig("plain", ("python", "gate.py"), tools=("git",))
+        with_comment = self.PIN_A + "# a comment\n"
+        self.assertEqual(self._keys_for(self.PIN_A, plain), self._keys_for(with_comment, plain))
+
+    def test_no_ci_toml_bytes_keeps_byte_sensitivity(self) -> None:
+        # A caller that passes no ci_toml (or a lane in a tree without
+        # ci.toml) hashes ci.toml by blob sha, exactly as before #401.
+        plain = LaneConfig("plain", ("python", "gate.py"), tools=("git",))
+        cfg = self.config()
+
+        def key_without_bytes(toml_text: str) -> str:
+            self.write("ci.toml", toml_text)
+            self.commit("pin")
+            return lane_key(
+                tree_entries(self.repo, "HEAD"), plain,
+                gate_run=cfg.run, gate_source=cfg.source,
+                versions=ToolVersions([ToolVersion("git", "1")]),
+            ).key
+
+        self.assertNotEqual(key_without_bytes(self.PIN_A), key_without_bytes(self.PIN_B))
 
 
 class AuditTest(LanedRepo):
