@@ -17,13 +17,16 @@ from ci_lint import cli
 from ci_lint.finding import Finding, Status
 from ci_lint.fleet import (
     RepoScan,
+    burn_share,
     check_ci_toml,
+    check_fleet_003,
     check_workflows,
     load_report_json,
     run_fleet_scan,
     to_json_dict,
 )
 from ci_lint.fleet_cli import replay_fetch
+from ci_lint.settings_audit import SettingsReply
 from ci_lint.sync_issues import ExistingIssue, fingerprint, plan_repo, plan_sync
 from ci_lint.tests.helpers import FIXTURES
 from ci_lint.yaml_io import yaml_tooling_available
@@ -51,9 +54,9 @@ class FleetScanTest(unittest.TestCase):
         report = run_fleet_scan(_fetch(RED), "t", owners=("zackees",), repos=(T,))
         (scan,) = report.repos
         rules = {f.rule for f in scan.findings if f.status == Status.VIOLATION}
-        self.assertEqual(rules, {"FLEET-001", "FLEET-002", "GEN-008", "RUN-001", "RUST-014", "SEC-007"})
+        self.assertEqual(rules, {"FLEET-001", "FLEET-002", "FLEET-003", "GEN-008", "RUN-001", "RUST-014", "SEC-007"})
         self.assertIsNone(scan.ci_toml_schema)
-        self.assertEqual(scan.score, 6 * 10 + scan.violations)
+        self.assertEqual(scan.score, 7 * 10 + scan.violations)
 
     def test_ranking_worst_first_and_json_roundtrip(self) -> None:
         red = run_fleet_scan(_fetch(RED), "t", repos=(T,)).repos[0]
@@ -121,6 +124,68 @@ class FleetUnitTest(unittest.TestCase):
             wf.write_text("on:\n  push:\njobs:\n  a:\n    runs-on: ubuntu-24.04\n", encoding="utf-8")
             count, prs, found = check_workflows(Path(tmp))
         self.assertEqual((count, prs, [f.rule for f in found]), (1, (), ["GEN-001"]))
+
+
+_RUNS = "https://api.github.com/repos/o/r/actions/runs?per_page=100"
+
+
+def _run(event: str, branch: str, minutes: int) -> dict[str, str]:
+    return {
+        "event": event,
+        "head_branch": branch,
+        "status": "completed",
+        "run_started_at": "2026-10-20T00:00:00Z",
+        "updated_at": f"2026-10-20T{minutes // 60:02d}:{minutes % 60:02d}:00Z",
+    }
+
+
+_CLUD_SHAPED = {_RUNS: [200, {"workflow_runs": [_run("push", "main", 22), _run("pull_request", "x", 78)]}]}
+_QUEUE = SettingsReply(
+    200,
+    [
+        {
+            "enforcement": "active",
+            "target": "branch",
+            "rules": [{"type": "merge_queue"}],
+            "conditions": {"ref_name": {"include": ["~DEFAULT_BRANCH"]}},
+        }
+    ],
+)
+
+
+class Fleet003Test(unittest.TestCase):
+    def _check(self, table, reuse=False, merge_group=False, rulesets=None):
+        return check_fleet_003(replay_fetch(table), "t", "o/r", "main", reuse, merge_group, rulesets)
+
+    def test_red_clud_shaped_burn_is_a_violation(self) -> None:
+        (f,) = self._check(_CLUD_SHAPED, rulesets=SettingsReply(200, []))
+        self.assertEqual((f.rule, f.status), ("FLEET-003", Status.VIOLATION))
+        self.assertIn("22%", f.message)
+
+    def test_green_with_reuse_check_wiring(self) -> None:
+        self.assertEqual(self._check({}, reuse=True), [])
+
+    def test_green_with_live_merge_queue(self) -> None:
+        self.assertEqual(self._check({}, merge_group=True, rulesets=_QUEUE), [])
+
+    def test_queue_ruleset_without_merge_group_trigger_is_not_live(self) -> None:
+        (f,) = self._check(_CLUD_SHAPED, rulesets=_QUEUE)
+        self.assertEqual(f.status, Status.VIOLATION)
+
+    def test_unreadable_history_needs_review(self) -> None:
+        (f,) = self._check({_RUNS: [403, {}]}, rulesets=SettingsReply(200, []))
+        self.assertEqual(f.status, Status.NEEDS_REVIEW)
+        (f,) = self._check({}, rulesets=SettingsReply(200, []))
+        self.assertEqual(f.status, Status.NEEDS_REVIEW)
+
+    def test_merge_group_with_unreadable_rulesets_needs_review(self) -> None:
+        (f,) = self._check(_CLUD_SHAPED, merge_group=True, rulesets=SettingsReply(403, []))
+        self.assertEqual(f.status, Status.NEEDS_REVIEW)
+
+    def test_low_share_is_clean(self) -> None:
+        table = {_RUNS: [200, {"workflow_runs": [_run("push", "main", 1), _run("pull_request", "x", 30)]}]}
+        self.assertEqual(self._check(table, rulesets=SettingsReply(200, [])), [])
+        self.assertEqual(burn_share([_run("push", "dev", 5)], "main").push_runs, 0)
 
 
 def _scan(findings: tuple[Finding, ...]) -> RepoScan:

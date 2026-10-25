@@ -23,6 +23,12 @@ not require a repository to have adopted `ci.toml` schema 3 yet:
     no exceptions, maintainer decision 2026-10-02).
   - FLEET-002: the repository's Actions cache usage is at or above
     FLEET_CACHE_WARN_FRACTION of GitHub's 10 GiB per-repository limit.
+  - FLEET-003 (#159, docs/designs/default-branch-verified-reuse.md Phase 3):
+    default-branch push runs take >= FLEET_BURN_SHARE of the recent runs'
+    wall time while no workflow makes a `ci-lint reuse-check` decision
+    (GEN-021) and there is no live merge queue (a `merge_group` trigger
+    plus an active merge-queue ruleset on the default branch). Unreadable
+    run history or rulesets is `needs_review`, never a pass.
 
 Every call goes through an injectable `FetchStatusFn`, so the unit tests
 replay recorded API responses and never touch the network. Workflow files
@@ -38,15 +44,24 @@ import json
 import tempfile
 import tomllib
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 from ci_lint.finding import Finding, Status
 from ci_lint.github_api import FetchStatusFn, GitHubApiError
+from ci_lint.rules.default_branch_skip import _REUSE_CHECK_RE
 from ci_lint.rules.setup_soldr_freshness import check_rust_014
 from ci_lint.rules.swatinem_ban import check_cache_025
 from ci_lint.rules.workflows import FLEET_RUNNERS
 from ci_lint.schema import load_ci_toml
-from ci_lint.settings_audit import _fetch_branch_protection, _fetch_rulesets, check_gen_006, check_sec_007
+from ci_lint.settings_audit import (
+    SettingsReply,
+    _fetch_branch_protection,
+    _fetch_rulesets,
+    _has_active_merge_queue,
+    check_gen_006,
+    check_sec_007,
+)
 from ci_lint.workflow_scan import as_dict, get_on_section, jobs_of, load_workflows
 from ci_lint.yaml_io import LoadStatus
 
@@ -54,6 +69,9 @@ API_ROOT = "https://api.github.com"
 DEFAULT_OWNERS: tuple[str, ...] = ("zackees", "FastLED", "TechWatchProject")
 FLEET_CACHE_LIMIT_BYTES = 10 * 1024**3
 FLEET_CACHE_WARN_FRACTION = 0.8
+# FLEET-003: the design doc's Phase 3 bar (clud measured 22%).
+FLEET_BURN_SHARE = 0.20
+FLEET_BURN_RUNS_PER_PAGE = 100
 
 # Ranking: breadth first -- each distinct violated rule ID weighs
 # RULE_WEIGHT, then every individual violation and needs_review finding adds
@@ -326,6 +344,132 @@ def check_cache_usage(fetch_status: FetchStatusFn, token: str, repo: str) -> tup
     return size, []
 
 
+# ── FLEET-003: default-branch CI burn ─────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class BurnShare:
+    push_seconds: int
+    total_seconds: int
+    push_runs: int
+
+    @property
+    def share(self) -> float:
+        return self.push_seconds / self.total_seconds if self.total_seconds else 0.0
+
+
+def _iso_seconds(value: object) -> int | None:
+    if not isinstance(value, str):
+        return None
+    try:
+        return int(datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp())
+    except ValueError:
+        return None
+
+
+def burn_share(runs: list[object], default_branch: str) -> BurnShare:
+    """Wall time (run_started_at -> updated_at, completed runs only) of
+    default-branch `push` runs versus every run in the page. Wall time, not
+    summed job time: one GET, an approximation of runner share."""
+
+    push = total = push_runs = 0
+    for run in runs:
+        if not isinstance(run, dict) or run.get("status") != "completed":
+            continue
+        start, end = _iso_seconds(run.get("run_started_at")), _iso_seconds(run.get("updated_at"))
+        if start is None or end is None or end < start:
+            continue
+        total += end - start
+        if run.get("event") == "push" and run.get("head_branch") == default_branch:
+            push += end - start
+            push_runs += 1
+    return BurnShare(push, total, push_runs)
+
+
+@dataclass(frozen=True)
+class WorkflowRelief:
+    has_reuse_check: bool  # some workflow runs `ci-lint reuse-check`
+    has_merge_group: bool  # some workflow declares a `merge_group` trigger
+
+
+def workflow_relief(repo_root: Path) -> WorkflowRelief:
+    """Default-branch burn relief visible in materialized workflow files."""
+
+    reuse = merge_group = False
+    for wf in load_workflows(repo_root):
+        if wf.status != LoadStatus.OK:
+            continue
+        doc = as_dict(wf.document)
+        if "merge_group" in get_on_section(doc):
+            merge_group = True
+        for job in jobs_of(doc).values():
+            steps = job.get("steps")
+            for step in steps if isinstance(steps, list) else []:
+                run = step.get("run") if isinstance(step, dict) else None
+                if isinstance(run, str) and _REUSE_CHECK_RE.search(run):
+                    reuse = True
+    return WorkflowRelief(reuse, merge_group)
+
+
+def check_fleet_003(
+    fetch_status: FetchStatusFn,
+    token: str,
+    repo: str,
+    default_branch: str,
+    has_reuse_check: bool,
+    has_merge_group: bool,
+    rulesets: SettingsReply | None,
+) -> list[Finding]:
+    path = f"branch:{default_branch}"
+    if has_reuse_check:
+        return []
+    queue_unknown = rulesets is None or rulesets.status not in (200, 404)
+    if has_merge_group and not queue_unknown and rulesets is not None:
+        body = rulesets.body if isinstance(rulesets.body, list) else []
+        if _has_active_merge_queue(body, default_branch):
+            return []
+    url = f"{API_ROOT}/repos/{repo}/actions/runs?per_page={FLEET_BURN_RUNS_PER_PAGE}"
+    result = _get(fetch_status, token, url)
+    if result is None or result[0] != 200 or not isinstance(result[1], dict):
+        what = "network error" if result is None else f"HTTP {result[0]}"
+        return [
+            Finding(
+                rule="FLEET-003",
+                path=path,
+                status=Status.NEEDS_REVIEW,
+                message=f"no reuse-check decision and no proven merge queue, and the run history is unreadable ({what})",
+                fix="re-run `ci-lint fleet scan` with a token that can read this repository's Actions runs",
+            )
+        ]
+    runs = result[1].get("workflow_runs")
+    burn = burn_share(runs if isinstance(runs, list) else [], default_branch)
+    if burn.push_runs == 0 or burn.share < FLEET_BURN_SHARE:
+        return []
+    pct = f"{burn.share * 100:.0f}%"
+    if queue_unknown and has_merge_group:
+        return [
+            Finding(
+                rule="FLEET-003",
+                path=path,
+                status=Status.NEEDS_REVIEW,
+                message=f"default-branch push runs are {pct} of recent CI wall time with no reuse-check "
+                "decision; a merge_group trigger exists but the rulesets could not be read",
+                fix="re-run with a token that can read rulesets to confirm the merge queue is live",
+            )
+        ]
+    return [
+        Finding(
+            rule="FLEET-003",
+            path=path,
+            message=f"default-branch push runs re-run validation and are {pct} of recent CI wall time "
+            f"({burn.push_runs} push runs) with no `ci-lint reuse-check` decision and no live merge queue",
+            fix="adopt verified default-branch reuse (GEN-021, `[reuse.default-branch]` + `ci-lint reuse-check`, "
+            "docs/designs/default-branch-verified-reuse.md) or a merge queue (merge_group trigger + an "
+            "active merge-queue ruleset)",
+        )
+    ]
+
+
 def scan_repo(fetch_status: FetchStatusFn, token: str, ref: RepoRef) -> RepoScan:
     repo = ref.full_name
     findings: list[Finding] = []
@@ -366,6 +510,7 @@ def scan_repo(fetch_status: FetchStatusFn, token: str, ref: RepoRef) -> RepoScan
         findings.extend(wf_findings)
         findings.extend(check_rust_014(fetch_status, token, root))
         findings.extend(check_cache_025(root))
+        relief = workflow_relief(root)
         if text is not None:
             (root / "ci.toml").write_text(text, encoding="utf-8")
             ci, _ = load_ci_toml(root)
@@ -376,6 +521,11 @@ def scan_repo(fetch_status: FetchStatusFn, token: str, ref: RepoRef) -> RepoScan
     bp = _fetch_branch_protection(fetch_status, token, repo, ref.default_branch)
     rulesets = _fetch_rulesets(fetch_status, token, repo)
     findings.extend(check_gen_006(bp, rulesets, ref.default_branch))
+    findings.extend(
+        check_fleet_003(
+            fetch_status, token, repo, ref.default_branch, relief.has_reuse_check, relief.has_merge_group, rulesets
+        )
+    )
 
     cache_bytes, cache_findings = check_cache_usage(fetch_status, token, repo)
     findings.extend(cache_findings)
