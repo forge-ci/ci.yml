@@ -661,6 +661,9 @@ def check_group9(ci: CiToml, repo_root: Path) -> tuple[list[Finding], str]:
     findings.extend(check_cache_032(ci))
     findings.extend(check_cache_034(ci, repo_root))
     findings.extend(check_cache_038(ci, repo_root))
+    from ci_lint.rules.lint_cache import check_lint_cache  # pylint: disable=import-outside-toplevel
+
+    findings.extend(check_lint_cache(ci, repo_root))
     return findings, arithmetic
 
 
