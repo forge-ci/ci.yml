@@ -29,6 +29,7 @@ truncates that PR's saved cache every time).
 
 from __future__ import annotations
 
+import itertools
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -36,7 +37,7 @@ from pathlib import Path
 from ci_lint.finding import Finding, Status
 from ci_lint.resolve import resolve_flow
 from ci_lint.schema import CacheFamily, CiToml
-from ci_lint.workflow_scan import as_dict, load_composite_actions, load_workflows
+from ci_lint.workflow_scan import as_dict, jobs_of, load_composite_actions, load_workflows, steps_of
 from ci_lint.yaml_io import LoadStatus, YamlValue
 from ci_lint.rules.tools import _iter_uses_with, _is_plan_expr
 
@@ -650,6 +651,7 @@ def check_group9(ci: CiToml, repo_root: Path) -> tuple[list[Finding], str]:
     findings.extend(check_cache_031(ci))
     findings.extend(check_cache_032(ci))
     findings.extend(check_cache_034(ci, repo_root))
+    findings.extend(check_cache_038(ci, repo_root))
     return findings, arithmetic
 
 
@@ -958,3 +960,212 @@ def check_cache_034(ci: CiToml, repo_root: Path) -> list[Finding]:
             ),
         )
     ]
+
+
+# CACHE-038 (#125): setup-soldr's build-cache key is
+# `setup-soldr-buildcache-v2-<os>-<arch>-<toolchain>-<lock>[-<suffix>]`, so two
+# saving jobs on one runner label with one (or no) `cache-key-suffix` compute
+# one key. GitHub cache keys are immutable: the first job to finish wins, the
+# other's save is silently dropped while its log still says `saved`
+# (FastLED/fbuild#1587: a 166.5 MB facade cache beat the 478.7 MB workspace one,
+# and PRs restored it for a 28% hit rate).
+_SETUP_SOLDR_SLUG = "zackees/setup-soldr"
+_NON_BUILD_SUBACTIONS: tuple[str, ...] = ("/cook", "/cleanup")
+_NO_SAVE_VALUES: frozenset[str] = frozenset({"false", "none", "no", "off", "0"})
+_INPUT_REF_RE = re.compile(r"^\$\{\{\s*inputs\.([A-Za-z0-9_-]+)\s*\}\}$")
+
+
+@dataclass(frozen=True)
+class _SoldrWriter:
+    """One setup-soldr build-cache saving step, as one job sees it."""
+
+    workflow: str
+    job: str
+    loc: str
+    runs_on: str | None  # None = dynamic, not statically known
+    suffix: str | None  # None = dynamic; "" = absent
+    save: str
+
+
+@dataclass(frozen=True)
+class _InputDefault:
+    """One composite-action input's declared default."""
+
+    name: str
+    value: str
+
+
+@dataclass(frozen=True)
+class _CompositeSoldr:
+    """A local composite action's setup-soldr build step plus its input defaults."""
+
+    action: str  # `./<action dir>`, as a caller's `uses:` names it
+    with_: dict[str, YamlValue]
+    defaults: tuple[_InputDefault, ...]
+
+
+def _is_build_soldr(uses: str) -> bool:
+    if not uses.startswith(_SETUP_SOLDR_SLUG):
+        return False
+    rest = uses[len(_SETUP_SOLDR_SLUG) :].split("@", 1)[0]
+    return rest == "" or rest not in _NON_BUILD_SUBACTIONS
+
+
+def _composite_soldr_steps(repo_root: Path) -> list[_CompositeSoldr]:
+    """Every local composite action's setup-soldr build steps (one level deep)."""
+
+    out: list[_CompositeSoldr] = []
+    for item in load_composite_actions(repo_root):
+        if item.status != LoadStatus.OK:
+            continue
+        doc = as_dict(item.document)
+        inputs = doc.get("inputs")
+        defaults = tuple(
+            _InputDefault(name=str(name), value=str(spec.get("default")))
+            for name, spec in (inputs.items() if isinstance(inputs, dict) else ())
+            if isinstance(spec, dict) and spec.get("default") is not None
+        )
+        action = "./" + str(Path(item.path).parent).strip("/")
+        out.extend(
+            _CompositeSoldr(action=action, with_=w, defaults=defaults)
+            for uses, _loc, w in _iter_uses_with(doc, is_composite=True)
+            if _is_build_soldr(uses)
+        )
+    return out
+
+
+def _resolve_input(
+    value: YamlValue, caller: dict[str, YamlValue], defaults: tuple[_InputDefault, ...]
+) -> YamlValue:
+    """Substitute a bare `${{ inputs.<n> }}` with the caller's value or default."""
+
+    if isinstance(value, str):
+        m = _INPUT_REF_RE.match(value.strip())
+        if m:
+            name = m.group(1)
+            if name in caller:
+                return caller[name]
+            return next((d.value for d in defaults if d.name == name), None)
+    return value
+
+
+def _as_text(value: YamlValue) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    return str(value)
+
+
+def _runs_on_key(value: YamlValue) -> str | None:
+    if isinstance(value, str):
+        return None if "${{" in value else value.strip()
+    if isinstance(value, list) and value and all(isinstance(v, str) and "${{" not in v for v in value):
+        return ",".join(sorted(str(v).strip() for v in value))
+    return None
+
+
+def _writer_from_with(
+    wf: str, job: str, loc: str, runs_on: str | None, with_: dict[str, YamlValue]
+) -> _SoldrWriter | None:
+    save = _as_text(with_.get("save-cache"))
+    save_text = "auto" if save is None else save.strip()
+    if save_text.lower() in _NO_SAVE_VALUES:
+        return None
+    raw_suffix = _as_text(with_.get("cache-key-suffix"))
+    if raw_suffix is None:
+        suffix: str | None = ""
+    elif "${{" in raw_suffix:
+        suffix = None
+    else:
+        suffix = raw_suffix.strip()
+    return _SoldrWriter(workflow=wf, job=job, loc=loc, runs_on=runs_on, suffix=suffix, save=save_text)
+
+
+def _collect_soldr_writers(repo_root: Path) -> list[_SoldrWriter]:
+    composites = _composite_soldr_steps(repo_root)
+    writers: list[_SoldrWriter] = []
+    for item in load_workflows(repo_root):
+        if item.status != LoadStatus.OK:
+            continue
+        for job_id, job in jobs_of(as_dict(item.document)).items():
+            runs_on = _runs_on_key(job.get("runs-on"))
+            for i, step in enumerate(steps_of(job)):
+                uses = step.get("uses")
+                if not isinstance(uses, str):
+                    continue
+                raw_with = step.get("with")
+                with_ = raw_with if isinstance(raw_with, dict) else {}
+                loc = f"jobs.{job_id}.steps[{i}]"
+                candidates: list[dict[str, YamlValue]] = []
+                if _is_build_soldr(uses):
+                    candidates.append(with_)
+                else:
+                    for comp in (c for c in composites if c.action == uses.rstrip("/")):
+                        candidates.append(
+                            {k: _resolve_input(v, with_, comp.defaults) for k, v in comp.with_.items()}
+                        )
+                for cand in candidates:
+                    writer = _writer_from_with(item.path, job_id, loc, runs_on, cand)
+                    if writer is not None:
+                        writers.append(writer)
+    return writers
+
+
+def _describe(w: _SoldrWriter) -> str:
+    return f"{w.workflow} {w.loc}"
+
+
+def check_cache_038(ci: CiToml, repo_root: Path) -> list[Finding]:
+    """Two or more saving setup-soldr jobs racing for one immutable cache key."""
+
+    _ = ci  # uniform group-9 signature; the rule reads only the workflows
+    writers = _collect_soldr_writers(repo_root)
+    findings: list[Finding] = []
+    dynamic = [w for w in writers if w.runs_on is None or w.suffix is None]
+    static = sorted(
+        (w for w in writers if w.runs_on is not None and w.suffix is not None),
+        key=lambda w: (w.runs_on or "", w.suffix or ""),
+    )
+    fix = (
+        "give every saving setup-soldr job on the same runner a distinct `cache-key-suffix` "
+        "(e.g. the job id), or set `save-cache: \"false\"` on all but the one job whose build "
+        "the others should restore (zackees/ci.yml#125, FastLED/fbuild#1587)"
+    )
+    for (runs_on, suffix), grouped in itertools.groupby(static, key=lambda w: (w.runs_on, w.suffix)):
+        members = list(grouped)
+        jobs = {(m.workflow, m.job) for m in members}
+        if len(jobs) < 2:
+            continue
+        where = "; ".join(_describe(m) for m in members)
+        shown = f"`cache-key-suffix: {suffix}`" if suffix else "no `cache-key-suffix`"
+        findings.append(
+            Finding(
+                rule="CACHE-038",
+                status=Status.VIOLATION,
+                path=members[0].workflow,
+                message=(
+                    f"{len(jobs)} jobs save a setup-soldr build cache on `runs-on: {runs_on}` with "
+                    f"{shown} ({where}); they compute one immutable key, so the first to finish "
+                    "wins and every other save is silently dropped while its log still says saved"
+                ),
+                fix=fix,
+            )
+        )
+    if dynamic and len(writers) >= 2:
+        for w in dynamic:
+            part = "runs-on" if w.runs_on is None else "cache-key-suffix"
+            findings.append(
+                Finding(
+                    rule="CACHE-038",
+                    status=Status.NEEDS_REVIEW,
+                    path=w.workflow,
+                    message=(
+                        f"{_describe(w)} saves a setup-soldr build cache with a dynamic {part}; "
+                        f"with {len(writers)} saving setup-soldr steps in the repository, confirm "
+                        "no two of them resolve to the same runner and suffix"
+                    ),
+                    fix=fix,
+                )
+            )
+    return findings
