@@ -452,6 +452,20 @@ def lane_log_dir(repo: Path) -> Path:
     return git_dir / "ci-lint" / "lane-logs"
 
 
+def run_lock_path(repo: Path) -> Path:
+    """The gate-run lock, scoped to this worktree (same `--git-dir` basis as
+    `lane_log_dir`; zackees/ci.yml#397). The old clone-common lock made two
+    worktrees of one clone queue behind each other for hours (bosn#617 wait)
+    while what they actually share stayed safe without it: `record` writes
+    lane-cache entries atomically (tmp + rename), the lane logs were already
+    per-worktree, and git handles its own cross-worktree state. The per-
+    worktree lock still excludes a second gate -- and this repo's publish
+    step -- from the SAME worktree, which is the conflict that is real
+    (#362's duplicate-run front door, re-scoped rather than removed)."""
+
+    return lane_log_dir(repo).parent / "run.lock"
+
+
 def cache_dir(repo: Path) -> Path:
     common = Path(_git(repo, "rev-parse", "--git-common-dir").strip())
     if not common.is_absolute():

@@ -136,11 +136,11 @@ class GatePublishTest(TempRepoCase):
 
     def test_other_gate_owner_prevents_publication(self) -> None:
         from ci_lint.gate_run_lock import hold
-        from ci_lint.lane_cache import cache_dir
+        from ci_lint.lane_cache import run_lock_path
 
         head = self.prepare()
         before = self.remote_head()
-        with hold(cache_dir(self.tmp).parent / "run.lock"):
+        with hold(run_lock_path(self.tmp)):
             result = publish(self.tmp, sha=head)
         self.assertNotEqual(result.exit_code, 0)
         self.assertEqual(self.remote_head(), before)
