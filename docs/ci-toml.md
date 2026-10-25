@@ -1183,7 +1183,7 @@ fails (wrong digest, wrong head SHA, not `success`), is the pre-existing
 
 ### Verified reuse on default-branch pushes (`ci-lint reuse-check`, GEN-021, #156)
 
-**Merge-queue evidence (`--queue-evidence`, opt-in).** A merge queue merges a PR that is behind the default branch, so the pushed tree differs from the PR head's (`tree-mismatch`) even though the queue already validated that exact commit. With `--queue-evidence`, a `tree-mismatch` or `no-successful-run` on the PR head falls back to the newest decisive `merge_group` run whose `head_sha` is the pushed commit itself: same selection, per-job and freshness rules, and the merged-PR association is still required. No queue run keeps the PR-head reason; a red or unfinished queue run is a refusal of its own.
+**Merge-queue evidence (`--queue-evidence`, opt-in).** A merge queue merges a PR that is behind the default branch, so the pushed tree differs from the PR head's (`tree-mismatch`) even though the queue already validated that exact commit. With `--queue-evidence`, a `tree-mismatch` or `no-successful-run` on the PR head falls back to the newest decisive `merge_group` run whose `head_sha` is the pushed commit itself: same selection, per-job and freshness rules, and the merged-PR association is still required. No queue run keeps the PR-head reason; a red or unfinished queue run is a refusal of its own. The document's `proving_sha` names the commit the proving jobs ran on (the PR head, or the pushed commit for queue evidence); `ci-lint gate` re-verifies each skipped job against it.
 
 A different mechanism from title-edit reuse above (which reuses lanes
 within the SAME pull_request head by lane digest, `ci_lint.reuse`, whose

@@ -268,6 +268,27 @@ class GateDefaultBranchReuseTest(unittest.TestCase):
         )
         self.assertFalse(_skipped_ok(report, "fast"))
 
+    def _queue_fetch(self, url: str, token: str) -> JsonValue:
+        # merge_group evidence: the proving jobs ran on the pushed commit.
+        name = "fast [abc123]" if "9001" in url else "dylint [def456]"
+        return {"conclusion": "success", "head_sha": PUSH_SHA, "name": name}
+
+    def test_queue_evidence_is_verified_against_its_proving_sha(self) -> None:
+        report = _gate(_doc(proving_sha=PUSH_SHA), fetch=self._queue_fetch)
+        self.assertTrue(_skipped_ok(report, "fast"))
+        self.assertTrue(report.ok)
+
+    def test_queue_jobs_without_a_proving_sha_are_checked_against_the_pr_head(self) -> None:
+        report = _gate(_doc(), fetch=self._queue_fetch)
+        self.assertFalse(_skipped_ok(report, "fast"))
+
+    def test_a_proving_sha_does_not_accept_jobs_on_a_third_commit(self) -> None:
+        report = _gate(
+            _doc(proving_sha=PUSH_SHA),
+            fetch=lambda url, token: {"conclusion": "success", "head_sha": HEAD_SHA, "name": "fast [abc123]"},
+        )
+        self.assertFalse(_skipped_ok(report, "fast"))
+
     def test_a_document_without_a_job_id_is_needs_review(self) -> None:
         """A name we cannot re-fetch is not a proof, and is not a failure
         either -- it is unverifiable, which is its own state."""
