@@ -21,7 +21,7 @@ import sys
 import subprocess
 import time
 from datetime import datetime, timezone
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from ci_lint.hosted_attestations import job_decisions as _job_decisions, trust_input
@@ -29,7 +29,8 @@ from ci_lint.attestations import output_name as attestation_output_name
 from ci_lint.cargo_messages import JsonValue
 from ci_lint.finding import Status
 from ci_lint.first_pass import DEFAULT_MIN_PRS, DEFAULT_TARGET, collect, render_text
-from ci_lint.github_api import GitHubApiError, default_fetch
+from ci_lint.github_api import GitHubApiError, default_fetch, default_fetch_status
+from ci_lint.merge_queue_trust import decide_merge_group, merge_group_event
 from ci_lint.gate_bare_tools import check_no_bare_rust
 from ci_lint.remote_only import check_gate_012
 from ci_lint.rules.cpp_ctest import check_cpp_001
@@ -147,11 +148,8 @@ def _cmd_verify(args: argparse.Namespace) -> int:
         print(f"::error title=GATE-003 local gate not run::{outcome.message.splitlines()[0]}")
     lines = [f"attested={'true' if outcome.attested else 'false'}", f"state={outcome.state}"]
     if args.trust:
-        trust_input = policy_input
-        decision = (
-            TrustDecision(False, False, "local-replay", "local execution never reuses a commit attestation")
-            if local_replay else decide_trust(repo, trust_input)
-        )
+        outcome_trust = _trust_decision(repo, event, payload, policy_input, local_replay=local_replay)
+        decision, trust_input = outcome_trust.decision, outcome_trust.input
         print(decision.render())
         lines += [
             f"trusted={'true' if decision.trusted else 'false'}",
@@ -174,6 +172,25 @@ def _cmd_verify(args: argparse.Namespace) -> int:
             with open(target, "a", encoding="utf-8") as fh:
                 fh.write("\n".join(lines) + "\n")
     return outcome.exit_code
+
+
+@dataclass(frozen=True)
+class _TrustOutcome:
+    decision: TrustDecision
+    input: TrustInput  # the head the per-job GATE-010 decisions judge
+
+
+def _trust_decision(repo: Path, event: str, payload: dict[str, JsonValue], inp: TrustInput, *,
+                    local_replay: bool) -> _TrustOutcome:
+    if local_replay:
+        return _TrustOutcome(TrustDecision(False, False, "local-replay", "local execution never reuses a commit attestation"), inp)
+    if event == "merge_group":
+        # #419: reuse only a single-PR, tree-identical, attested queue entry.
+        group = decide_merge_group(
+            repo, event, merge_group_event(payload, os.environ.get("GITHUB_REPOSITORY")),
+            fetch=default_fetch_status, token=os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN") or "")
+        return _TrustOutcome(group.decision, group.pr_input or inp)
+    return _TrustOutcome(decide_trust(repo, inp), inp)
 
 
 def _trust_input(args: argparse.Namespace, payload: dict[str, JsonValue], event: str, sha: str) -> TrustInput:
