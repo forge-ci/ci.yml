@@ -158,6 +158,31 @@ class JanitorTest(unittest.TestCase):
         self.assertEqual(4, len(result.deleted))
         self.assertIn("retired", table)  # id 9003's family label
 
+    def test_cache_004_drift_surfaces_as_a_measured_warning_not_a_delete(self) -> None:
+        """zackees/ci.yml#425 (Problem 2): a family whose live entries exceed
+        its declared max must name the measured size in `result.warning` on
+        every janitor run -- the eviction point where a stale max would
+        otherwise be applied blind. The sweep itself must not delete on that
+        basis (CACHE-004 is not in JANITOR_RULES; the fix is a corrected
+        `max`, a pre-prune, or eviction after review, never a blind sweep)."""
+
+        entry = {
+            "id": 7777, "ref": "refs/heads/main",
+            "key": f"setup-soldr-buildcache-v2-LinuxX64-{'d' * 16}",
+            "version": "v", "size_in_bytes": 500_000_000,
+            "created_at": "2026-10-20T00:00:00Z", "last_accessed_at": "2026-10-25T00:00:00Z",
+        }
+        fetch = _fetch_from({"total_count": 1, "actions_caches": [entry]})
+        result, _table = janitor(
+            self.ci, fetch=fetch, graphql=self.graphql, delete=None, token=TOKEN, repo=REPO_SLUG,
+            dry_run=True, stale_days=999999,
+        )
+        warning = result.warning or ""
+        self.assertIn("live footprint 500000000B", warning)
+        self.assertIn("exceed max", warning)
+        self.assertIn("id=7777", warning)
+        self.assertNotIn(7777, {p.id for p in result.planned}, "drift is reported, never swept")
+
 
 def _entry(cid: int, key: str, ref: str, size: int, created: str, accessed: str) -> dict[str, object]:
     return {
