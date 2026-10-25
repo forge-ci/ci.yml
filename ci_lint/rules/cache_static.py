@@ -1036,9 +1036,9 @@ def _composite_soldr_steps(repo_root: Path) -> list[_CompositeSoldr]:
         )
         action = "./" + str(Path(item.path).parent).strip("/")
         out.extend(
-            _CompositeSoldr(action=action, with_=w, defaults=defaults)
-            for uses, _loc, w in _iter_uses_with(doc, is_composite=True)
-            if _is_build_soldr(uses)
+            _CompositeSoldr(action=action, with_=s.with_, defaults=defaults)
+            for s in _iter_uses_with(doc, is_composite=True)
+            if _is_build_soldr(s.uses)
         )
     return out
 
