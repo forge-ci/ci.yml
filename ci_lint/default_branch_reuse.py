@@ -136,6 +136,10 @@ class ReuseRequest:
     default_branch: str = "main"
     event_name: str = "push"
     ref: str = "refs/heads/main"
+    # Also accept a green merge_group run on the pushed commit itself when the
+    # PR head's proof fails (a queue merges a PR that was behind the default
+    # branch, so the merged tree differs from the head's). Opt-in.
+    queue_evidence: bool = False
 
 
 @dataclass(frozen=True)
@@ -307,6 +311,7 @@ def _select_run(  # noqa: C901
     workflow: str,
     req: ReuseRequest,
     head_sha: str,
+    event: str = "pull_request",
 ) -> dict[str, JsonValue]:
     candidates: list[tuple[datetime, int, dict[str, JsonValue]]] = []
     for run in runs:
@@ -314,7 +319,7 @@ def _select_run(  # noqa: C901
         # re-check both so a mis-filtered response can never widen the proof.
         if _str(run.get("path")) != workflow or _str(run.get("head_sha")) != head_sha:
             continue
-        if _str(run.get("event")) != "pull_request":
+        if _str(run.get("event")) != event:
             continue
         created = parse_time(run.get("created_at"))
         run_id = _int(run.get("id"))
@@ -330,20 +335,20 @@ def _select_run(  # noqa: C901
         if status != "completed":
             raise _Stop(
                 "run-in-progress",
-                f"{workflow} run {run_id} on the PR head is '{status}': its outcome is unknown",
+                f"{workflow} {event} run {run_id} on {head_sha[:12]} is '{status}': its outcome is unknown",
             )
         if conclusion in NO_SIGNAL_CONCLUSIONS:
             continue
         if conclusion != "success":
             raise _Stop(
                 "newest-run-not-success",
-                f"the newest decisive {workflow} run on the PR head ({run_id}) concluded '{conclusion}'",
+                f"the newest decisive {workflow} {event} run on {head_sha[:12]} ({run_id}) concluded '{conclusion}'",
             )
         head_repo = _str(_as_dict(run.get("head_repository")).get("full_name"))
         if head_repo is None or head_repo.lower() != req.repo.lower():
             raise _Stop("fork-run", f"{workflow} run {run_id} ran for '{head_repo}', not '{req.repo}'")
         return run
-    raise _Stop("no-successful-run", f"no completed, successful {workflow} pull_request run on the PR head")
+    raise _Stop("no-successful-run", f"no completed, successful {workflow} {event} run on {head_sha[:12]}")
 
 
 def _check_jobs(api: _Api, req: ReuseRequest, runs: list[RunEvidence]) -> tuple[JobEvidence, ...]:  # noqa: C901
@@ -424,6 +429,46 @@ def decide(req: ReuseRequest, fetch_status: FetchStatusFn | None, token: str | N
     return _decide(req, api)
 
 
+# PR-head proof failures a green merge_group run on the pushed commit answers.
+QUEUE_FALLBACK_REASONS = frozenset({"tree-mismatch", "no-successful-run"})
+
+
+def _run_evidence(api: _Api, req: ReuseRequest, sha: str, event: str) -> list[RunEvidence]:
+    runs = [
+        _as_dict(r)
+        for r in _paged(
+            api,
+            f"/repos/{req.repo}/actions/runs?head_sha={sha}&event={event}",
+            "workflow_runs",
+            "too-many-runs",
+        )
+    ]
+    evidence: list[RunEvidence] = []
+    for workflow in req.workflows:
+        run = _select_run(runs, workflow, req, sha, event)
+        evidence.append(
+            RunEvidence(
+                workflow=workflow,
+                run_id=_int(run.get("id")) or 0,
+                run_url=_str(run.get("html_url")) or "",
+                run_attempt=_int(run.get("run_attempt")) or 1,
+                created_at=_str(run.get("created_at")) or "",
+            )
+        )
+    return evidence
+
+
+def _pr_head_evidence(api: _Api, req: ReuseRequest, pr: int, head_sha: str, tree: str) -> list[RunEvidence]:
+    head_tree = _tree_of(api, req.repo, head_sha)
+    if head_tree != tree:
+        raise _Stop(
+            "tree-mismatch",
+            f"pushed tree {tree[:12]} != PR #{pr} head {head_sha[:12]}'s tree {head_tree[:12]}: the merged "
+            "tree was never validated by the PR",
+        )
+    return _run_evidence(api, req, head_sha, "pull_request")
+
+
 def _decide(req: ReuseRequest, api: _Api | None) -> ReuseDecision:
     if req.event_name != "push":
         return ReuseDecision(req, False, "event-not-push", f"event '{req.event_name or '<unset>'}' is not a push")
@@ -442,40 +487,27 @@ def _decide(req: ReuseRequest, api: _Api | None) -> ReuseDecision:
     try:
         pr, head_sha = _associated_pr(api, req)
         tree = _tree_of(api, req.repo, req.sha)
-        head_tree = _tree_of(api, req.repo, head_sha)
-        if head_tree != tree:
-            raise _Stop(
-                "tree-mismatch",
-                f"pushed tree {tree[:12]} != PR #{pr} head {head_sha[:12]}'s tree {head_tree[:12]}: the merged "
-                "tree was never validated by the PR",
-            )
-        runs = [
-            _as_dict(r)
-            for r in _paged(
-                api,
-                f"/repos/{req.repo}/actions/runs?head_sha={head_sha}&event=pull_request",
-                "workflow_runs",
-                "too-many-runs",
-            )
-        ]
-        for workflow in req.workflows:
-            run = _select_run(runs, workflow, req, head_sha)
-            evidence.append(
-                RunEvidence(
-                    workflow=workflow,
-                    run_id=_int(run.get("id")) or 0,
-                    run_url=_str(run.get("html_url")) or "",
-                    run_attempt=_int(run.get("run_attempt")) or 1,
-                    created_at=_str(run.get("created_at")) or "",
-                )
-            )
+        proof = f"tree {tree[:12]} == PR #{pr} head {head_sha[:12]}"
+        try:
+            evidence = _pr_head_evidence(api, req, pr, head_sha, tree)
+        except _Stop as head_stop:
+            if not req.queue_evidence or head_stop.reason not in QUEUE_FALLBACK_REASONS:
+                raise
+            # The queue tested this exact commit, so its tree is proven too.
+            try:
+                evidence = _run_evidence(api, req, req.sha, "merge_group")
+            except _Stop as queue_stop:
+                if queue_stop.reason == "no-successful-run":
+                    raise head_stop from None  # no queue run: the PR-head reason stands
+                raise
+            proof = f"merge_group run on {req.sha[:12]} itself (PR #{pr}; {head_stop.reason} on the head)"
         jobs = _check_jobs(api, req, evidence)
     except _Stop as stop:
         return ReuseDecision(
             req, False, stop.reason, stop.detail, pr, head_sha, tree, tuple(evidence), (), api.calls - start
         )
     detail = (
-        f"tree {tree[:12]} == PR #{pr} head {head_sha[:12]}; "
+        f"{proof}; "
         f"{len(jobs)} required job(s) green in run(s) {', '.join(str(r.run_id) for r in evidence)}"
     )
     return ReuseDecision(req, True, VERIFIED, detail, pr, head_sha, tree, tuple(evidence), jobs, api.calls - start)

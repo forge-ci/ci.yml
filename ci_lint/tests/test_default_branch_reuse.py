@@ -215,6 +215,63 @@ class VerifiedTest(unittest.TestCase):
         self.assertIn("(shadow)", render_step_summary(d))
 
 
+QUEUE_RUNS_1630 = f"{API}/actions/runs?head_sha={SHA_1630}&event=merge_group&per_page=100&page=1"
+QUEUE_RUN = RUN_1643 + 100
+QUEUE_JOBS = f"{API}/actions/runs/{QUEUE_RUN}/jobs?filter=latest&per_page=100&page=1"
+QUEUE_NOW = "2026-09-30T16:18:16Z"
+
+
+def queue_table(conclusion: str = "success") -> Table:
+    """PR #1630's tree mismatch, plus a merge_group run on the merged commit
+    itself: PR #1643's recorded run and jobs, re-pointed at SHA_1630."""
+
+    table = load("clud-pr1630.json")
+    donor = load("clud-pr1643.json")
+    queue_run = copy.deepcopy(ci_run(donor))
+    queue_run.update(id=QUEUE_RUN, head_sha=SHA_1630, event="merge_group", conclusion=conclusion)
+    table[QUEUE_RUNS_1630] = [200, {"total_count": 1, "workflow_runs": [queue_run]}]
+    jobs = copy.deepcopy(body(donor, JOBS_1643))
+    for item in jobs["jobs"]:  # type: ignore[index]
+        item["run_id"] = QUEUE_RUN
+    table[QUEUE_JOBS] = [200, jobs]
+    return table
+
+
+class QueueEvidenceTest(unittest.TestCase):
+    def test_queue_run_on_the_pushed_commit_proves_a_mismatched_tree(self) -> None:
+        d = run(queue_table(), req(SHA_1630, QUEUE_NOW, queue_evidence=True))
+        self.assertEqual((d.verdict, d.reason, d.pr), (True, "verified", 1630), d.detail)
+        self.assertEqual([r.run_id for r in d.runs], [QUEUE_RUN])
+        self.assertIn("merge_group run on", d.detail)
+        self.assertIn("tree-mismatch on the head", d.detail)
+
+    def test_queue_evidence_is_opt_in(self) -> None:
+        d = run(queue_table(), req(SHA_1630, QUEUE_NOW))
+        self.assertEqual((d.verdict, d.reason), (False, "tree-mismatch"))
+
+    def test_no_queue_run_keeps_the_pr_head_reason(self) -> None:
+        table = queue_table()
+        table[QUEUE_RUNS_1630] = [200, {"total_count": 0, "workflow_runs": []}]
+        d = run(table, req(SHA_1630, QUEUE_NOW, queue_evidence=True))
+        self.assertEqual((d.verdict, d.reason), (False, "tree-mismatch"))
+
+    def test_a_failed_queue_run_is_never_reuse(self) -> None:
+        d = run(queue_table("failure"), req(SHA_1630, QUEUE_NOW, queue_evidence=True))
+        self.assertEqual((d.verdict, d.reason), (False, "newest-run-not-success"))
+
+    def test_a_pull_request_run_on_the_pushed_commit_is_not_queue_evidence(self) -> None:
+        table = queue_table()
+        body(table, QUEUE_RUNS_1630)["workflow_runs"][0]["event"] = "pull_request"  # type: ignore[index]
+        d = run(table, req(SHA_1630, QUEUE_NOW, queue_evidence=True))
+        self.assertEqual((d.verdict, d.reason), (False, "tree-mismatch"))
+
+    def test_a_queue_run_does_not_rescue_a_direct_push(self) -> None:
+        table = queue_table()
+        table[f"{API}/commits/{SHA_1630}/pulls?per_page=100"] = [200, []]
+        d = run(table, req(SHA_1630, QUEUE_NOW, queue_evidence=True))
+        self.assertEqual((d.verdict, d.reason), (False, "no-associated-pr"))
+
+
 class FailClosedTest(unittest.TestCase):
     def assertReason(self, table: Table, reason: str, request: ReuseRequest | None = None) -> None:
         d = run(table, request)

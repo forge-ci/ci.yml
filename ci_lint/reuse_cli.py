@@ -137,7 +137,9 @@ def _cmd_reuse_check(args: argparse.Namespace) -> int:
         return _usage("reuse-check", f"--sha must be a 40-hex commit SHA (got {sha!r}; or set GITHUB_SHA)")
     event_name = args.event_name if args.event_name is not None else os.environ.get("GITHUB_EVENT_NAME", "")
     ref = args.ref if args.ref is not None else os.environ.get("GITHUB_REF", "")
-    req = replace(template, sha=sha, mode=args.mode, event_name=event_name, ref=ref)
+    req = replace(
+        template, sha=sha, mode=args.mode, event_name=event_name, ref=ref, queue_evidence=args.queue_evidence
+    )
     fetch, token, table = _fetcher(args)
     decision = decide(req, fetch, token)
     _write_record(args, table)
@@ -220,6 +222,12 @@ def register(sub: argparse._SubParsersAction) -> None:  # type: ignore[type-arg]
     p_check.add_argument("--sha", default=None, help="the pushed commit (default: $GITHUB_SHA)")
     p_check.add_argument("--now", default=None, help="evaluation clock, ISO-8601 (default: current UTC time)")
     p_check.add_argument("--mode", choices=("enforce", "shadow"), default="enforce")
+    p_check.add_argument(
+        "--queue-evidence",
+        action="store_true",
+        help="also accept a green merge_group run on the pushed commit itself when the PR head's "
+        "proof fails (tree-mismatch / no-successful-run): the queue tested exactly that commit",
+    )
     p_check.add_argument("--event-name", default=None, help="default: $GITHUB_EVENT_NAME")
     p_check.add_argument("--ref", default=None, help="default: $GITHUB_REF")
     p_check.add_argument(
