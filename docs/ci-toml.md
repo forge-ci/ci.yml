@@ -575,6 +575,14 @@ way, so an unresolvable branch means the janitor plans no CACHE-003
 deletion at all (fail closed). `cache budget` and `ci-lint audit` keep
 their own explicit `--default-branch` defaults.
 
+**Run it on a schedule (#425).** A repository with `[cache].budget` or
+family `max` values runs `cache audit` from its scheduled/default-branch
+job so `CACHE-004` drift surfaces between on-demand audits; every
+`cache janitor` run also reports live `CACHE-004` family drift as a
+warning naming the measured size, before it plans any eviction (drift is
+reported, never swept -- `CACHE-004` is not in the janitor's rule set).
+See policy-general.md's "Cache policy".
+
 | Rule | Fires on |
 | --- | --- |
 | `CACHE-001` | a key matching no declared family prefix (and not a delta, not retired, not a ci-lint attestation side entry: `att1-*` is a known ci-lint family, #412) |

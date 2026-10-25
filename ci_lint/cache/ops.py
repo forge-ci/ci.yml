@@ -328,7 +328,18 @@ def janitor(  # noqa: C901
     result = _apply(planned, delete=delete, token=token, repo=repo, dry_run=dry_run)
     deleted_or_planned_ids = {p.id for p in (result.deleted if not result.dry_run else result.planned)}
     table = _before_after_table(list(classified), deleted_or_planned_ids)
-    warning = "; ".join(w for w in (report.warning, budget.warning) if w) or None
+    # #425 (Problem 2): surface CACHE-004 live drift as a warning naming the
+    # measured size, right where eviction runs -- before any sweep can apply
+    # a stale declared max (obs-studio: a 1.17 GB zccache against a 550 MB
+    # max, noticed by nobody because the audit only ran on demand). The
+    # findings are never deletable (CACHE-004 is not in JANITOR_RULES);
+    # this only makes every janitor run -- scheduled, end-of-queue, or
+    # manual -- report the drift. The budget-ratio CACHE-004 (`cache:budget`)
+    # is deliberately excluded: it already has its own channel below.
+    live_drift = [
+        f.message for f in report.findings if f.rule == "CACHE-004" and f.path.startswith("cache:family:")
+    ]
+    warning = "; ".join([*live_drift, *(w for w in (report.warning, budget.warning) if w)]) or None
     if warning:
         result = OpsResult(**{**result.__dict__, "warning": warning})
     return result, table
