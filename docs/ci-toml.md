@@ -1488,6 +1488,31 @@ active and at least one benchmark regressed past the threshold. The
 printed/`--json` report itself carries a `schema_version` field
 (`PERF_SCHEMA_VERSION`).
 
+### Measurement protocol (#148: warm-main, rerun-attempt-2, median of N)
+
+Runner variance on hosted runners is about ±15% (±30 s on a five-minute
+job), so a single run cannot verify a sub-30 s policy win -- #1244's
+measured ~37 s disappeared into a later run's noise. The protocol for
+producing the two JSON files `perf compare` consumes:
+
+- **Baseline on warm `main`.** Measure on a warm default branch (exact
+  keys restored, no pending invalidation), and label cache state
+  cold/warm/unknown only as run evidence supports (the Performance
+  rule) -- never compare a cold baseline against a warm current or the
+  reverse.
+- **Pair like with like, and take rerun attempt 2.** New commits
+  against new commits, exact-commit reruns against reruns (the
+  Performance rule); record attempt 2 of a job so first-attempt setup
+  noise (tool downloads, image pulls) is excluded from the number.
+- **Record N samples and their median.** Fill `samples` (the N timings)
+  and `median` in the benchmark file. N is per-comparison, but must be
+  large enough that the ±15% runner band is visibly smaller than the
+  claimed win: when a delta sits inside the band, report it as
+  *unproven*, not as a win.
+
+`perf compare` reports the `delta_pct` between the two medians and any
+gating `--threshold-pct` applies to that median delta only.
+
 
 ### Qualified replay public outputs (candidate pilot, #362)
 
