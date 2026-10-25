@@ -33,7 +33,8 @@ from ci_lint.rules.ci_pre import check_group12
 from ci_lint.rules.contract import check_ct_006, check_tag_001, check_tag_002
 from ci_lint.rules.layout import check_group6
 from ci_lint.rules.m2_22 import check_group_m2_22
-from ci_lint.rules.packaging import check_group8
+from ci_lint.rules.packaging import NATIVE_WHEEL_PROFILES, check_group8
+from ci_lint.rules.wheel_soldr_only import check_pkg_010
 from ci_lint.rules.profile_required import check_group13
 from ci_lint.rules.py_benchmark import check_group14
 from ci_lint.rules.doc_claims import check_gen_010_static
@@ -165,6 +166,8 @@ def run_precheck(repo_root: Path, *, title: str = "", local: bool = False, live:
         all_findings.extend(check_group6(ci, repo_root))
         all_findings.extend(check_group7(ci, repo_root))
         all_findings.extend(check_group8(ci, repo_root))
+        if ci.profile in NATIVE_WHEEL_PROFILES:
+            all_findings.extend(check_pkg_010(repo_root))
         findings9, cache_arithmetic = check_group9(ci, repo_root)
         all_findings.extend(findings9)
         all_findings.extend(check_cache_007_static(ci, repo_root))
