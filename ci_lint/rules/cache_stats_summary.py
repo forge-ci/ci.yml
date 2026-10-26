@@ -17,8 +17,9 @@ Static signals (workflows and composite actions; a workflow job's
   and no `run:` step that writes `ccache -s`/`--show-stats` or
   `zccache stats`/`--show-stats` output to `$GITHUB_STEP_SUMMARY`.
 
-Still candidate (setup-soldr work, not checked here): the exact-vs-fallback
-restore flag in the summary and the < 80% hit-rate warning.
+The log-evidence half (missing stats line, < 80% hit rate) is
+`ci_lint.cache.hit_rate` / `ci-lint cache hit-rate --log`. The exact-vs-fallback
+restore flag in the summary is setup-soldr work, not checked by ci-lint.
 """
 
 from __future__ import annotations
