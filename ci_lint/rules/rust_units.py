@@ -6,6 +6,8 @@ Test binaries are derived from Cargo manifests and the filesystem only
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import re
 from pathlib import Path
 
@@ -97,14 +99,21 @@ def check_rust_005(ci: CiToml, crates: list[CargoCrate]) -> list[Finding]:
     return findings
 
 
-def _iter_all_commands(repo_root: Path) -> list[tuple[list[str], str, str]]:
-    out: list[tuple[list[str], str, str]] = []
+@dataclass(frozen=True)
+class _CommandSite:
+    tokens: list[str]
+    path: str
+    loc: str
+
+
+def _iter_all_commands(repo_root: Path) -> list[_CommandSite]:
+    out: list[_CommandSite] = []
     for run_step in _iter_run_steps(repo_root):
         run_text = run_step.run_text
         path = run_step.path
         loc = run_step.loc
         for tokens in find_commands(run_text):
-            out.append((tokens, path, loc))
+            out.append(_CommandSite(tokens, path, loc))
     for path in _discover_python_command_files(repo_root):
         rel = path.relative_to(repo_root).as_posix()
         for cmd in _extract_ast_commands(path):
@@ -115,7 +124,7 @@ def _iter_all_commands(repo_root: Path) -> list[tuple[list[str], str, str]]:
                 i += 1
             remaining = tokens[i:]
             if remaining:
-                out.append((remaining, rel, f"line {lineno}"))
+                out.append(_CommandSite(remaining, rel, f"line {lineno}"))
     return out
 
 
@@ -188,7 +197,8 @@ def check_rust_011(ci: CiToml, crates: list[CargoCrate], repo_root: Path) -> lis
 
     declared = public_crate.features if public_crate is not None else {}
     ship_sets = [effective_features(s, declared) for s in ci.rust.ship] if ci.rust.ship else [frozenset()]
-    for tokens, path, loc in _iter_all_commands(repo_root):
+    for site in _iter_all_commands(repo_root):
+        tokens, path, loc = site.tokens, site.path, site.loc
         if not tokens or tokens[0] != "cargo":
             continue
         if "hack" in tokens[1:2]:

@@ -255,20 +255,13 @@ def _looks_like_release_publish_script(rel: Path) -> bool:
     return ("publish" in stem and "release" in stem) or stem in ("release_publish", "publish_release")
 
 
-def _call_argv0_and_rest(call: ast.Call) -> tuple[str | None, list[str | None]] | None:
-    argv = _argv_from_call(call)
-    if not argv:
-        return None
-    return argv[0], argv[1:]
-
-
 def _is_rebuild_call(call: ast.Call) -> str | None:  # noqa: C901
     if not _is_subprocess_call(call):
         return None
-    parsed = _call_argv0_and_rest(call)
-    if parsed is None:
+    argv = _argv_from_call(call)
+    if not argv:
         return None
-    argv0, rest = parsed
+    argv0, rest = argv[0], argv[1:]
     if argv0 not in REBUILD_TOOL_ARGV0:
         return None
     literal_rest = [tok for tok in rest if tok is not None]

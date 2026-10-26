@@ -108,27 +108,18 @@ def scan_repo_docs(repo_root: Path) -> list[DocClaim]:
     return claims
 
 
-def _job_runs_on_labels(document: object) -> dict[str, list[str]]:
-    """job id -> list of runs-on label strings (best-effort; a dynamic
-    matrix expression is recorded verbatim, never silently dropped)."""
+def _job_runs_on_labels(job: object) -> list[str]:
+    """runs-on label strings of one job (best-effort; a dynamic matrix
+    expression is recorded verbatim, never silently dropped)."""
 
-    out: dict[str, list[str]] = {}
-    if not isinstance(document, dict):
-        return out
-    jobs = document.get("jobs")
-    if not isinstance(jobs, dict):
-        return out
-    for job_id, job in jobs.items():
-        if not isinstance(job, dict) or not isinstance(job_id, str):
-            continue
-        runs_on = job.get("runs-on")
-        labels: list[str] = []
-        if isinstance(runs_on, str):
-            labels = [runs_on]
-        elif isinstance(runs_on, list):
-            labels = [str(x) for x in runs_on]
-        out[job_id] = labels
-    return out
+    if not isinstance(job, dict):
+        return []
+    runs_on = job.get("runs-on")
+    if isinstance(runs_on, str):
+        return [runs_on]
+    if isinstance(runs_on, list):
+        return [str(x) for x in runs_on]
+    return []
 
 
 def _is_dylint_job(job_id: str, job: object) -> bool:
@@ -153,15 +144,21 @@ def _has_native_dylint_job(repo_root: Path) -> bool:
         for job_id, job in jobs.items():
             if not isinstance(job_id, str) or not _is_dylint_job(job_id, job):
                 continue
-            for label in _job_runs_on_labels(document).get(job_id, []):
+            for label in _job_runs_on_labels(job):
                 low = label.lower()
                 if "windows" in low or "macos" in low or "mac-os" in low:
                     return True
     return False
 
 
-def check_gen_010_static(repo_root: Path) -> tuple[list[Finding], list[DocClaim]]:
-    """Returns (findings, all claims found) -- callers that also have live
+@dataclass(frozen=True)
+class Gen010Static:
+    findings: list[Finding]
+    claims: list[DocClaim]
+
+
+def check_gen_010_static(repo_root: Path) -> Gen010Static:
+    """Returns the findings and all claims found -- callers that also have live
     access (settings_audit.check_gen_010) reuse the returned claims instead
     of re-scanning the filesystem."""
 
@@ -201,4 +198,4 @@ def check_gen_010_static(repo_root: Path) -> tuple[list[Finding], list[DocClaim]
             )
         )
 
-    return findings, claims
+    return Gen010Static(findings=findings, claims=claims)

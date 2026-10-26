@@ -22,6 +22,8 @@ under an `environment:` (ci.yml#134) -- being allowlisted in
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import re
 from pathlib import Path
 
@@ -34,13 +36,19 @@ SECRET_REF_RE = re.compile(r"secrets\.([A-Za-z_][A-Za-z0-9_]*)")
 INHERIT_RE = re.compile(r"^\s*secrets:\s*inherit\s*$")
 
 # The only grants a workflow's TOP-LEVEL `permissions:` may hold for free.
-TOP_LEVEL_FREE_GRANTS: frozenset[tuple[str, str]] = frozenset(
-    {("contents", "read"), ("actions", "read")}
+@dataclass(frozen=True)
+class Grant:
+    scope: str
+    level: str
+
+
+TOP_LEVEL_FREE_GRANTS: frozenset[Grant] = frozenset(
+    {Grant("contents", "read"), Grant("actions", "read")}
 )
 # The only grants any JOB's `permissions:` may hold for free -- anything
 # else must be listed for that job id in [allow].permissions.
-JOB_FREE_GRANTS: frozenset[tuple[str, str]] = frozenset(
-    {("contents", "read"), ("actions", "read")}
+JOB_FREE_GRANTS: frozenset[Grant] = frozenset(
+    {Grant("contents", "read"), Grant("actions", "read")}
 )
 
 
@@ -123,7 +131,7 @@ def _top_level_permission_findings(perms: YamlValue, path: str) -> list[Finding]
     for key, val in perms.items():
         if val in (None, "none"):
             continue
-        if (key, val) in TOP_LEVEL_FREE_GRANTS:
+        if Grant(str(key), str(val)) in TOP_LEVEL_FREE_GRANTS:
             continue
         findings.append(
             Finding(
@@ -204,7 +212,7 @@ def _job_permission_findings(
     for key, val in perms.items():
         if val in (None, "none"):
             continue
-        if (key, val) in JOB_FREE_GRANTS:
+        if Grant(str(key), str(val)) in JOB_FREE_GRANTS:
             continue
         grant = f"{key}: {val}"
         allowed_jobs = ci.allow.permissions.get(grant) or ()

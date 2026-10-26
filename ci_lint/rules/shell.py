@@ -31,7 +31,7 @@ from ci_lint.workflow_scan import (
     load_workflows,
     steps_of,
 )
-from ci_lint.yaml_io import LoadStatus
+from ci_lint.yaml_io import LoadStatus, YamlValue
 
 SCRIPT_EXTS: frozenset[str] = frozenset({".sh", ".ps1", ".bat", ".cmd"})
 BANNED_SHELLS: frozenset[str] = frozenset({"pwsh", "powershell", "cmd"})
@@ -138,7 +138,7 @@ def _nested(doc: object, *keys: str) -> object:
 
 
 def _check_steps(
-    findings: list[Finding], path: str, job_prefix: str, steps: list[dict[str, object]]
+    findings: list[Finding], path: str, job_prefix: str, steps: list[dict[str, YamlValue]]
 ) -> None:
     for i, step in enumerate(steps):
         loc = f"{job_prefix}.steps[{i}]"

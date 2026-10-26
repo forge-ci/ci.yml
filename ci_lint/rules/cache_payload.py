@@ -24,6 +24,7 @@ from ci_lint.finding import Finding
 from ci_lint.rules.tools import _iter_uses_with
 from ci_lint.rules.cache_static import _is_cache_action_slug, _loaded_files
 from ci_lint.schema import CiToml
+from ci_lint.yaml_io import YamlValue
 
 
 def _findings_for_paths(paths: list[str], *, location: str) -> list[Finding]:
@@ -44,7 +45,7 @@ def _findings_for_paths(paths: list[str], *, location: str) -> list[Finding]:
     return findings
 
 
-def _with_paths(with_: dict[str, object]) -> list[str]:
+def _with_paths(with_: dict[str, YamlValue]) -> list[str]:
     raw = with_.get("path")
     if isinstance(raw, str):
         return [line for line in raw.splitlines() if line.strip()]

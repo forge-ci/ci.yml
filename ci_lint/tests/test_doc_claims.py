@@ -57,7 +57,8 @@ class Gen010StaticTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             _write_repo(root, RED_WORKFLOW)
-            findings, claims = check_gen_010_static(root)
+            gen010 = check_gen_010_static(root)
+            findings, claims = gen010.findings, gen010.claims
             native = [f for f in findings if f.rule == "GEN-010" and "native" in f.message]
             self.assertTrue(native, findings)
             self.assertEqual(native[0].status, Status.VIOLATION)
@@ -68,7 +69,7 @@ class Gen010StaticTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             _write_repo(root, GREEN_WORKFLOW)
-            findings, _claims = check_gen_010_static(root)
+            findings = check_gen_010_static(root).findings
             native = [f for f in findings if f.rule == "GEN-010" and "native" in f.message]
             self.assertEqual(native, [])
 
@@ -76,7 +77,8 @@ class Gen010StaticTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             (root / "README.md").write_text("Just a normal readme.\n", encoding="utf-8")
-            findings, claims = check_gen_010_static(root)
+            gen010 = check_gen_010_static(root)
+            findings, claims = gen010.findings, gen010.claims
             self.assertEqual(findings, [])
             self.assertEqual(claims, [])
 
@@ -87,7 +89,7 @@ class Gen010StaticTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             (root / "AGENTS.md").write_text(text, encoding="utf-8")
-            findings, _claims = check_gen_010_static(root)
+            findings = check_gen_010_static(root).findings
             mq = [f for f in findings if f.rule == "GEN-010"]
             self.assertTrue(mq)
             self.assertTrue(all(f.status == Status.NEEDS_REVIEW for f in mq))
