@@ -19,6 +19,7 @@ on push/schedule/dispatch"). Verified reuse on default-branch pushes
 
 from __future__ import annotations
 
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 
 from ci_lint.cargo_messages import JsonValue
@@ -40,8 +41,37 @@ class ReuseEntry:
     job_id: int
     html_url: str
 
-    def to_json_dict(self) -> dict[str, object]:
+    def to_json_dict(self) -> dict[str, JsonValue]:
         return {"run_id": self.run_id, "job_id": self.job_id, "html_url": self.html_url}
+
+
+@dataclass(frozen=True)
+class LaneReuse:
+    lane: str
+    entry: ReuseEntry | None
+
+
+@dataclass(frozen=True)
+class ReuseMap(Mapping[str, "ReuseEntry | None"]):
+    """Read-only lane -> `ReuseEntry | None`, backed by `LaneReuse` records."""
+
+    entries: tuple[LaneReuse, ...] = ()
+
+    @classmethod
+    def of(cls, reuse: Mapping[str, ReuseEntry | None]) -> ReuseMap:
+        return cls(tuple(LaneReuse(lane, entry) for lane, entry in reuse.items()))
+
+    def __getitem__(self, lane: str) -> ReuseEntry | None:
+        for item in self.entries:
+            if item.lane == lane:
+                return item.entry
+        raise KeyError(lane)
+
+    def __iter__(self) -> Iterator[str]:
+        return (item.lane for item in self.entries)
+
+    def __len__(self) -> int:
+        return len(self.entries)
 
 
 @dataclass(frozen=True)
@@ -52,15 +82,15 @@ class ReuseResult:
     result degrades to "reuse nothing") on any GitHub API error -- never
     raised, per this module's docstring."""
 
-    reuse: dict[str, ReuseEntry | None]
+    reuse: ReuseMap
     warning: str | None
 
-    def to_json_dict(self) -> dict[str, object | None]:
+    def to_json_dict(self) -> dict[str, JsonValue]:
         return {lane: (entry.to_json_dict() if entry is not None else None) for lane, entry in self.reuse.items()}
 
 
 def empty_result(lane_digests: dict[str, str], *, warning: str | None = None) -> ReuseResult:
-    return ReuseResult(reuse={lane: None for lane in lane_digests}, warning=warning)
+    return ReuseResult(reuse=ReuseMap.of({lane: None for lane in lane_digests}), warning=warning)
 
 
 def _as_dict(value: JsonValue) -> dict[str, JsonValue]:
@@ -154,4 +184,4 @@ def compute_reuse(  # noqa: C901
                     )
                     remaining.discard(lane)
 
-    return ReuseResult(reuse=reuse, warning=warning)
+    return ReuseResult(reuse=ReuseMap.of(reuse), warning=warning)

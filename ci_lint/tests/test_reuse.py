@@ -48,7 +48,7 @@ class ComputeReuseTest(unittest.TestCase):
         result = compute_reuse(
             repo=REPO, head_sha=HEAD_SHA, current_run_id="3003", lane_digests={}, fetch=fetch, token="t"
         )
-        self.assertEqual({}, result.reuse)
+        self.assertEqual({}, dict(result.reuse))
         self.assertIsNone(result.warning)
 
     def test_matching_digest_on_a_successful_job_is_reused(self) -> None:
@@ -142,7 +142,7 @@ class ComputeReuseTest(unittest.TestCase):
 
     def test_empty_result_helper(self) -> None:
         result = empty_result({"fast": "x", "dylint": "y"}, warning="reuse: unreachable")
-        self.assertEqual({"fast": None, "dylint": None}, result.reuse)
+        self.assertEqual({"fast": None, "dylint": None}, dict(result.reuse))
         self.assertEqual("reuse: unreachable", result.warning)
         self.assertEqual({"fast": None, "dylint": None}, result.to_json_dict())
 

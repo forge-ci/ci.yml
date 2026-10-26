@@ -135,7 +135,7 @@ def _selection(raw: dict[str, TomlValue], *, source: str, path: str,
         _bad(findings, source, path, "input names must be nonempty")
     if len(findings) != start or lane is None or event is None:
         return None
-    return ReplaySelection(lane, selected, event, tuple(ReplayInput(key, value) for key, value in inputs.items()),
+    return ReplaySelection(lane, selected, event, tuple(ReplayInput(e.key, e.value) for e in inputs.entries),
                            f".github/workflows/{workflow}" if workflow is not None else None)
 
 

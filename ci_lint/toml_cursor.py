@@ -10,6 +10,7 @@ whatever is left over into `CT-001` findings.
 
 from __future__ import annotations
 
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from typing import TypeVar
 
@@ -36,6 +37,78 @@ def _type_name(value: object) -> str:
     if value is None:
         return "none"
     return type(value).__name__
+
+
+@dataclass(frozen=True)
+class StrEntry:
+    """One `key = "value"` pair of a string -> string table."""
+
+    key: str
+    value: str
+
+
+@dataclass(frozen=True)
+class StrMap:
+    """A string -> string table (`[allow].setup-*.require`), kept as typed
+    entries in declaration order rather than a dict field (PY-002, #193)."""
+
+    entries: tuple[StrEntry, ...] = ()
+
+    @classmethod
+    def of(cls, table: Mapping[str, str]) -> StrMap:
+        return cls(tuple(StrEntry(k, v) for k, v in table.items()))
+
+    def get(self, key: str) -> str | None:
+        return next((e.value for e in self.entries if e.key == key), None)
+
+    def __contains__(self, key: object) -> bool:
+        return any(e.key == key for e in self.entries)
+
+    def __iter__(self) -> Iterator[str]:
+        return (e.key for e in self.entries)
+
+    def __len__(self) -> int:
+        return len(self.entries)
+
+
+@dataclass(frozen=True)
+class StrTupleEntry:
+    """One `key = ["a", "b"]` pair of a string -> string-array table."""
+
+    key: str
+    values: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class StrTupleMap:
+    """A string -> string-array table (`[allow].workflows`,
+    `[allow].permissions`), as typed entries (PY-002, #193)."""
+
+    entries: tuple[StrTupleEntry, ...] = ()
+
+    @classmethod
+    def of(cls, table: Mapping[str, tuple[str, ...]]) -> StrTupleMap:
+        return cls(tuple(StrTupleEntry(k, tuple(v)) for k, v in table.items()))
+
+    def get(self, key: str) -> tuple[str, ...] | None:
+        return next((e.values for e in self.entries if e.key == key), None)
+
+    def __contains__(self, key: object) -> bool:
+        return any(e.key == key for e in self.entries)
+
+    def __iter__(self) -> Iterator[str]:
+        return (e.key for e in self.entries)
+
+    def __len__(self) -> int:
+        return len(self.entries)
+
+
+@dataclass(frozen=True)
+class NamedTable:
+    """One `[<key>.<id>]` subtable of a table of tables, in declaration order."""
+
+    key: str
+    table: dict[str, TomlValue]
 
 
 @dataclass
@@ -177,32 +250,32 @@ class Cursor:
             return ()
         return tuple(out)
 
-    def dict_str_str(self, key: str, *, required: bool = True) -> dict[str, str]:
+    def dict_str_str(self, key: str, *, required: bool = True) -> StrMap:
         if key not in self._remaining:
             if required:
                 self._missing(key, "a table of string -> string")
-            return {}
+            return StrMap()
         value = self._remaining.pop(key)
         if not isinstance(value, dict) or not all(isinstance(v, str) for v in value.values()):
             self._ct002(key, "a table of string -> string", value)
-            return {}
-        return dict(value)  # type: ignore[arg-type]
+            return StrMap()
+        return StrMap(tuple(StrEntry(k, str(v)) for k, v in value.items()))
 
     def dict_str_list_str(
         self, key: str, *, required: bool = True
-    ) -> dict[str, tuple[str, ...]]:
+    ) -> StrTupleMap:
         """A table whose values are each an array of strings, e.g.
         `[allow].permissions`: `{ "actions: write" = ["precheck"] }` (round-4B)."""
 
         if key not in self._remaining:
             if required:
                 self._missing(key, "a table of string -> array of strings")
-            return {}
+            return StrTupleMap()
         value = self._remaining.pop(key)
         if not isinstance(value, dict):
             self._ct002(key, "a table of string -> array of strings", value)
-            return {}
-        out: dict[str, tuple[str, ...]] = {}
+            return StrTupleMap()
+        out: list[StrTupleEntry] = []
         for sub_key, sub_val in value.items():
             if not isinstance(sub_val, list) or not all(isinstance(v, str) for v in sub_val):
                 self.findings.append(
@@ -215,8 +288,8 @@ class Cursor:
                     )
                 )
                 continue
-            out[sub_key] = tuple(sub_val)
-        return out
+            out.append(StrTupleEntry(sub_key, tuple(sub_val)))
+        return StrTupleMap(tuple(out))
 
     def table_(self, key: str, *, required: bool = True) -> dict[str, TomlValue] | None:
         """Pop a subtable and return its raw dict for a nested Cursor."""
@@ -233,13 +306,13 @@ class Cursor:
 
     def raw_table_of_tables(
         self, key: str, *, required: bool = True
-    ) -> dict[str, dict[str, TomlValue]]:
+    ) -> tuple[NamedTable, ...]:
         """Pop a table whose values are all themselves tables (e.g. [platforms])."""
 
         raw = self.table_(key, required=required)
         if raw is None:
-            return {}
-        out: dict[str, dict[str, TomlValue]] = {}
+            return ()
+        out: list[NamedTable] = []
         for sub_key, sub_val in raw.items():
             if not isinstance(sub_val, dict):
                 self.findings.append(
@@ -251,8 +324,8 @@ class Cursor:
                     )
                 )
                 continue
-            out[sub_key] = sub_val
-        return out
+            out.append(NamedTable(sub_key, sub_val))
+        return tuple(out)
 
     def array_of_tables(self, key: str) -> list[dict[str, TomlValue]]:
         """Pop `[[key]]`, an array-of-tables. Missing -> empty list, not an error."""

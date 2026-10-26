@@ -69,11 +69,44 @@ def _norm(rel: str) -> str:
     return out
 
 
-def _env_of(node: YamlValue) -> dict[str, str]:
+@dataclass(frozen=True)
+class WorkflowCalls:
+    path: str
+    calls: tuple[CargoCall, ...]
+
+
+@dataclass(frozen=True)
+class _CallSite:
+    path: str
+    line: int | None
+    loc: str
+
+
+@dataclass(frozen=True)
+class _LintCall:
+    call: CargoCall
+    crate: str
+
+
+def merge_env(env: dict[str, str], node: YamlValue) -> None:
+    """Overlay `node`'s literal `env:` map onto `env` in place."""
+
+    raw = as_dict(node).get("env") if isinstance(node, dict) else None
+    if not isinstance(raw, dict):
+        return
+    env.update({str(k): normalize_expr(str(v)) for k, v in raw.items() if isinstance(v, (str, int, float))})
+
+
+def _target_dir_env(node: YamlValue, inherited: str | None) -> str | None:
+    """`CARGO_TARGET_DIR` from `node`'s `env:` map, else `inherited`."""
+
     env = as_dict(node).get("env") if isinstance(node, dict) else None
     if not isinstance(env, dict):
-        return {}
-    return {str(k): normalize_expr(str(v)) for k, v in env.items() if isinstance(v, (str, int, float))}
+        return inherited
+    value = env.get("CARGO_TARGET_DIR")
+    if not isinstance(value, (str, int, float)):
+        return inherited
+    return normalize_expr(str(value))
 
 
 def _crate_config(repo_root: Path, crate_dir: str) -> str | None:
@@ -132,26 +165,26 @@ def _within(cwd: str, crate_dir: str) -> bool:
     return cwd == crate_dir or cwd.startswith(crate_dir + "/")
 
 
-def _collect(repo_root: Path) -> dict[str, list[CargoCall]]:  # noqa: C901
+def _collect(repo_root: Path) -> list[WorkflowCalls]:  # noqa: C901
     """Every cargo/dylint call per workflow file."""
 
-    by_file: dict[str, list[CargoCall]] = {}
+    by_file: list[WorkflowCalls] = []
     for wf in load_workflows(repo_root):
         if wf.status != LoadStatus.OK:
             continue
         doc = as_dict(wf.document)
         raw = raw_lines_of(repo_root / wf.path)
         calls: list[CargoCall] = []
-        wf_env = _env_of(doc)
+        wf_target = _target_dir_env(doc, None)
         for job_id, job in jobs_of(doc).items():
-            job_env = {**wf_env, **_env_of(job)}
+            job_target = _target_dir_env(job, wf_target)
             defaults_run = as_dict(as_dict(job.get("defaults")).get("run"))
             job_wd = defaults_run.get("working-directory")
             for i, step in enumerate(steps_of(job)):
                 run_text = step.get("run")
                 if not isinstance(run_text, str):
                     continue
-                env = {**job_env, **_env_of(step)}
+                step_target = _target_dir_env(step, job_target)
                 wd = step.get("working-directory", job_wd)
                 cwd = _norm(wd) if isinstance(wd, str) else "."
                 loc = f"jobs.{job_id}.steps[{i}]"
@@ -160,14 +193,13 @@ def _collect(repo_root: Path) -> dict[str, list[CargoCall]]:  # noqa: C901
                     for cmd in split_commands_with_env(ln):
                         inline_env, tokens = cmd.env, cmd.tokens
                         t = tuple(tokens)
-                        cmd_env = {**env, **inline_env}
-                        target = _flag_value(t, "--target-dir") or cmd_env.get("CARGO_TARGET_DIR")
+                        target = _flag_value(t, "--target-dir") or inline_env.get("CARGO_TARGET_DIR", step_target)
                         if _cargo_index(t) is not None or _is_dylint(t):
                             calls.append(CargoCall(t, wf.path, None, loc, raw_line, cwd, target))
                         for tok in t:
                             if CI_SCRIPT_RE.match(tok) and (repo_root / cwd / tok).is_file():
                                 calls.extend(_script_calls(repo_root, _norm(posixpath.join(cwd, tok)), cwd, target))
-        by_file[wf.path] = calls
+        by_file.append(WorkflowCalls(wf.path, tuple(calls)))
     return by_file
 
 
@@ -189,9 +221,10 @@ def _script_calls(repo_root: Path, rel: str, step_cwd: str, step_target: str | N
 
 def check_rust_016(repo_root: Path) -> list[Finding]:
     findings: list[Finding] = []
-    seen: set[tuple[str, int | None, str]] = set()
-    for _wf_path, calls in _collect(repo_root).items():
-        lint_calls: list[tuple[CargoCall, str]] = []
+    seen: set[_CallSite] = set()
+    for wf_calls in _collect(repo_root):
+        calls = wf_calls.calls
+        lint_calls: list[_LintCall] = []
         for call in calls:
             if allowed(call.raw, RULE):
                 continue
@@ -202,9 +235,9 @@ def check_rust_016(repo_root: Path) -> list[Finding]:
                 and mdir != "."
                 and _crate_config(repo_root, mdir) is not None
                 and not _within(call.cwd, mdir)
-                and (call.path, call.line, call.loc) not in seen
+                and _CallSite(call.path, call.line, call.loc) not in seen
             ):
-                seen.add((call.path, call.line, call.loc))
+                seen.add(_CallSite(call.path, call.line, call.loc))
                 findings.append(
                     Finding(
                         rule=RULE,
@@ -219,9 +252,10 @@ def check_rust_016(repo_root: Path) -> list[Finding]:
                     )
                 )
             if not _is_dylint(call.tokens) and _is_lint_crate(repo_root, crate):
-                lint_calls.append((call, crate))
+                lint_calls.append(_LintCall(call, crate))
         dylint_calls = [c for c in calls if _is_dylint(c.tokens) and not allowed(c.raw, RULE)]
-        for call, crate in lint_calls:
+        for lint in lint_calls:
+            call, crate = lint.call, lint.crate
             if call.target_dir is None:
                 continue
             clash = next((d for d in dylint_calls if d.target_dir == call.target_dir), None)

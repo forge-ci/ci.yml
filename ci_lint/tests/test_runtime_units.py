@@ -10,7 +10,7 @@ import unittest
 from dataclasses import replace
 
 from ci_lint.cargo_messages import parse_compiler_artifacts
-from ci_lint.cargo_scan import discover_workspace
+from ci_lint.cargo_scan import CargoFeatures, discover_workspace
 from ci_lint.runtime.units import compute_units, render_text
 from ci_lint.schema import load_ci_toml
 from ci_lint.tests.helpers import FIXTURES
@@ -87,7 +87,7 @@ class EmptyDefaultFeatureTest(unittest.TestCase):
 
     def _public_findings(self, default: tuple[str, ...], compiled: tuple[str, ...]) -> list[str]:
         crates = [
-            replace(c, features={**c.features, "default": default}) if c.name == "demo" else c for c in self.crates
+            replace(c, features=CargoFeatures.of({**c.features, "default": default})) if c.name == "demo" else c for c in self.crates
         ]
         report = compute_units(self.ci, crates, [replace(self.demo, features=compiled)])
         return [f.message for f in report.findings if f.rule == "RUST-011" and "public crate" in f.message]
