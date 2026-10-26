@@ -155,7 +155,7 @@ The `lint` phase (RUST-032) stays **one Linux job, multi-target** by default. It
 3. every shard runs the same lint set (the same Dylint libraries and the same clippy/check pass);
 4. there are no more than 3 shards, grouped by OS family (for example linux / apple / windows) rather than one job per triple;
 5. the repository records, in `ci.toml` or a linked run list, at least 3 recent successful runs in which each shard's median per-target pass step is at least 60 s and at least the median fixed per-job cost (`F`);
-6. the shards' combined cache entries fit `[cache].budget`. This clause is the cache half of #112's `GEN-020` candidate, and #112 does not separately decide `GEN-020`.
+6. the shards' combined cache entries fit `[cache].budget`. This clause absorbed #112's `GEN-020` candidate, which was rejected as a separate rule (see policy-general.md); the footprint is measured by `CACHE-004` and the `cache budget` verdict.
 
 A shard is a split of one lint phase, not a duplicate of it. Running the same targets or lint set in two jobs, or running any shard on a native non-Linux runner, is still a `RUST-002` violation. A repository whose evidence drops below the 60 s bar goes back to one job. Sequential per-target passes in one job remain strictly worse than one multi-target pass (+23-37 % measured) and are kept only as a debug fallback.
 
