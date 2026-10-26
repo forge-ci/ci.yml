@@ -31,7 +31,13 @@ EVENT_TO_FLOW: dict[str, str] = {
     "push": "main",
     "schedule": "nightly",
     "workflow_dispatch": "release",
+    # A merge-queue run validates the same change a PR run did (GEN-022), so
+    # it takes the PR flow -- or a declared `queue` flow when the repository
+    # wants the queue to run something different. No title tokens apply.
+    "merge_group": "pr",
 }
+
+QUEUE_FLOW = "queue"
 
 DISPATCH_SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
 
@@ -344,6 +350,8 @@ def compute_plan(  # noqa: C901
         raise PlanError(f"unsupported event '{event_name}'; expected one of {sorted(EVENT_TO_FLOW)}")
 
     flow_id = EVENT_TO_FLOW[event_name]
+    if event_name == "merge_group" and QUEUE_FLOW in ci.flows:
+        flow_id = QUEUE_FLOW
     reasons: list[str] = [f"event '{event_name}' selects base flow '{flow_id}'"]
 
     tokens: tuple[str, ...] = ()

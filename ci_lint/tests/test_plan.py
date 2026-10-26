@@ -38,6 +38,12 @@ class PlanTest(unittest.TestCase):
         self.assertEqual("read", plan.cache_mode)
         self.assertEqual("none", plan.publish)
 
+    def test_merge_group_takes_pr_flow_and_ignores_title(self) -> None:
+        plan = compute_plan(self.ci, event_name="merge_group", title="[ci-full] queued")
+        self.assertEqual("pr", plan.flow)
+        self.assertEqual((), plan.tags)
+        self.assertTrue(plan.mergeable)
+
     def test_ci_windows_adds_platform_group(self) -> None:
         plan = compute_plan(self.ci, event_name="pull_request", title="[ci-windows] fix")
         self.assertEqual({"linux-x64", "windows-x64"}, {p.id for p in plan.platforms})
