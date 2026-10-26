@@ -1,6 +1,6 @@
 """Group 2: workflow rules.
 
-GEN-001, GEN-002, GEN-008, TAG-003, SEC-003, SEC-004, RUN-001, RUN-002,
+GEN-001, GEN-002, GEN-008, TAG-003, SEC-003, SEC-004, RUN-001, RUN-002, RUN-003,
 WF-001, WF-002, WF-003, and CT-004 (the linter pin, verified against the actual
 checkout step here since CT-001..003/005 live in schema/exceptions). All of
 these need parsed workflow YAML; a file that fails to parse (no PyYAML, no
@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import re
+from dataclasses import dataclass
 from pathlib import Path
 
 from ci_lint.finding import Finding, Status
@@ -52,6 +53,7 @@ WORKFLOW_FILE_RULES: tuple[str, ...] = (
     "SEC-004",
     "RUN-001",
     "RUN-002",
+    "RUN-003",
     "WF-001",
     "WF-002",
     "WF-003",
@@ -493,6 +495,218 @@ def check_run_002(workflows: list[ParsedYamlFile]) -> list[Finding]:
     return findings
 
 
+# ── RUN-003 (#150) ────────────────────────────────────────────────────────
+# A native non-x64 Linux job stays off the pull_request and default-branch
+# push path. Static clause only: the dispatch-only and lost-RUST-008 clauses
+# need cross-workflow/run evidence and stay candidate.
+
+_NON_LINUX_PREFIXES: tuple[str, ...] = ("windows", "macos")
+_EVENT_EQ_RE = re.compile(r"github\.event_name\s*==\s*['\"]([A-Za-z_]+)['\"]")
+_EVENT_NE_RE = re.compile(r"github\.event_name\s*!=\s*['\"]([A-Za-z_]+)['\"]")
+_TAG_REF_RE = re.compile(r"startsWith\(\s*github\.ref\s*,\s*['\"]refs/tags/")
+_RUN_003_OFF_PATH_EVENTS: frozenset[str] = frozenset({"schedule", "workflow_dispatch", "release"})
+_DEFAULT_BRANCHES: frozenset[str] = frozenset({"main", "master"})
+
+
+def is_native_arm_linux_label(label: str) -> bool:
+    """`ubuntu-24.04-arm` or any other `*-arm` label that is not Windows/macOS."""
+    low = label.strip().lower()
+    if "${{" in low or low.startswith(_NON_LINUX_PREFIXES):
+        return False
+    return low.endswith("-arm") or low.endswith("-arm64")
+
+
+def _push_reaches_default_branch(push: YamlValue) -> bool:
+    if not isinstance(push, dict):
+        return True
+    branches = push.get("branches")
+    if isinstance(branches, list):
+        names = [b for b in branches if isinstance(b, str)]
+        return any(b in _DEFAULT_BRANCHES or "*" in b for b in names)
+    if branches is None and push.get("branches-ignore") is None:
+        # tags-only push filter never reaches the default branch
+        return not ("tags" in push or "tags-ignore" in push)
+    ignored = push.get("branches-ignore")
+    if isinstance(ignored, list):
+        return not any(b in _DEFAULT_BRANCHES for b in ignored if isinstance(b, str))
+    return True
+
+
+def _pr_push_events(doc: dict[str, YamlValue]) -> tuple[str, ...]:
+    on = get_on_section(doc)
+    events: list[str] = []
+    for ev in ("pull_request", "pull_request_target"):
+        if ev in on:
+            events.append(ev)
+    if "push" in on and _push_reaches_default_branch(on["push"]):
+        events.append("push")
+    return tuple(events)
+
+
+def _if_confines_off_pr_push(cond: str) -> bool | None:
+    """True: the `if:` provably confines the job to schedule/dispatch/release,
+    a tag ref, or the `ci-full` tag. None: an `if:` we cannot prove either way."""
+    if "ci-full" in cond:
+        return True
+    positives = set(_EVENT_EQ_RE.findall(cond))
+    negatives = set(_EVENT_NE_RE.findall(cond))
+    if "||" not in cond:
+        if positives and positives <= _RUN_003_OFF_PATH_EVENTS:
+            return True
+        if {"push"} <= negatives and negatives & {"pull_request", "pull_request_target"}:
+            return True
+        if _TAG_REF_RE.search(cond):
+            return True
+    elif positives and positives <= _RUN_003_OFF_PATH_EVENTS and not negatives:
+        stripped = _EVENT_EQ_RE.sub("", cond)
+        if "github." not in stripped and "needs." not in stripped and "matrix." not in stripped:
+            return True
+    return None
+
+
+def _pick_literal(val: YamlValue, rest: list[str]) -> str | None:
+    for part in rest:
+        if not isinstance(val, dict):
+            return None
+        val = val.get(part)
+    if isinstance(val, str) and "${{" not in val:
+        return val
+    return None
+
+
+def _pick_all(items: list[YamlValue], rest: list[str]) -> list[str] | None:
+    picked = [_pick_literal(v, rest) for v in items]
+    if any(p is None for p in picked):
+        return None
+    return [p for p in picked if p is not None]
+
+
+def _literal_matrix_values(job: dict[str, YamlValue], key_path: str) -> list[str] | None:
+    """Resolve `matrix.<k>` or `matrix.<k>.<f>` from a literal strategy.matrix
+    (list values and `include` entries). None if anything is dynamic."""
+    strategy = job.get("strategy")
+    matrix = strategy.get("matrix") if isinstance(strategy, dict) else None
+    if not isinstance(matrix, dict):
+        return None
+    head, *rest = key_path.split(".")
+    top = matrix.get(head)
+    include = matrix.get("include")
+    if (top is not None and not isinstance(top, list)) or (
+        include is not None and not isinstance(include, list)
+    ):
+        return None
+    from_top = _pick_all(top or [], rest)
+    entries = [e[head] for e in include or [] if isinstance(e, dict) and head in e]
+    from_include = _pick_all(entries, rest)
+    if from_top is None or from_include is None:
+        return None
+    return (from_top + from_include) or None
+
+
+_MATRIX_EXPR_RE = re.compile(r"^\$\{\{\s*matrix\.([A-Za-z0-9_.-]+)\s*\}\}$")
+
+
+@dataclass(frozen=True)
+class _Run003Labels:
+    arm: tuple[str, ...]
+    unresolved: tuple[str, ...]
+
+
+def _run_003_labels(ci: CiToml, job: dict[str, YamlValue]) -> _Run003Labels:
+    """Native arm64 Linux labels and unresolvable dynamic labels for one job."""
+    runs_on = job.get("runs-on")
+    labels: list[str] = []
+    if isinstance(runs_on, str):
+        labels = [runs_on]
+    elif isinstance(runs_on, list):
+        labels = [x for x in runs_on if isinstance(x, str)]
+    arm: list[str] = []
+    unresolved: list[str] = []
+    lane_key = _matrix_platform_lane_key(job)
+    for label in labels:
+        if "${{" not in label:
+            resolved: list[str] | None = [label]
+        elif lane_key is not None and f"matrix.{lane_key}.runs_on" in label:
+            arm.extend(
+                f"{p.runs_on} ([platforms.{pid}])"
+                for pid, p in sorted(ci.platforms.items())
+                if is_native_arm_linux_label(p.runs_on)
+            )
+            continue
+        else:
+            m = _MATRIX_EXPR_RE.match(label.strip())
+            resolved = _literal_matrix_values(job, m.group(1)) if m else None
+        if resolved is None:
+            unresolved.append(label)
+        else:
+            arm.extend(v for v in resolved if is_native_arm_linux_label(v))
+    return _Run003Labels(tuple(arm), tuple(unresolved))
+
+
+def _run_003_confined(cond: YamlValue) -> bool | None:
+    if isinstance(cond, str):
+        return _if_confines_off_pr_push(cond)
+    return cond is False
+
+
+def _run_003_finding(
+    path: str, job_id: str, events: str, labels: _Run003Labels, cond: YamlValue
+) -> Finding:
+    arm, unresolved = labels.arm, labels.unresolved
+    if arm and not isinstance(cond, str):
+        return Finding(
+            rule="RUN-003",
+            path=path,
+            message=f"jobs.{job_id} runs on native arm64 Linux ({', '.join(arm)}) "
+            f"and is reachable from {events} with no `if:` excluding it",
+            fix="move the native lane to a nightly `schedule` (or a test-running "
+            "release flow / the `ci-full` tag) and keep the RUST-008 cross-target "
+            "`check` on the PR/push path (docs/policy-general.md, #150)",
+        )
+    what = (
+        f"runs on native arm64 Linux ({', '.join(arm)})"
+        if arm
+        else f"has a dynamic runs-on {unresolved}"
+    )
+    detail = (
+        f"its `if: {cond}` cannot be proven to exclude {events}"
+        if isinstance(cond, str)
+        else f"it is reachable from {events} if that resolves to an arm64 Linux label"
+    )
+    return Finding(
+        rule="RUN-003",
+        path=path,
+        status=Status.NEEDS_REVIEW,
+        message=f"jobs.{job_id} {what}; {detail}",
+        fix="confirm the job never runs a native arm64 Linux lane on "
+        "pull_request/default-branch push, or confine it with an "
+        "`if: github.event_name == 'schedule'`-style guard",
+    )
+
+
+def check_run_003(ci: CiToml, workflows: list[ParsedYamlFile]) -> list[Finding]:
+    """RUN-003 (#150): a job on a native arm64 Linux runner must not be
+    reachable from `pull_request` or a default-branch `push`. Its job `if:`
+    must confine it to `schedule`/`workflow_dispatch`/`release` (or a tag ref,
+    or the `ci-full` tag). Platform-lanes matrix legs are resolved against
+    ci.toml's [platforms].*.runs-on, as RUN-001 does; other dynamic labels
+    and unprovable `if:` expressions are `needs_review`."""
+    findings: list[Finding] = []
+    for wf in workflows:
+        if wf.status != LoadStatus.OK:
+            continue
+        doc = as_dict(wf.document)
+        events = _pr_push_events(doc)
+        if not events:
+            continue
+        for job_id, job in jobs_of(doc).items():
+            labels = _run_003_labels(ci, job)
+            cond = job.get("if")
+            if (labels.arm or labels.unresolved) and _run_003_confined(cond) is not True:
+                findings.append(_run_003_finding(wf.path, job_id, "/".join(events), labels, cond))
+    return findings
+
+
 def check_wf_001(workflows: list[ParsedYamlFile]) -> list[Finding]:
     findings: list[Finding] = []
     for wf in workflows:
@@ -689,6 +903,7 @@ def check_group2(ci: CiToml, repo_root: Path) -> list[Finding]:
     findings.extend(check_sec_004(ci, workflows, actions))
     findings.extend(check_run_001(ci, workflows))
     findings.extend(check_run_002(workflows))
+    findings.extend(check_run_003(ci, workflows))
     findings.extend(check_wf_001(workflows))
     findings.extend(check_wf_002(workflows))
     findings.extend(check_wf_003(workflows, actions))
