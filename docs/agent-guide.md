@@ -51,6 +51,11 @@ The disposition is either:
 
 For implementation changes to the checker, use focused regression fixtures from [issue #1](https://github.com/zackees/ci.yml/issues/1) and [issue #2](https://github.com/zackees/ci.yml/issues/2): repeated native Dylint, qualified versus short nightly cache identity, read-only restored output, missing cross-target `rust-std`, queue-heavy runs, a historical fixed case, a removed test workflow, equivalent Soldr command forms, and an approved dependency-cycle exception. Require a failing fixture before a fix and a passing fixture afterward.
 
+## Agent merge hygiene (#148 process lessons)
+
+- **Admin-merge only after the quick gate is green**, even for a change that looks docs-only: running-process#1230 carried a line-length violation into `main`.
+- **Stage explicit paths in automation, never `git add -A`** after local test runs: tests can write build artifacts (`<crate>-<hash>.d`) into source directories, and a shared checkout can hold another workstream's files.
+
 ## Current limits
 
 The fleet inventory in issue #2 sampled repositories and PR history; it is not proof that uninspected repositories comply. The first central-scanner slice exists ([issue #38](https://github.com/zackees/ci.yml/issues/38)): `python3 -m ci_lint fleet scan` inventories repositories live and read-only (ci.toml adoption `FLEET-001`, PR entrypoints `GEN-001`/`GEN-008`, runner labels `RUN-001`, setup-soldr pin freshness `RUST-014`, settings `SEC-007`/`GEN-006`, cache usage `FLEET-002`) and ranks them, and `python3 -m ci_lint sync-issues --dry-run` prints the exact fingerprinted issue plan (one issue per repo + rule + subject, per the lifecycle above). No scheduler exists, and still no repository is enrolled: an agent still reports the observed scope rather than claiming fleet-wide enforcement for anything the scan does not check (Dylint, cache families, timing).
