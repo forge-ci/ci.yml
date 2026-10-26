@@ -42,6 +42,7 @@ from ci_lint.rules.profile_required import check_group13
 from ci_lint.rules.py_benchmark import check_group14
 from ci_lint.rules.doc_claims import check_gen_010_static
 from ci_lint.rules.ghapi_reread import check_ghapi_001
+from ci_lint.rules.macos_signing import check_rel_006
 from ci_lint.rules.host_sweeps import check_gen_030
 from ci_lint.rules.status_badges import check_gen_026
 from ci_lint.rules.release_gate import check_group11
@@ -221,6 +222,7 @@ def run_precheck(repo_root: Path, *, title: str = "", local: bool = False, live:
         all_findings.extend(check_complexity(repo_root).findings)
         all_findings.extend(check_rust_019(repo_root))
         all_findings.extend(check_ghapi_001(repo_root))
+        all_findings.extend(check_rel_006(repo_root))
         all_findings.extend(check_gen_023(repo_root))
         all_findings.extend(check_gen_030(repo_root))
         all_findings.extend(check_gen_026(repo_root))
