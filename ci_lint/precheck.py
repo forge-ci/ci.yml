@@ -33,15 +33,18 @@ from ci_lint.rules.ci_pre import check_group12
 from ci_lint.rules.contract import check_ct_006, check_tag_001, check_tag_002
 from ci_lint.rules.layout import check_group6
 from ci_lint.rules.m2_22 import check_group_m2_22
-from ci_lint.rules.packaging import check_group8
+from ci_lint.rules.packaging import NATIVE_WHEEL_PROFILES, check_group8
+from ci_lint.rules.wheel_soldr_only import check_pkg_010
 from ci_lint.rules.profile_required import check_group13
 from ci_lint.rules.py_benchmark import check_group14
 from ci_lint.rules.doc_claims import check_gen_010_static
 from ci_lint.rules.ghapi_reread import check_ghapi_001
+from ci_lint.rules.host_sweeps import check_gen_030
 from ci_lint.rules.release_gate import check_group11
 from ci_lint.rules.rust_dylint_target import check_rust_016
 from ci_lint.rules.cpp_ctest import check_cpp_001
 from ci_lint.rules.rust_async_guards import check_rust_019
+from ci_lint.rules.cache_stats_summary import check_gen_023
 from ci_lint.rules.rust_nocapture import check_rust_017
 from ci_lint.rules.rust_test_selectors import check_rust_015
 from ci_lint.rules.rust_units import check_group7
@@ -165,6 +168,8 @@ def run_precheck(repo_root: Path, *, title: str = "", local: bool = False, live:
         all_findings.extend(check_group6(ci, repo_root))
         all_findings.extend(check_group7(ci, repo_root))
         all_findings.extend(check_group8(ci, repo_root))
+        if ci.profile in NATIVE_WHEEL_PROFILES:
+            all_findings.extend(check_pkg_010(repo_root))
         findings9, cache_arithmetic = check_group9(ci, repo_root)
         all_findings.extend(findings9)
         all_findings.extend(check_cache_007_static(ci, repo_root))
@@ -189,6 +194,8 @@ def run_precheck(repo_root: Path, *, title: str = "", local: bool = False, live:
         all_findings.extend(check_complexity(repo_root).findings)
         all_findings.extend(check_rust_019(repo_root))
         all_findings.extend(check_ghapi_001(repo_root))
+        all_findings.extend(check_gen_023(repo_root))
+        all_findings.extend(check_gen_030(repo_root))
         if ci.local.gate is not None:
             all_findings.extend(check_gate_static(ci.local.gate, repo_root))
             all_findings.extend(check_no_bare_rust(repo_root, ci.local.gate.run, workflows=False))

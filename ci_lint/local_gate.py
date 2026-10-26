@@ -59,6 +59,7 @@ from ci_lint.attestations import strip_trailers as strip_attestation_trailers
 from ci_lint.attestations import MISSING, VALID, verify_commit as verify_gate_attestations
 from ci_lint.finding import Finding, Status
 from ci_lint.gate_run_lock import hold as hold_gate_run_lock
+from ci_lint.lane_log_retention import KEEP_RUNS, new_run_log_dir, prune_run_log_dirs
 from ci_lint.workflow_replay_config import ReplayConfig, parse_replay
 from ci_lint.workflow_replay_runtime import CheckedCommand, bind_execution_pins, run_checked_command
 from ci_lint.workflow_replay_static import check_replay_static
@@ -704,8 +705,7 @@ def run_lanes(repo: Path, config: GateConfig, head: str, tree: str, *, use_cache
     versions = ToolVersions()
     replay = bind_execution_pins(repo, config.replay) if config.replay is not None else None
     config = replace(config, replay=replay)
-    log_dir = lane_log_dir(repo)
-    log_dir.mkdir(parents=True, exist_ok=True)
+    log_dir = new_run_log_dir(lane_log_dir(repo))
     reused: dict[str, str] = {}
     pending: list[_Pending] = []
     for lane in config.lanes:
@@ -783,12 +783,31 @@ def _replay_coverage_problem(config: GateConfig, repo: Path) -> str | None:
     return "local-gate run: replay coverage is unproven:\n  " + "\n  ".join(item.message for item in findings)
 
 
+def _retain_lane_logs(repo: Path) -> None:
+    """GEN-030: the run is over and the per-worktree run lock is still held,
+    so no gate run of this worktree is active; keep the newest KEEP_RUNS."""
+
+    try:
+        report = prune_run_log_dirs(lane_log_dir(repo), keep=KEEP_RUNS)
+    except (OSError, GitError, subprocess.SubprocessError):
+        return
+    if report.removed:
+        print(
+            f"local-gate: lane-log retention kept {len(report.kept)} run(s), removed {len(report.removed)} "
+            f"({report.freed_bytes} bytes freed; GEN-030 keeps the last {KEEP_RUNS} per worktree)",
+            file=sys.stderr,
+        )
+
+
 def run_gate(
     repo: Path, config: GateConfig, *, stamp: bool = True, force: bool = False, use_cache: bool = True
 ) -> RunOutcome:
     try:
         with hold_gate_run_lock(run_lock_path(repo)):
-            return _run_gate(repo, config, stamp=stamp, force=force, use_cache=use_cache)
+            try:
+                return _run_gate(repo, config, stamp=stamp, force=force, use_cache=use_cache)
+            finally:
+                _retain_lane_logs(repo)
     except (OSError, GitError, ValueError, subprocess.SubprocessError) as error:
         return RunOutcome(2, f"local-gate run: {error}")
 
