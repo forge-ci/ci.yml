@@ -1,0 +1,5 @@
+name: soldr
+runs:
+  using: composite
+  steps:
+    - uses: zackees/setup-soldr@v0
