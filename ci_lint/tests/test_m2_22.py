@@ -33,7 +33,7 @@ class Gen007Test(unittest.TestCase):
 class Rust008Test(unittest.TestCase):
     def test_no_check_only_coverage_is_violation(self) -> None:
         repo = fixture("RUST-008", "red")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         findings = check_rust_008(ci, repo)
         self.assertIn("RUST-008", rule_ids(findings))
         self.assertTrue(all(f.status == Status.VIOLATION for f in findings))
@@ -42,12 +42,12 @@ class Rust008Test(unittest.TestCase):
 
     def test_full_check_only_coverage_is_clean(self) -> None:
         repo = fixture("RUST-008", "green-check-coverage")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         self.assertEqual([], check_rust_008(ci, repo))
 
     def test_boundary_lint_exempts_repo(self) -> None:
         repo = fixture("RUST-008", "green-boundary-lint")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         self.assertEqual([], check_rust_008(ci, repo))
 
 

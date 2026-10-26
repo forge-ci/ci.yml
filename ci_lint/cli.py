@@ -12,7 +12,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from ci_lint.act_audit import audit as run_act_audit
-from ci_lint.hosted_attestations import verified_jobs
+from ci_lint.hosted_attestations import verified_jobs, verified_merge_group_jobs
 from ci_lint.attestations import JobDecision
 from ci_lint.act_audit import render as render_act_audit_text
 from ci_lint.act_audit import to_json_dict as act_audit_to_json_dict
@@ -116,7 +116,7 @@ from ci_lint.rules.contract import extract_bracket_tokens
 from ci_lint.runtime.dylint import DylintCoverageError, compute_dylint_coverage
 from ci_lint.runtime.dylint import render_text as render_dylint_coverage_text
 from ci_lint.runtime.dylint import to_json_dict as dylint_coverage_to_json_dict
-from ci_lint.runtime.gate import compute_gate
+from ci_lint.runtime.gate import QueueReuse, compute_gate
 from ci_lint.runtime.gate import render_text as render_gate_text
 from ci_lint.runtime.gate import to_json_dict as gate_to_json_dict
 from ci_lint.runtime.suite import SuiteCheckError, compute_suite_check
@@ -375,7 +375,7 @@ def _cmd_precheck(args: argparse.Namespace) -> int:
     write_step_summary(result)
 
     if args.plan_out or args.github_output:
-        ci, _ = load_ci_toml(repo_root)
+        ci = load_ci_toml(repo_root).ci
         if ci is not None:
             event_name = "pull_request" if title else "push"
             try:
@@ -403,7 +403,9 @@ def _cmd_precheck(args: argparse.Namespace) -> int:
 
 def _cmd_plan(args: argparse.Namespace) -> int:
     repo_root = Path(args.repo).resolve()
-    ci, findings = load_ci_toml(repo_root)
+    _loaded = load_ci_toml(repo_root)
+    ci = _loaded.ci
+    findings = _loaded.findings
     if ci is None:
         for f in findings:
             print(f.render())
@@ -451,7 +453,9 @@ def _cmd_plan(args: argparse.Namespace) -> int:
 
 
 def _load_ci_or_die(repo_root: Path, command: str) -> CiToml | None:
-    ci, findings = load_ci_toml(repo_root)
+    _loaded = load_ci_toml(repo_root)
+    ci = _loaded.ci
+    findings = _loaded.findings
     if ci is None:
         for f in findings:
             print(f.render())
@@ -591,6 +595,24 @@ def _attested_gate_jobs(args: argparse.Namespace, payload: dict[str, JsonValue],
         return ()
 
 
+def _queue_gate_jobs(args: argparse.Namespace, payload: dict[str, JsonValue],
+                     needs: dict[str, JsonValue]) -> QueueReuse | None:
+    """#419 clause 5: merge_group skips need the aggregator's own GET-only re-derivation."""
+    if not getattr(args, "attested_workflow", None):
+        return None
+    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN") or ""
+    try:
+        return verified_merge_group_jobs(
+            Path(args.repo).resolve(), args.attested_workflow, payload,
+            event=os.environ.get("GITHUB_EVENT_NAME", ""), needs=needs,
+            fetch=default_fetch_status if token else None, token=token,
+            repo_slug=os.environ.get("GITHUB_REPOSITORY"),
+            local_replay=os.environ.get("ACT", "").strip().lower() == "true",
+        )
+    except (OSError, ValueError) as exc:
+        return QueueReuse((), unverifiable=f"queue attestation unavailable: {exc}")
+
+
 def _gate_plan(args: argparse.Namespace, needs: dict[str, JsonValue]) -> dict[str, JsonValue]:
     if args.workflow_plan:
         from ci_lint.workflow_gate import build_plan
@@ -664,6 +686,7 @@ def _cmd_gate(args: argparse.Namespace) -> int:
         default_branch_reuse=db_reuse,
         push_sha=push_sha,
         attested_jobs=_attested_gate_jobs(args, event, needs),
+        queue_reuse=_queue_gate_jobs(args, event, needs),
         workflow_jobs=_native_gate_jobs(args, needs),
     )
     print(json.dumps(gate_to_json_dict(report), indent=2) if args.json else render_gate_text(report))
@@ -1071,11 +1094,12 @@ def _cmd_cache_janitor(args: argparse.Namespace) -> int:
         return 1
     token, repo_slug = creds
     delete_fn = None if args.dry_run else default_delete
-    result, table = cache_janitor(
+    janitor_report = cache_janitor(
         ci, fetch=default_fetch, graphql=default_graphql, delete=delete_fn, token=token, repo=repo_slug,
         max_deletes=args.max_deletes, dry_run=args.dry_run, stale_days=args.stale_days,
         default_branch=args.default_branch, enforce_budget=args.enforce_budget,
     )
+    result, table = janitor_report.result, janitor_report.text
     if args.json:
         payload = result.to_json_dict()
         payload["table"] = table
@@ -1140,11 +1164,12 @@ def _cmd_cache_preprune(args: argparse.Namespace) -> int:
         return 1
     token, repo_slug = creds
     delete_fn = None if args.dry_run else default_delete
-    result, summary = cache_preprune(
+    preprune_report = cache_preprune(
         ci, fetch=default_fetch, graphql=default_graphql, delete=delete_fn, token=token, repo=repo_slug,
         lockfile_changed=args.lockfile_changed, max_deletes=args.max_deletes, dry_run=args.dry_run,
         default_branch=args.default_branch,
     )
+    result, summary = preprune_report.result, preprune_report.text
     if args.json:
         payload = result.to_json_dict()
         payload["summary"] = summary

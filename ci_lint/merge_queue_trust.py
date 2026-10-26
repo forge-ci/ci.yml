@@ -54,6 +54,7 @@ class MergeGroupDecision:
     decision: TrustDecision
     pr_input: TrustInput | None  # the PR-head input decide() judged; per-job GATE-010 decisions reuse it
     pr: int | None
+    tree: str | None = None  # the proven tree, for the aggregator's provenance line
 
 
 def parse_queue_ref(ref: str) -> QueueRef | None:
@@ -173,4 +174,5 @@ def decide_merge_group(repo: Path, event_name: str, event: MergeGroupEvent | Non
     )
     inner = decide(repo, pr_input)
     detail = f"PR #{ref.pr} head {pr_head[:12]} tree {pr_tree[:12]} == queue tree: {inner.detail}"
-    return MergeGroupDecision(TrustDecision(inner.trusted, inner.would_trust, inner.reason, detail), pr_input, ref.pr)
+    return MergeGroupDecision(TrustDecision(inner.trusted, inner.would_trust, inner.reason, detail), pr_input, ref.pr,
+                              pr_tree)

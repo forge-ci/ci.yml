@@ -17,6 +17,7 @@ import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 
+from ci_lint.cargo_messages import JsonValue
 from ci_lint.finding import Finding, Status
 from ci_lint.proc import run_captured
 from ci_lint.schema import CiToml
@@ -27,6 +28,30 @@ _NATIVE_MEMBER_RE = re.compile(r"(^|/)_native[^/]*\.(so|pyd|dylib)$")
 _ELF_MACHINE: dict[str, int] = {"x86_64": 0x3E, "aarch64": 0xB7}
 _PE_MACHINE: dict[str, int] = {"x86_64": 0x8664, "aarch64": 0xAA64}
 _MACHO_CPUTYPE: dict[str, int] = {"x86_64": 0x01000007, "aarch64": 0x0100000C}
+
+
+@dataclass(frozen=True)
+class BinaryTarget:
+    """An executable format (`"elf" | "pe" | "macho"`) and CPU arch."""
+
+    family: str
+    arch: str
+
+
+@dataclass(frozen=True)
+class MagicCheck:
+    ok: bool
+    detail: str
+
+
+@dataclass(frozen=True, order=True)
+class SoldrVersion:
+    major: int
+    minor: int
+    patch: int
+
+    def __str__(self) -> str:
+        return f"{self.major}.{self.minor}.{self.patch}"
 
 
 @dataclass(frozen=True)
@@ -62,7 +87,7 @@ def parse_wheel_filename(path: Path) -> WheelFilenameParts | None:
     )
 
 
-def _platform_family_and_arch(platform_tag: str) -> tuple[str, str] | None:
+def _platform_family_and_arch(platform_tag: str) -> BinaryTarget | None:
     """`(family, arch)` for a wheel platform tag this round's brief lists
     checks for; `family` is `"elf" | "pe" | "macho"`. Returns None for a
     tag ci-lint does not yet know how to verify (e.g. a pure-Python
@@ -83,10 +108,10 @@ def _platform_family_and_arch(platform_tag: str) -> tuple[str, str] | None:
         arch = "aarch64"
     else:
         return None
-    return family, arch
+    return BinaryTarget(family, arch)
 
 
-def _host_family_and_arch() -> tuple[str, str] | None:
+def _host_family_and_arch() -> BinaryTarget | None:
     """The family/arch of the machine `ci-lint wheel installed` itself
     runs on -- there is no wheel filename to read a platform tag from once
     a wheel is already installed into a venv, so the host's own
@@ -100,15 +125,15 @@ def _host_family_and_arch() -> tuple[str, str] | None:
     else:
         return None
     if sys.platform.startswith("linux"):
-        return "elf", arch
+        return BinaryTarget("elf", arch)
     if sys.platform.startswith("win"):
-        return "pe", arch
+        return BinaryTarget("pe", arch)
     if sys.platform == "darwin":
-        return "macho", arch
+        return BinaryTarget("macho", arch)
     return None
 
 
-def check_magic(data: bytes, family: str, arch: str) -> tuple[bool, str]:  # noqa: C901
+def check_magic(data: bytes, family: str, arch: str) -> MagicCheck:  # noqa: C901
     """Verify `data` (a binary's leading bytes) is really a `family`
     executable for `arch`, reading only the fixed-offset header fields
     every format guarantees: ELF's `e_machine` (offset 18), PE's
@@ -118,40 +143,40 @@ def check_magic(data: bytes, family: str, arch: str) -> tuple[bool, str]:  # noq
 
     if family == "elf":
         if data[:4] != b"\x7fELF":
-            return False, "not an ELF file (missing \\x7fELF magic)"
+            return MagicCheck(False, "not an ELF file (missing \\x7fELF magic)")
         if len(data) < 20:
-            return False, "file too short to read e_machine"
+            return MagicCheck(False, "file too short to read e_machine")
         e_machine = int.from_bytes(data[18:20], "little")
         expected = _ELF_MACHINE[arch]
         if e_machine != expected:
-            return False, f"ELF e_machine=0x{e_machine:x}, expected 0x{expected:x} ({arch})"
-        return True, "ok"
+            return MagicCheck(False, f"ELF e_machine=0x{e_machine:x}, expected 0x{expected:x} ({arch})")
+        return MagicCheck(True, "ok")
     if family == "pe":
         if data[:2] != b"MZ":
-            return False, "not a PE file (missing MZ magic)"
+            return MagicCheck(False, "not a PE file (missing MZ magic)")
         if len(data) < 0x40:
-            return False, "file too short to read e_lfanew"
+            return MagicCheck(False, "file too short to read e_lfanew")
         e_lfanew = int.from_bytes(data[0x3C:0x40], "little")
         if data[e_lfanew : e_lfanew + 4] != b"PE\x00\x00":
-            return False, "missing PE\\0\\0 signature at e_lfanew"
+            return MagicCheck(False, "missing PE\\0\\0 signature at e_lfanew")
         if len(data) < e_lfanew + 6:
-            return False, "file too short to read the PE Machine field"
+            return MagicCheck(False, "file too short to read the PE Machine field")
         machine = int.from_bytes(data[e_lfanew + 4 : e_lfanew + 6], "little")
         expected = _PE_MACHINE[arch]
         if machine != expected:
-            return False, f"PE Machine=0x{machine:x}, expected 0x{expected:x} ({arch})"
-        return True, "ok"
+            return MagicCheck(False, f"PE Machine=0x{machine:x}, expected 0x{expected:x} ({arch})")
+        return MagicCheck(True, "ok")
     if family == "macho":
         if data[:4] != b"\xcf\xfa\xed\xfe":
-            return False, "not a 64-bit little-endian Mach-O file (missing magic)"
+            return MagicCheck(False, "not a 64-bit little-endian Mach-O file (missing magic)")
         if len(data) < 8:
-            return False, "file too short to read cputype"
+            return MagicCheck(False, "file too short to read cputype")
         cputype = int.from_bytes(data[4:8], "little")
         expected = _MACHO_CPUTYPE[arch]
         if cputype != expected:
-            return False, f"Mach-O cputype=0x{cputype:x}, expected 0x{expected:x} ({arch})"
-        return True, "ok"
-    return False, f"unrecognized family '{family}'"
+            return MagicCheck(False, f"Mach-O cputype=0x{cputype:x}, expected 0x{expected:x} ({arch})")
+        return MagicCheck(True, "ok")
+    return MagicCheck(False, f"unrecognized family '{family}'")
 
 
 def _has_console_script(entry_points_text: str, cli_name: str) -> bool:
@@ -174,12 +199,12 @@ def _has_console_script(entry_points_text: str, cli_name: str) -> bool:
 # above this version can only have produced an unstamped wheel by bypassing
 # soldr, so a missing stamp is a hard PKG-004 violation there; below it (or
 # with no readable floor) the stamp may legitimately be absent -> needs_review.
-GENERATOR_STAMP_MIN_SOLDR: tuple[int, int, int] = (0, 9, 26)
+GENERATOR_STAMP_MIN_SOLDR = SoldrVersion(0, 9, 26)
 
 _SOLDR_FLOOR_RE = re.compile(r"^soldr\s*(?:==|>=|~=|>)\s*(\d+)\.(\d+)(?:\.(\d+))?")
 
 
-def soldr_requires_floor(repo_root: Path) -> tuple[int, int, int] | None:
+def soldr_requires_floor(repo_root: Path) -> SoldrVersion | None:
     """The soldr version floor declared in `repo_root/pyproject.toml`'s
     `[build-system].requires` (`soldr>=X.Y.Z`, `==`, `~=`, `>`), or None
     when absent/unreadable."""
@@ -197,7 +222,7 @@ def soldr_requires_floor(repo_root: Path) -> tuple[int, int, int] | None:
             continue
         m = _SOLDR_FLOOR_RE.match(req.strip())
         if m:
-            return (int(m.group(1)), int(m.group(2)), int(m.group(3) or 0))
+            return SoldrVersion(int(m.group(1)), int(m.group(2)), int(m.group(3) or 0))
     return None
 
 
@@ -264,7 +289,7 @@ def check_wheel(  # noqa: C901
     wheel_path: Path,
     sdist_path: Path | None = None,
     *,
-    soldr_floor: tuple[int, int, int] | None = None,
+    soldr_floor: SoldrVersion | None = None,
 ) -> WheelCheckReport:
     """`soldr_floor` is the repository's `[build-system].requires` soldr
     floor (`soldr_requires_floor`); at or above `GENERATOR_STAMP_MIN_SOLDR`
@@ -327,8 +352,8 @@ def check_wheel(  # noqa: C901
                         "shim slipped in instead",
                     )
                 )
-            family_arch = _platform_family_and_arch(parts.platform_tag)
-            if family_arch is None:
+            target = _platform_family_and_arch(parts.platform_tag)
+            if target is None:
                 findings.append(
                     Finding(
                         rule="PKG-003",
@@ -342,8 +367,8 @@ def check_wheel(  # noqa: C901
                     )
                 )
             else:
-                family, arch = family_arch
-                ok, detail = check_magic(data, family, arch)
+                magic = check_magic(data, target.family, target.arch)
+                ok, detail = magic.ok, magic.detail
                 if not ok:
                     findings.append(
                         Finding(
@@ -352,7 +377,7 @@ def check_wheel(  # noqa: C901
                             message=f"bundled CLI's magic bytes don't match wheel platform tag "
                             f"'{parts.platform_tag}': {detail}",
                             fix=f"rebuild the wheel for '{parts.platform_tag}' so its bundled binary is "
-                            f"a real {arch} {family} executable, not a mismatched or stub binary",
+                            f"a real {target.arch} {target.family} executable, not a mismatched or stub binary",
                         )
                     )
 
@@ -386,7 +411,7 @@ def check_wheel(  # noqa: C901
             wheel_text = zf.read(wheel_meta_member).decode("utf-8", errors="replace")
             generator = _parse_wheel_generator(wheel_text)
             if generator is None or "soldr" not in generator.lower():
-                floor_text = ".".join(str(x) for x in GENERATOR_STAMP_MIN_SOLDR)
+                floor_text = str(GENERATOR_STAMP_MIN_SOLDR)
                 if soldr_floor is not None and soldr_floor >= GENERATOR_STAMP_MIN_SOLDR:
                     findings.append(
                         Finding(
@@ -529,7 +554,8 @@ def check_installed(ci: CiToml, repo_root: Path, venv_dir: Path) -> InstalledChe
                 )
             )
         else:
-            ok, detail = check_magic(data, *host)
+            magic = check_magic(data, host.family, host.arch)
+            ok, detail = magic.ok, magic.detail
             if not ok:
                 findings.append(
                     Finding(
@@ -620,14 +646,14 @@ def check_installed(ci: CiToml, repo_root: Path, venv_dir: Path) -> InstalledChe
     )
 
 
-def _findings_json(findings: tuple[Finding, ...]) -> list[dict[str, object]]:
+def _findings_json(findings: tuple[Finding, ...]) -> list[dict[str, JsonValue]]:
     return [
         {"rule": f.rule, "status": f.status.value, "path": f.path, "line": f.line, "message": f.message, "fix": f.fix}
         for f in findings
     ]
 
 
-def wheel_check_to_json_dict(report: WheelCheckReport) -> dict[str, object]:
+def wheel_check_to_json_dict(report: WheelCheckReport) -> dict[str, JsonValue]:
     return {
         "wheel_path": report.wheel_path,
         "generator": report.generator,
@@ -637,7 +663,7 @@ def wheel_check_to_json_dict(report: WheelCheckReport) -> dict[str, object]:
     }
 
 
-def installed_check_to_json_dict(report: InstalledCheckReport) -> dict[str, object]:
+def installed_check_to_json_dict(report: InstalledCheckReport) -> dict[str, JsonValue]:
     return {
         "cli_path": report.cli_path,
         "native_module_file": report.native_module_file,

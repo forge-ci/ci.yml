@@ -39,7 +39,9 @@ def rule_ids(findings) -> list[str]:
 class DylintCoverageRuntimeTest(unittest.TestCase):
     def setUp(self) -> None:
         self.repo = FIXTURES / "runtime" / "dylint"
-        self.ci, findings = load_ci_toml(self.repo)
+        _loaded = load_ci_toml(self.repo)
+        self.ci = _loaded.ci
+        findings = _loaded.findings
         self.assertIsNotNone(self.ci, msg=str(findings))
 
     # -- GREEN: real evidence, both shapes --------------------------------

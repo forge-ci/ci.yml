@@ -15,11 +15,11 @@ from ci_lint.tests.helpers import fixture, init_git_repo
 class LayoutFixtureTest(unittest.TestCase):
     def test_layout_001_host_selector_outside_facade(self) -> None:
         repo = fixture("LAYOUT-001", "red")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         self.assertIn("LAYOUT-001", [f.rule for f in check_group6(ci, repo)])
 
         repo = fixture("LAYOUT-001", "green")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         self.assertNotIn("LAYOUT-001", [f.rule for f in check_group6(ci, repo)])
 
     def test_layout_001_ignores_gitignored_vendored_code(self) -> None:
@@ -42,7 +42,7 @@ class LayoutFixtureTest(unittest.TestCase):
                 "#[cfg(windows)]\nfn vendored_windows_only() {}\n", encoding="utf-8"
             )
             repo = fixture("LAYOUT-001", "green")
-            ci, _ = load_ci_toml(repo)
+            ci = load_ci_toml(repo).ci
             findings = check_group6(ci, root)
         self.assertEqual([], findings)
 
@@ -61,7 +61,7 @@ class LayoutFixtureTest(unittest.TestCase):
                 encoding="utf-8",
             )
             repo = fixture("LAYOUT-001", "green")
-            ci, _ = load_ci_toml(repo)
+            ci = load_ci_toml(repo).ci
 
             # Reuse the green fixture's ci.toml (a valid, empty allowlist
             # match for this new path) against the temp-dir source tree.
@@ -82,7 +82,7 @@ class LayoutFixtureTest(unittest.TestCase):
                 encoding="utf-8",
             )
             repo = fixture("LAYOUT-001", "green")
-            ci, _ = load_ci_toml(repo)
+            ci = load_ci_toml(repo).ci
             findings = check_group6(ci, root)
         self.assertEqual([], findings)
 
@@ -109,7 +109,7 @@ class LayoutMultilineAttributeTest(unittest.TestCase):
             root = Path(tmp)
             _write(root, "crates/demo/src/other.rs", content)
             repo = fixture("LAYOUT-001", "green")
-            ci, _ = load_ci_toml(repo)
+            ci = load_ci_toml(repo).ci
             findings = check_group6(ci, root)
         return [f.rule for f in findings]
 

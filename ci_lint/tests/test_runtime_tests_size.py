@@ -22,7 +22,9 @@ from ci_lint.tests.helpers import FIXTURES
 class TestsSizeRuntimeTest(unittest.TestCase):
     def setUp(self) -> None:
         self.repo = FIXTURES / "runtime" / "tests-size"
-        self.ci, findings = load_ci_toml(self.repo)
+        _loaded = load_ci_toml(self.repo)
+        self.ci = _loaded.ci
+        findings = _loaded.findings
         self.assertIsNotNone(self.ci, msg=str(findings))
         raw = (self.repo / "artifacts.jsonl").read_text(encoding="utf-8")
         raw = raw.replace("<FIXTURE_DIR>", str(self.repo))

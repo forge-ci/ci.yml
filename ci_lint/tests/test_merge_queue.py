@@ -11,7 +11,9 @@ from ci_lint.tests.helpers import fixture, requires_yaml_tooling
 
 def _messages(kind: str) -> list[str]:
     repo = fixture("GEN-022", kind)
-    ci, findings = load_ci_toml(repo)
+    _loaded = load_ci_toml(repo)
+    ci = _loaded.ci
+    findings = _loaded.findings
     assert ci is not None, findings
     found = check_gen_022(ci, repo)
     assert {f.rule for f in found} <= {"GEN-022"}

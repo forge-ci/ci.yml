@@ -56,7 +56,7 @@ class CachePayload007StaticTest(unittest.TestCase):
     @requires_yaml_tooling
     def test_red_flags_target_and_incremental_paths(self) -> None:
         repo = fixture("CACHE-007", "red")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         findings = check_cache_007_static(ci, repo)
         rules = [f.rule for f in findings]
         self.assertEqual(["CACHE-007"] * 2, rules)
@@ -64,7 +64,7 @@ class CachePayload007StaticTest(unittest.TestCase):
     @requires_yaml_tooling
     def test_green_registry_path_is_clean(self) -> None:
         repo = fixture("CACHE-007", "green")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         self.assertEqual([], check_cache_007_static(ci, repo))
 
 
@@ -86,12 +86,12 @@ class CachePayload007CmakeTest(unittest.TestCase):
     @requires_yaml_tooling
     def test_static_red_and_green(self) -> None:
         repo = fixture("CACHE-007", "red-cmake")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         findings = check_cache_007_static(ci, repo)
         self.assertEqual(["CACHE-007"] * 2, [f.rule for f in findings])
         self.assertTrue(all("CMake build tree" in f.message for f in findings))
         repo = fixture("CACHE-007", "green-cmake")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         self.assertEqual([], check_cache_007_static(ci, repo))
 
 

@@ -17,7 +17,9 @@ from ci_lint.workflow_scan import load_workflows
 
 def _rules(rule: str, kind: str) -> set[str]:
     repo = fixture(rule, kind)
-    ci, findings = load_ci_toml(repo)
+    _loaded = load_ci_toml(repo)
+    ci = _loaded.ci
+    findings = _loaded.findings
     assert ci is not None, findings
     return {f.rule for f in check_group12(ci, repo)}
 

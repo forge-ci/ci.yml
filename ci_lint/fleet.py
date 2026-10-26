@@ -513,7 +513,7 @@ def scan_repo(fetch_status: FetchStatusFn, token: str, ref: RepoRef) -> RepoScan
         relief = workflow_relief(root)
         if text is not None:
             (root / "ci.toml").write_text(text, encoding="utf-8")
-            ci, _ = load_ci_toml(root)
+            ci = load_ci_toml(root).ci
             if ci is not None:
                 sync_issues_opt_in = ci.fleet.sync_issues
 

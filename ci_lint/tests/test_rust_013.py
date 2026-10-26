@@ -21,7 +21,7 @@ from ci_lint.tests.helpers import fixture, requires_yaml_tooling
 class Rust013FixtureTest(unittest.TestCase):
     def test_exact_pyproject_pin_is_a_violation(self) -> None:
         repo = fixture("RUST-013", "red-pyproject-pin")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         findings = check_rust_013(ci, repo)
         self.assertIn("RUST-013", [f.rule for f in findings])
         pin_findings = [f for f in findings if f.rule == "RUST-013" and f.path == "pyproject.toml"]
@@ -29,14 +29,14 @@ class Rust013FixtureTest(unittest.TestCase):
 
     def test_floor_pin_pyproject_is_clean(self) -> None:
         repo = fixture("RUST-013", "green-pyproject-floor")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         findings = check_rust_013(ci, repo)
         self.assertNotIn("RUST-013", [f.rule for f in findings])
 
     @requires_yaml_tooling
     def test_setup_soldr_literal_version_is_a_violation(self) -> None:
         repo = fixture("RUST-013", "red-setup-soldr-version")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         findings = check_rust_013(ci, repo)
         self.assertIn("RUST-013", [f.rule for f in findings])
         version_findings = [
@@ -47,13 +47,13 @@ class Rust013FixtureTest(unittest.TestCase):
     @requires_yaml_tooling
     def test_setup_soldr_without_version_is_clean(self) -> None:
         repo = fixture("RUST-013", "green-setup-soldr-no-version")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         findings = check_rust_013(ci, repo)
         self.assertNotIn("RUST-013", [f.rule for f in findings])
 
     def test_recorded_exception_waives_the_pyproject_pin(self) -> None:
         repo = fixture("RUST-013", "green-exception")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         raw_findings = check_rust_013(ci, repo)
         self.assertIn("RUST-013", [f.rule for f in raw_findings], "sanity: rule still fires raw")
 
@@ -69,7 +69,7 @@ class Rust013FixtureTest(unittest.TestCase):
 
     def test_wired_into_group7(self) -> None:
         repo = fixture("RUST-013", "red-pyproject-pin")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         self.assertIn("RUST-013", [f.rule for f in check_group7(ci, repo)])
 
 

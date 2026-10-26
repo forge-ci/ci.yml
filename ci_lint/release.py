@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ci_lint.finding import Finding, Status
-from ci_lint.runtime.wheel import WheelFilenameParts, check_wheel, parse_wheel_filename
+from ci_lint.runtime.wheel import SoldrVersion, WheelFilenameParts, check_wheel, parse_wheel_filename
 from ci_lint.schema import CiToml, Platform
 
 RELEASE_MANIFEST_SCHEMA_VERSION = 1
@@ -173,7 +173,7 @@ def verify_staged_artifacts(  # noqa: C901
     candidate_sha: str,
     ci_toml_digest: str,
     smoke_dir: Path | None = None,
-    soldr_floor: tuple[int, int, int] | None = None,
+    soldr_floor: SoldrVersion | None = None,
 ) -> ReleaseVerifyReport:
     if not SHA_RE.match(candidate_sha):
         raise ReleaseVerifyError(f"--sha {candidate_sha!r} is not a 40-hex-char commit SHA")

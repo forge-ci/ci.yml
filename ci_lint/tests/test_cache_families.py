@@ -88,7 +88,9 @@ class LiteralPrefixFamilyTest(unittest.TestCase):
         ) + extra
         d = pathlib.Path(tempfile.mkdtemp())
         (d / "ci.toml").write_text(text, encoding="utf-8")
-        ci, findings = load_ci_toml(d)
+        _loaded = load_ci_toml(d)
+        ci = _loaded.ci
+        findings = _loaded.findings
         self.assertEqual([f.message for f in findings], [], extra)
         return ci
 
@@ -133,7 +135,7 @@ class LiteralPrefixFamilyTest(unittest.TestCase):
         ) + '\n[cache.family.both]\nvia = "setup-soldr:cook"\nprefix = "x-"\nmax = "5MB"\n'
         d = pathlib.Path(tempfile.mkdtemp())
         (d / "ci.toml").write_text(text, encoding="utf-8")
-        _, findings = load_ci_toml(d)
+        findings = load_ci_toml(d).findings
         self.assertTrue(any("both 'via' and 'prefix'" in f.message for f in findings))
 
     def test_a_family_claiming_neither_is_rejected(self) -> None:
@@ -145,5 +147,5 @@ class LiteralPrefixFamilyTest(unittest.TestCase):
         ) + '\n[cache.family.orphan]\nmax = "5MB"\n'
         d = pathlib.Path(tempfile.mkdtemp())
         (d / "ci.toml").write_text(text, encoding="utf-8")
-        _, findings = load_ci_toml(d)
+        findings = load_ci_toml(d).findings
         self.assertTrue(any("neither 'via' nor 'prefix'" in f.message for f in findings))

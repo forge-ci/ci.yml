@@ -34,11 +34,11 @@ class CacheStaticFixtureTest(unittest.TestCase):
     @requires_yaml_tooling
     def test_cache_001_raw_actions_cache(self) -> None:
         repo = fixture("CACHE-001", "red")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         self.assertIn("CACHE-001", [f.rule for f in check_cache_001(ci, repo)])
 
         repo = fixture("CACHE-001", "green")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         self.assertNotIn("CACHE-001", [f.rule for f in check_cache_001(ci, repo)])
 
     @requires_yaml_tooling
@@ -49,21 +49,21 @@ class CacheStaticFixtureTest(unittest.TestCase):
         directory is still CACHE-001."""
 
         repo = fixture("CACHE-001", "green-wrapper")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         self.assertNotIn("CACHE-001", [f.rule for f in check_cache_001(ci, repo)])
 
         repo = fixture("CACHE-001", "red-outside-wrapper")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         self.assertIn("CACHE-001", [f.rule for f in check_cache_001(ci, repo)])
 
     @requires_yaml_tooling
     def test_cache_002_volatile_key_component(self) -> None:
         repo = fixture("CACHE-002", "red")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         self.assertIn("CACHE-002", [f.rule for f in check_cache_002(ci, repo)])
 
         repo = fixture("CACHE-002", "green")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         self.assertNotIn("CACHE-002", [f.rule for f in check_cache_002(ci, repo)])
 
     @requires_yaml_tooling
@@ -73,11 +73,11 @@ class CacheStaticFixtureTest(unittest.TestCase):
         from 'ci_lint cache key' via a step output or an input passthrough."""
 
         repo = fixture("CACHE-002", "red-wrapper-literal-key")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         self.assertIn("CACHE-002", [f.rule for f in check_cache_002(ci, repo)])
 
         repo = fixture("CACHE-002", "green-wrapper-dynamic-key")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         self.assertNotIn("CACHE-002", [f.rule for f in check_cache_002(ci, repo)])
 
     @requires_yaml_tooling
@@ -87,11 +87,11 @@ class CacheStaticFixtureTest(unittest.TestCase):
         CACHE-003 if missing or a literal 'true'."""
 
         repo = fixture("CACHE-003", "red")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         self.assertIn("CACHE-003", [f.rule for f in check_cache_003_setup_uv(ci, repo)])
 
         repo = fixture("CACHE-003", "green")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         self.assertNotIn("CACHE-003", [f.rule for f in check_cache_003_setup_uv(ci, repo)])
 
     @requires_yaml_tooling
@@ -101,11 +101,11 @@ class CacheStaticFixtureTest(unittest.TestCase):
         `_dylint.yml` -- clud#487)."""
 
         repo = fixture("CACHE-010", "red")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         self.assertIn("CACHE-010", [f.rule for f in check_cache_010(ci, repo)])
 
         repo = fixture("CACHE-010", "green")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         self.assertNotIn("CACHE-010", [f.rule for f in check_cache_010(ci, repo)])
 
     @requires_yaml_tooling
@@ -115,41 +115,45 @@ class CacheStaticFixtureTest(unittest.TestCase):
         contradicts nothing ci.toml declares."""
 
         repo = fixture("CACHE-010", "red-ccache")
-        ci, findings = load_ci_toml(repo)
+        _loaded = load_ci_toml(repo)
+        ci = _loaded.ci
+        findings = _loaded.findings
         assert ci is not None, findings
         self.assertEqual(["CACHE-010"], [f.rule for f in check_cache_010(ci, repo)])
 
         repo = fixture("CACHE-010", "green-ccache")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         self.assertEqual([], check_cache_010(ci, repo))
 
     def test_cache_004_budgets_ccache_and_zccache_families(self) -> None:
         # zackees/ci.yml#393: C/C++ object-cache families count toward the
         # declared budget like any other family.
-        ci, findings = load_ci_toml(fixture("CACHE-004", "green-cpp"))
+        _loaded = load_ci_toml(fixture("CACHE-004", "green-cpp"))
+        ci = _loaded.ci
+        findings = _loaded.findings
         assert ci is not None, findings
         self.assertEqual([], [f for f in findings if f.rule == "CT-002"])
         found, arithmetic = check_cache_004(ci)
         self.assertNotIn("CACHE-004", [f.rule for f in found], msg=arithmetic)
         self.assertIn("ccache", arithmetic)
 
-        ci, _ = load_ci_toml(fixture("CACHE-004", "red-cpp"))
+        ci = load_ci_toml(fixture("CACHE-004", "red-cpp")).ci
         assert ci is not None
         found, arithmetic = check_cache_004(ci)
         self.assertIn("CACHE-004", [f.rule for f in found], msg=arithmetic)
 
     def test_cache_004_budget_exceeded_without_pre_prune(self) -> None:
-        ci, _ = load_ci_toml(fixture("CACHE-004", "red"))
+        ci = load_ci_toml(fixture("CACHE-004", "red")).ci
         findings, arithmetic = check_cache_004(ci)
         self.assertIn("CACHE-004", [f.rule for f in findings])
         self.assertIn("worst case", arithmetic)
 
-        ci, _ = load_ci_toml(fixture("CACHE-004", "green"))
+        ci = load_ci_toml(fixture("CACHE-004", "green")).ci
         findings, arithmetic = check_cache_004(ci)
         self.assertNotIn("CACHE-004", [f.rule for f in findings])
 
     def test_cache_004_budget_over_10gb_is_always_a_violation(self) -> None:
-        ci, _ = load_ci_toml(fixture("CACHE-004", "green"))
+        ci = load_ci_toml(fixture("CACHE-004", "green")).ci
         from dataclasses import replace
 
         big = replace(ci.cache, budget="11GB")
@@ -170,7 +174,7 @@ class CacheStaticFixtureTest(unittest.TestCase):
 
         from dataclasses import replace
 
-        ci, _ = load_ci_toml(fixture("CACHE-004", "green"))
+        ci = load_ci_toml(fixture("CACHE-004", "green")).ci
         self.assertTrue(ci.flows["main"].pre_prune)
         self.assertTrue(ci.flows["nightly"].pre_prune)
 
@@ -192,7 +196,7 @@ class CacheStaticFixtureTest(unittest.TestCase):
     def test_cache_004_partial_pre_prune_still_counts_the_lockfile_peak(self) -> None:
         from dataclasses import replace
 
-        ci, _ = load_ci_toml(fixture("CACHE-004", "green"))
+        ci = load_ci_toml(fixture("CACHE-004", "green")).ci
         one_flow_only = replace(ci, flows={**ci.flows, "nightly": replace(ci.flows["nightly"], pre_prune=False)})
         findings, arithmetic = check_cache_004(replace(one_flow_only, cache=replace(one_flow_only.cache, budget="1100MB")))
         self.assertIn("CACHE-004", [f.rule for f in findings], msg=arithmetic)
@@ -205,7 +209,7 @@ class CacheStaticFixtureTest(unittest.TestCase):
         entries, ~25GB total, and clud had already crossed GitHub's 10GB cap
         so new saves were being refused."""
 
-        ci, _ = load_ci_toml(fixture("CACHE-004", "green"))
+        ci = load_ci_toml(fixture("CACHE-004", "green")).ci
         fam = dict(ci.cache.family)
         fam["huge"] = replace(fam["uv"], max="700MB", evict=None, per="none")
         findings = check_cache_029(replace(ci, cache=replace(ci.cache, family=fam)))
@@ -213,7 +217,7 @@ class CacheStaticFixtureTest(unittest.TestCase):
         self.assertEqual(len(hit), 1, [f.message for f in findings])
 
     def test_cache_029_evict_lru_satisfies_it(self) -> None:
-        ci, _ = load_ci_toml(fixture("CACHE-004", "green"))
+        ci = load_ci_toml(fixture("CACHE-004", "green")).ci
         fam = dict(ci.cache.family)
         fam["huge"] = replace(fam["uv"], max="700MB", evict="lru", per=None)
         findings = check_cache_029(replace(ci, cache=replace(ci.cache, family=fam)))
@@ -225,7 +229,7 @@ class CacheStaticFixtureTest(unittest.TestCase):
         live entries, so accepting `per` as an exemption would have missed
         the exact repositories this rule exists for."""
 
-        ci, _ = load_ci_toml(fixture("CACHE-004", "green"))
+        ci = load_ci_toml(fixture("CACHE-004", "green")).ci
         fam = dict(ci.cache.family)
         fam["huge"] = replace(fam["uv"], max="700MB", evict=None, per="platform")
         findings = check_cache_029(replace(ci, cache=replace(ci.cache, family=fam)))
@@ -235,7 +239,7 @@ class CacheStaticFixtureTest(unittest.TestCase):
         """Below 256MB an unbounded entry count is noise, not a budget
         threat -- the uv family holds 22 entries totalling 2.3MB."""
 
-        ci, _ = load_ci_toml(fixture("CACHE-004", "green"))
+        ci = load_ci_toml(fixture("CACHE-004", "green")).ci
         fam = dict(ci.cache.family)
         fam["small"] = replace(fam["uv"], max="5MB", evict=None, per=None)
         findings = check_cache_029(replace(ci, cache=replace(ci.cache, family=fam)))
@@ -248,7 +252,7 @@ class CacheStaticFixtureTest(unittest.TestCase):
         zackees/setup-soldr#552 is open. Recording the intent must be
         allowed; believing it happened must not."""
 
-        ci, _ = load_ci_toml(fixture("CACHE-004", "green"))
+        ci = load_ci_toml(fixture("CACHE-004", "green")).ci
         self.assertEqual(check_cache_030(ci), [])
         promoted = replace(ci, cache=replace(ci.cache, promote=CachePromote(mode="ancestor")))
         findings = check_cache_030(promoted)
@@ -264,7 +268,7 @@ class CacheStaticFixtureTest(unittest.TestCase):
         2026-10-04: soldr 70 labeled entries = 0.00 GiB against 5.97 GiB of
         bare-hash build caches; bosn 85 / 0.00 against 4.41)."""
 
-        ci, _ = load_ci_toml(fixture("CACHE-004", "green"))
+        ci = load_ci_toml(fixture("CACHE-004", "green")).ci
         # Without a promotion claim there is nothing to be inconsistent with.
         self.assertEqual(check_cache_031(ci), [])
 
@@ -289,7 +293,7 @@ class CacheStaticFixtureTest(unittest.TestCase):
 
     @requires_yaml_tooling
     def test_cache_031_a_family_that_declares_the_label_is_quiet(self) -> None:
-        ci, _ = load_ci_toml(fixture("CACHE-004", "green"))
+        ci = load_ci_toml(fixture("CACHE-004", "green")).ci
         promoted = replace(ci, cache=replace(ci.cache, promote=CachePromote(mode="ancestor")))
         fams = {
             fid: replace(fam, promote="ancestor") if parse_size(fam.max) and parse_size(fam.max) >= 256 * 1024**2 else fam
@@ -305,7 +309,7 @@ class CacheStaticFixtureTest(unittest.TestCase):
         SHA-pinned setup-soldr predates it and the opt-in is inert. Silent:
         the input parses, the pilot never runs, restores fall back."""
 
-        ci, _ = load_ci_toml(fixture("CACHE-004", "green"))
+        ci = load_ci_toml(fixture("CACHE-004", "green")).ci
         self.assertEqual(check_cache_032(ci), [])  # no promotion claim, nothing unreachable
 
         claimed = replace(ci, cache=replace(ci.cache, promote=CachePromote(mode="ancestor")))
@@ -345,7 +349,9 @@ class CacheStaticFixtureTest(unittest.TestCase):
         )
         row = _re.search(r"^compile\s*=.*$", base, _re.M).group(0)
         shapes = '{ "macos-arm-shared" = { max = "1300MB" }, "linux" = { max = "1100MB" } }'
-        ci, findings = load_ci_toml_text(base.replace(row, row[:-2] + f", shapes = {shapes} }}"))
+        _loaded = load_ci_toml_text(base.replace(row, row[:-2] + f", shapes = {shapes} }}"))
+        ci = _loaded.ci
+        findings = _loaded.findings
         self.assertEqual([f.rule for f in findings], [])
         fam = ci.cache.family["compile"]
         self.assertEqual([(s.scope, s.max) for s in fam.shapes],
@@ -353,7 +359,7 @@ class CacheStaticFixtureTest(unittest.TestCase):
         self.assertEqual(cardinality(ci, fam.per, len(fam.shapes)), 2)
         self.assertEqual(family_footprint(ci, fam), 2400 * 1024**2)
         # Without shapes the same family models max x cardinality instead.
-        plain, _ = load_ci_toml_text(base)
+        plain = load_ci_toml_text(base).ci
         self.assertNotEqual(family_footprint(ci, plain.cache.family["compile"]), family_footprint(ci, fam))
 
     def test_a_shape_ceiling_that_is_not_a_size_is_rejected(self) -> None:
@@ -370,14 +376,14 @@ class CacheStaticFixtureTest(unittest.TestCase):
             "zackees/ci.yml@<40-hex-sha>", "zackees/ci.yml@" + "a" * 40
         )
         row = _re.search(r"^compile\s*=.*$", base, _re.M).group(0)
-        _, findings = load_ci_toml_text(
+        findings = load_ci_toml_text(
             base.replace(row, row[:-2] + ', shapes = { "broken" = { max = "notasize" } } }')
-        )
+        ).findings
         self.assertIn("CT-002", [f.rule for f in findings])
 
     @requires_yaml_tooling
     def test_cache_014_no_optional_inputs_is_silent(self) -> None:
-        ci, _ = load_ci_toml(fixture("CACHE-004", "green"))
+        ci = load_ci_toml(fixture("CACHE-004", "green")).ci
         findings = check_cache_014(ci)
         self.assertNotIn("CACHE-014", [f.rule for f in findings])
 
@@ -386,7 +392,7 @@ class CacheStaticFixtureTest(unittest.TestCase):
         # max-per-pr=128MB, budget=1GB (from the fixture). 10 open PRs each
         # hitting the cap = 1.25GB > 1GB budget, even though no single PR
         # exceeded max-per-pr.
-        ci, _ = load_ci_toml(fixture("CACHE-004", "green"))
+        ci = load_ci_toml(fixture("CACHE-004", "green")).ci
         red = replace(ci, cache=replace(ci.cache, pr=replace(ci.cache.pr, expected_open_prs=10)))
         findings = check_cache_014(red)
         self.assertIn("CACHE-014", [f.rule for f in findings])
@@ -397,7 +403,7 @@ class CacheStaticFixtureTest(unittest.TestCase):
 
     @requires_yaml_tooling
     def test_cache_014_measured_delta_exceeds_max_per_pr(self) -> None:
-        ci, _ = load_ci_toml(fixture("CACHE-004", "green"))
+        ci = load_ci_toml(fixture("CACHE-004", "green")).ci
         red = replace(
             ci, cache=replace(ci.cache, pr=replace(ci.cache.pr, measured_largest_delta="200MB"))
         )
@@ -481,7 +487,7 @@ class Cache034PrepruneTest(unittest.TestCase):
     @requires_yaml_tooling
     def test_declared_without_a_call_is_flagged(self) -> None:
         repo = self._repo_with(declared=True, call=None)
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         findings = check_cache_034(ci, repo)
         self.assertEqual([f.rule for f in findings], ["CACHE-034"])
         self.assertEqual(findings[0].status.value, "needs_review")
@@ -499,7 +505,7 @@ class Cache034PrepruneTest(unittest.TestCase):
         """
 
         repo = self._repo_with(declared=True, call=None)
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         fix = check_cache_034(ci, repo)[0].fix
         self.assertIn("actions: write", fix)
         self.assertIn("WITHIN THE SAME RUN", fix)
@@ -518,7 +524,7 @@ class Cache034PrepruneTest(unittest.TestCase):
         """
 
         repo = self._repo_with(declared=True, call=None, wf_name="Cache Pre-prune")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         self.assertEqual(check_cache_034(ci, repo), [])
 
     @requires_yaml_tooling
@@ -527,7 +533,7 @@ class Cache034PrepruneTest(unittest.TestCase):
         `.github/workflows/cache-pre-prune.yml`."""
 
         repo = self._repo_with(declared=True, call=None, wf_file="cache-pre-prune.yml")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         self.assertEqual(check_cache_034(ci, repo), [])
 
     @requires_yaml_tooling
@@ -536,7 +542,7 @@ class Cache034PrepruneTest(unittest.TestCase):
         must not become a prefix match any workflow can ride in on."""
 
         repo = self._repo_with(declared=True, call=None, wf_name="Cache Pre-prune deployer")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         findings = check_cache_034(ci, repo)
         self.assertEqual([f.rule for f in findings], ["CACHE-034"])
 
@@ -551,7 +557,7 @@ class Cache034PrepruneTest(unittest.TestCase):
         """
 
         repo = self._repo_with(declared=True, call=None)
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         unparsed = [
             ParsedYamlFile(
                 path=".github/workflows/ci.yml",
@@ -568,12 +574,12 @@ class Cache034PrepruneTest(unittest.TestCase):
 
     def test_declared_with_a_call_is_clean(self) -> None:
         repo = self._repo_with(declared=True, call="ci-lint cache preprune --lockfile-changed")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         self.assertEqual(check_cache_034(ci, repo), [])
 
     def test_undeclared_is_clean_whatever_the_workflows_do(self) -> None:
         repo = self._repo_with(declared=False, call=None)
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         self.assertEqual(check_cache_034(ci, repo), [])
 
 
@@ -613,7 +619,7 @@ class Cache038RacingSoldrWritersTest(unittest.TestCase):
 
     def _check(self, workflow: str, action: str | None = None) -> list[tuple[str, str]]:
         repo = self._repo(workflow, action)
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         return [(f.rule, f.status.value) for f in check_cache_038(ci, repo)]
 
     @requires_yaml_tooling

@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from ci_lint.cache.audit import ClassifiedEntry, _shape, audit_classified, classify, infer_default_branch
+from ci_lint.cargo_messages import JsonValue
 from ci_lint.cache.github_cache import CacheApiError, delete_cache_by_id, delete_cache_by_key, list_caches
 from ci_lint.github_api import DeleteFn, FetchFn, GraphQLFn
 from ci_lint.rules.cache_static import cardinality, family_footprint, parse_size
@@ -53,7 +54,7 @@ class OpsResult:
     dry_run: bool
     warning: str | None = None
 
-    def to_json_dict(self) -> dict[str, object]:
+    def to_json_dict(self) -> dict[str, JsonValue]:
         return {
             "planned": [p.__dict__ for p in self.planned],
             "deleted": [p.__dict__ for p in self.deleted],
@@ -73,6 +74,44 @@ class OpsResult:
         return "\n".join(lines)
 
 
+@dataclass(frozen=True)
+class OpsReport:
+    """A janitor/preprune run: the delete result plus its human-readable
+    text (janitor's before/after family table, preprune's forecast)."""
+
+    result: OpsResult
+    text: str
+
+
+class _EntryIndex:
+    """`classified` indexed by cache id and by key, for resolving findings."""
+
+    def __init__(self, classified: list[ClassifiedEntry]) -> None:
+        self.by_id: dict[int, ClassifiedEntry] = {c.entry.id: c for c in classified}
+        self.by_key: dict[str, list[ClassifiedEntry]] = {}
+        for c in classified:
+            self.by_key.setdefault(c.entry.key, []).append(c)
+
+
+@dataclass(frozen=True)
+class _FamilyRow:
+    label: str
+    count: int
+    size: int
+
+
+@dataclass(frozen=True)
+class _ShapeKey:
+    family_id: str
+    shape: str
+
+
+@dataclass(frozen=True)
+class LruEviction:
+    cache_id: int
+    reason: str
+
+
 def _apply(planned: list[DeletePlanEntry], *, delete: DeleteFn | None, token: str, repo: str, dry_run: bool) -> OpsResult:
     if dry_run or delete is None:
         return OpsResult(planned=tuple(planned), deleted=(), errors=(), dry_run=True)
@@ -87,7 +126,7 @@ def _apply(planned: list[DeletePlanEntry], *, delete: DeleteFn | None, token: st
     return OpsResult(planned=tuple(planned), deleted=tuple(deleted), errors=tuple(errors), dry_run=False)
 
 
-def _finding_entry(f, by_id: dict[int, ClassifiedEntry], by_key: dict[str, list[ClassifiedEntry]]) -> ClassifiedEntry | None:
+def _finding_entry(f, index: _EntryIndex) -> ClassifiedEntry | None:
     """The one entry a live cache finding is about (ci.yml#137). GitHub
     cache keys are unique per ref, not per repository: the same key can sit
     on refs/heads/main and on refs/pull/N/merge at once, so resolve by the
@@ -97,32 +136,24 @@ def _finding_entry(f, by_id: dict[int, ClassifiedEntry], by_key: dict[str, list[
     if not f.path or not f.path.startswith("cache:"):
         return None
     if f.cache_id is not None:
-        return by_id.get(f.cache_id)
-    matches = by_key.get(f.path[len("cache:") :], [])
+        return index.by_id.get(f.cache_id)
+    matches = index.by_key.get(f.path[len("cache:") :], [])
     return matches[0] if len(matches) == 1 else None
-
-
-def _indexes(classified: list[ClassifiedEntry]) -> tuple[dict[int, ClassifiedEntry], dict[str, list[ClassifiedEntry]]]:
-    by_id = {c.entry.id: c for c in classified}
-    by_key: dict[str, list[ClassifiedEntry]] = {}
-    for c in classified:
-        by_key.setdefault(c.entry.key, []).append(c)
-    return by_id, by_key
 
 
 def _findings_to_plan(
     report_findings, classified: list[ClassifiedEntry], rules: frozenset[str] | None
-) -> dict[int, DeletePlanEntry]:
-    by_id, by_key = _indexes(classified)
+) -> tuple[DeletePlanEntry, ...]:
+    index = _EntryIndex(classified)
     out: dict[int, DeletePlanEntry] = {}
     for f in report_findings:
         if rules is not None and f.rule not in rules:
             continue
-        c = _finding_entry(f, by_id, by_key)
+        c = _finding_entry(f, index)
         if c is None or c.entry.id in out:
             continue
         out[c.entry.id] = DeletePlanEntry(id=c.entry.id, key=c.entry.key, size_in_bytes=c.entry.size_in_bytes, reason=f"{f.rule}: {f.message}")
-    return out
+    return tuple(out.values())
 
 
 def trim(
@@ -148,7 +179,7 @@ def trim(
     classified = classify(ci, entries)
     default_branch = _resolve_branch(default_branch, fetch, token, repo)  # #425: infer, never guess `main`
     report = audit_classified(ci, classified, graphql=graphql, token=token, repo=repo, default_branch=default_branch)
-    plan = _findings_to_plan(report.findings, list(classified), frozenset({"CACHE-008"}))
+    plan = {p.id: p for p in _findings_to_plan(report.findings, list(classified), frozenset({"CACHE-008"}))}
     # Same reasoning as the janitor (#357): `trim`'s plan can exceed
     # `max_deletes` too, and truncating in insertion order would spend the whole
     # cap on the smallest entries. Largest-first within the class.
@@ -169,24 +200,24 @@ def _parse_iso8601(value: str) -> float | None:
         return None
 
 
-def _family_table(classified: list[ClassifiedEntry]) -> dict[str, tuple[int, int]]:
-    table: dict[str, tuple[int, int]] = {}
+def _family_table(classified: list[ClassifiedEntry]) -> tuple[_FamilyRow, ...]:
+    table: dict[str, _FamilyRow] = {}
     for c in classified:
         label = c.family_id or ("delta" if c.is_delta else ("retired" if c.is_retired else "undeclared"))
-        count, size = table.get(label, (0, 0))
-        table[label] = (count + 1, size + c.entry.size_in_bytes)
-    return table
+        row = table.get(label, _FamilyRow(label, 0, 0))
+        table[label] = _FamilyRow(label, row.count + 1, row.size + c.entry.size_in_bytes)
+    return tuple(table.values())
 
 
 def _before_after_table(before: list[ClassifiedEntry], deleted_ids: set[int]) -> str:
     after = [c for c in before if c.entry.id not in deleted_ids]
-    before_table = _family_table(before)
-    after_table = _family_table(after)
+    before_table = {row.label: row for row in _family_table(before)}
+    after_table = {row.label: row for row in _family_table(after)}
     lines = [f"{'family':<24} {'before(n)':>10} {'before(B)':>12} {'after(n)':>10} {'after(B)':>12}"]
     for label in sorted(set(before_table) | set(after_table)):
-        bn, bb = before_table.get(label, (0, 0))
-        an, ab = after_table.get(label, (0, 0))
-        lines.append(f"{label:<24} {bn:>10} {bb:>12} {an:>10} {ab:>12}")
+        b = before_table.get(label, _FamilyRow(label, 0, 0))
+        a = after_table.get(label, _FamilyRow(label, 0, 0))
+        lines.append(f"{label:<24} {b.count:>10} {b.size:>12} {a.count:>10} {a.size:>12}")
     return "\n".join(lines)
 
 
@@ -196,24 +227,24 @@ def _protected_ids(ci: CiToml, classified: list[ClassifiedEntry]) -> set[int]:
     family and key shape (not a PR entry, delta, or retired family); for an
     `evict = "lru"` family, only its single newest entry."""
 
-    newest: dict[tuple[str, str], ClassifiedEntry] = {}
+    newest: dict[_ShapeKey, ClassifiedEntry] = {}
     for c in classified:
         if c.family_id is None or c.is_delta or c.is_retired or c.pr is not None:
             continue
         fam = ci.cache.family.get(c.family_id)
-        k = (c.family_id, "" if fam is not None and fam.evict == "lru" else _shape(c.entry.key))
+        k = _ShapeKey(c.family_id, "" if fam is not None and fam.evict == "lru" else _shape(c.entry.key))
         cur = newest.get(k)
         if cur is None or c.entry.last_accessed_at > cur.entry.last_accessed_at:
             newest[k] = c
     return {c.entry.id for c in newest.values()}
 
 
-def _lru_evictions(ci: CiToml, classified: list[ClassifiedEntry]) -> dict[int, str]:
+def _lru_evictions(ci: CiToml, classified: list[ClassifiedEntry]) -> tuple[LruEviction, ...]:
     """#23 section 4.2: an `evict = "lru"` family keeps its most recently
     used entries up to its declared footprint (max x cardinality) and
     evicts the rest, least recently used first."""
 
-    out: dict[int, str] = {}
+    out: list[LruEviction] = []
     for fam_id, fam in ci.cache.family.items():
         if fam.evict != "lru":
             continue
@@ -235,8 +266,8 @@ def _lru_evictions(ci: CiToml, classified: list[ClassifiedEntry]) -> dict[int, s
         for c in members:
             used += c.entry.size_in_bytes
             if used > budget:
-                out[c.entry.id] = f"lru: family '{fam_id}' over its {budget}B footprint (evict = \"lru\")"
-    return out
+                out.append(LruEviction(c.entry.id, f"lru: family '{fam_id}' over its {budget}B footprint (evict = \"lru\")"))
+    return tuple(out)
 
 
 def janitor(  # noqa: C901
@@ -254,7 +285,7 @@ def janitor(  # noqa: C901
     now: float | None = None,
     grace_seconds: int = JANITOR_GRACE_SECONDS,
     enforce_budget: bool = True,
-) -> tuple[OpsResult, str]:
+) -> OpsReport:
     """zackees/ci.yml#23 section 4. Deletes: every entry of a closed/merged
     PR (key `pr-<N>`/legacy delta, or ref `refs/pull/<N>/merge`; a failed
     PR lookup keeps them); CACHE-001/003/005/006/009 entries (006 keeps the
@@ -262,18 +293,18 @@ def janitor(  # noqa: C901
     footprint; entries not accessed in `stale_days` days. Never deletes an
     entry created within `grace_seconds`, nor the newest base entry of a
     family/key shape (except when it is poisoned, CACHE-005).
-    Returns `(result, before/after table)`."""
+    Returns the result and its before/after table."""
 
     try:
         entries = list_caches(fetch, token, repo)
     except CacheApiError as exc:
-        return OpsResult(planned=(), deleted=(), errors=(), dry_run=dry_run, warning=str(exc)), ""
+        return OpsReport(OpsResult(planned=(), deleted=(), errors=(), dry_run=dry_run, warning=str(exc)), "")
     classified = classify(ci, entries)
     # #425: infer, never guess `main` -- a wrong guess deletes CACHE-003 wrongly.
     default_branch = _resolve_branch(default_branch, fetch, token, repo)
     report = audit_classified(ci, classified, graphql=graphql, token=token, repo=repo, default_branch=default_branch)
     by_id = {c.entry.id: c for c in classified}
-    plan = _findings_to_plan(report.findings, list(classified), JANITOR_RULES)
+    plan = {p.id: p for p in _findings_to_plan(report.findings, list(classified), JANITOR_RULES)}
     for c in classified:
         if c.entry.id in report.closed_pr_ids and c.entry.id not in plan:
             plan[c.entry.id] = DeletePlanEntry(
@@ -281,7 +312,7 @@ def janitor(  # noqa: C901
                 reason=f"closed PR: #{c.pr} is closed or merged",
             )
 
-    lru = _lru_evictions(ci, list(classified))
+    lru = {e.cache_id: e.reason for e in _lru_evictions(ci, list(classified))}
     now_ts = now if now is not None else time.time()
     cutoff = now_ts - stale_days * 86400
     for c in classified:
@@ -342,7 +373,7 @@ def janitor(  # noqa: C901
     warning = "; ".join([*live_drift, *(w for w in (report.warning, budget.warning) if w)]) or None
     if warning:
         result = OpsResult(**{**result.__dict__, "warning": warning})
-    return result, table
+    return OpsReport(result, table)
 
 
 def _family_newest_ids(classified: list[ClassifiedEntry]) -> set[int]:
@@ -424,7 +455,7 @@ def preprune(
     max_deletes: int = 50,
     dry_run: bool = False,
     default_branch: str | None = "main",
-) -> tuple[OpsResult, str]:
+) -> OpsReport:
     """The CACHE-004 arithmetic, using LIVE sizes where a family has a live
     base entry (else its declared `max`), forecasting whether writing a
     changed lockfile's new keys would push the account over budget. Over
@@ -435,7 +466,10 @@ def preprune(
     try:
         entries = list_caches(fetch, token, repo)
     except CacheApiError as exc:
-        return OpsResult(planned=(), deleted=(), errors=(), dry_run=dry_run, warning=str(exc)), "preprune: could not list live caches"
+        return OpsReport(
+            OpsResult(planned=(), deleted=(), errors=(), dry_run=dry_run, warning=str(exc)),
+            "preprune: could not list live caches",
+        )
     classified = classify(ci, entries)
 
     live_max: dict[str, int] = {}
@@ -475,19 +509,21 @@ def preprune(
     )
 
     if not lockfile_changed or forecast <= budget_bytes:
-        return OpsResult(planned=(), deleted=(), errors=(), dry_run=dry_run), summary + "\n  under budget: nothing to preprune"
+        return OpsReport(
+            OpsResult(planned=(), deleted=(), errors=(), dry_run=dry_run), summary + "\n  under budget: nothing to preprune"
+        )
 
     lockfile_families = {fid for fid, fam in ci.cache.family.items() if fam.lockfile}
     # #425: resolved only now -- the under-budget fast path above never needs
     # the branch, so it never pays the lookup.
     default_branch = _resolve_branch(default_branch, fetch, token, repo)
     report = audit_classified(ci, classified, graphql=graphql, token=token, repo=repo, default_branch=default_branch)
-    by_id, by_key = _indexes(list(classified))
+    index = _EntryIndex(list(classified))
     planned: list[DeletePlanEntry] = []
     for f in report.findings:
         if f.rule != "CACHE-006":
             continue
-        c = _finding_entry(f, by_id, by_key)
+        c = _finding_entry(f, index)
         if c is None or c.family_id not in lockfile_families:
             continue
         planned.append(
@@ -495,7 +531,7 @@ def preprune(
         )
     planned = planned[:max_deletes]
     result = _apply(planned, delete=delete, token=token, repo=repo, dry_run=dry_run)
-    return result, summary + f"\n  OVER budget: pruning {len(planned)} superseded lockfile-keyed entrie(s)"
+    return OpsReport(result, summary + f"\n  OVER budget: pruning {len(planned)} superseded lockfile-keyed entrie(s)")
 
 
 # Reasons ordered by how much a bounded run should prefer them. `max_deletes`

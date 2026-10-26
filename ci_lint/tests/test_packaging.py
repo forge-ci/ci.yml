@@ -23,7 +23,9 @@ class PackagingFixtureTest(unittest.TestCase):
         for name, expect in (("red-rust-pypi-app", True), ("green-rust-library", False)):
             with self.subTest(fixture=name):
                 repo = fixture("PKG-004", name)
-                ci, findings = load_ci_toml(repo)
+                _loaded = load_ci_toml(repo)
+                ci = _loaded.ci
+                findings = _loaded.findings
                 assert ci is not None, findings
                 rules = [f.rule for f in check_group8(ci, repo)]
                 self.assertEqual(expect, "PKG-004" in rules, rules)
@@ -36,22 +38,26 @@ class PackagingFixtureTest(unittest.TestCase):
         must not be flagged for it."""
 
         repo = fixture("PKG-003", "red")  # rust-pypi-app, real defect
-        ci, findings = load_ci_toml(repo)
+        _loaded = load_ci_toml(repo)
+        ci = _loaded.ci
+        findings = _loaded.findings
         assert ci is not None, findings
         self.assertIn("PKG-003", [f.rule for f in check_group8(ci, repo)])
 
         repo = fixture("PKG-003", "red-rust-library")  # same defect, rust-library
-        ci, findings = load_ci_toml(repo)
+        _loaded = load_ci_toml(repo)
+        ci = _loaded.ci
+        findings = _loaded.findings
         assert ci is not None, findings
         self.assertNotIn("PKG-003", [f.rule for f in check_group8(ci, repo)])
 
     def test_pkg_003_cli_shadowed_by_python_script(self) -> None:
         repo = fixture("PKG-003", "red")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         self.assertIn("PKG-003", [f.rule for f in check_pkg_003(ci, repo)])
 
         repo = fixture("PKG-003", "green")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         self.assertNotIn("PKG-003", [f.rule for f in check_pkg_003(ci, repo)])
 
     def test_pkg_003_accepts_the_table_shaped_bundle_bins(self) -> None:
@@ -62,12 +68,12 @@ class PackagingFixtureTest(unittest.TestCase):
         on `bin` (and, if present, `package` must equal `[python].cli.crate`)."""
 
         repo = fixture("PKG-003", "green-bundle-table")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         self.assertEqual([], check_pkg_003(ci, repo))
 
     def test_pkg_003_table_shaped_bundle_bins_still_flags_a_mismatch(self) -> None:
         repo = fixture("PKG-003", "red-bundle-table-mismatch")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         self.assertIn("PKG-003", [f.rule for f in check_pkg_003(ci, repo)])
 
     def test_pkg_005_try_except_around_native_import(self) -> None:

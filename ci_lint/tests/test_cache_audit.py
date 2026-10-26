@@ -47,7 +47,9 @@ def _load_ci_toml_text(text: str) -> CiToml:
 
     d = _P(tempfile.mkdtemp())
     (d / "ci.toml").write_text(text)
-    ci, findings = load_ci_toml(d)
+    _loaded = load_ci_toml(d)
+    ci = _loaded.ci
+    findings = _loaded.findings
     hard = [f for f in findings if f.rule != "CT-002"]
     assert not hard, [f.message for f in hard]
     return ci
@@ -90,7 +92,9 @@ class ClassifyLiveTemplateTest(unittest.TestCase):
     "copy the JSON, don't mutate anything")."""
 
     def setUp(self) -> None:
-        ci, findings = load_ci_toml(REPO)
+        _loaded = load_ci_toml(REPO)
+        ci = _loaded.ci
+        findings = _loaded.findings
         assert ci is not None, findings
         self.ci = ci
         payload = _load("caches-live-template.json")
@@ -199,7 +203,9 @@ class ClassifySyntheticRulesTest(unittest.TestCase):
     template repo does not currently exhibit."""
 
     def setUp(self) -> None:
-        ci, findings = load_ci_toml(REPO)
+        _loaded = load_ci_toml(REPO)
+        ci = _loaded.ci
+        findings = _loaded.findings
         assert ci is not None, findings
         self.ci = ci
         payload = _load("caches-synthetic-rules.json")
@@ -260,7 +266,9 @@ class ClassifyGenerationSuffixedDeltaTest(unittest.TestCase):
     trailing `(?:-g...)?` group reproduces the miss (is_delta=False)."""
 
     def setUp(self) -> None:
-        ci, findings = load_ci_toml(REPO)
+        _loaded = load_ci_toml(REPO)
+        ci = _loaded.ci
+        findings = _loaded.findings
         assert ci is not None, findings
         self.ci = ci
 
@@ -323,7 +331,9 @@ class RunAuditErrorHandlingTest(unittest.TestCase):
     def test_fetch_failure_raises_audit_error_not_a_crash(self) -> None:
         from ci_lint.cache.audit import AuditError
 
-        ci, findings = load_ci_toml(REPO)
+        _loaded = load_ci_toml(REPO)
+        ci = _loaded.ci
+        findings = _loaded.findings
         assert ci is not None, findings
 
         def broken_fetch(url: str, token: str):
@@ -333,7 +343,9 @@ class RunAuditErrorHandlingTest(unittest.TestCase):
             run_audit(ci, fetch=broken_fetch, graphql=None, token=TOKEN, repo=REPO_SLUG)
 
     def test_graphql_failure_degrades_to_a_warning_not_a_crash(self) -> None:
-        ci, findings = load_ci_toml(REPO)
+        _loaded = load_ci_toml(REPO)
+        ci = _loaded.ci
+        findings = _loaded.findings
         assert ci is not None, findings
         payload = _load("caches-synthetic-rules.json")
 
@@ -408,7 +420,9 @@ class Rust004DylintOutputCacheSaveTest(unittest.TestCase):
     `test_stale_but_present_entry_is_green` below."""
 
     def setUp(self) -> None:
-        ci, findings = load_ci_toml(REPO)
+        _loaded = load_ci_toml(REPO)
+        ci = _loaded.ci
+        findings = _loaded.findings
         assert ci is not None, findings
         self.ci = ci
 
@@ -487,7 +501,9 @@ class Rust004DylintOutputCacheSaveTest(unittest.TestCase):
         self.assertEqual([], [f for f in report.findings if f.rule == "RUST-004"])
 
     def test_no_declared_dylint_family_never_calls_fetch(self) -> None:
-        ci, findings = load_ci_toml(FIXTURES / "runtime" / "suite")
+        _loaded = load_ci_toml(FIXTURES / "runtime" / "suite")
+        ci = _loaded.ci
+        findings = _loaded.findings
         assert ci is not None, findings
         self.assertFalse(any(fam.via in ("setup-soldr:dylint", "setup-soldr:dylint-output") for fam in ci.cache.family.values()))
 
@@ -511,7 +527,9 @@ class SetupUv64HexGenerationTest(unittest.TestCase):
     strip ever runs."""
 
     def setUp(self) -> None:
-        ci, findings = load_ci_toml(REPO)
+        _loaded = load_ci_toml(REPO)
+        ci = _loaded.ci
+        findings = _loaded.findings
         assert ci is not None, findings
         self.ci = ci
         entries = list_caches(_fetch_from(_load("caches-setup-uv-64hex-generation.json")), TOKEN, REPO_SLUG)
@@ -545,7 +563,9 @@ class SetupUvLegacyGenerationTest(unittest.TestCase):
     unknown generation still reports CACHE-001 (RED)."""
 
     def setUp(self) -> None:
-        ci, findings = load_ci_toml(REPO)
+        _loaded = load_ci_toml(REPO)
+        ci = _loaded.ci
+        findings = _loaded.findings
         assert ci is not None, findings
         self.ci = ci
         entries = list_caches(_fetch_from(_load("caches-setup-uv-v1.json")), TOKEN, REPO_SLUG)
@@ -573,7 +593,9 @@ class RegistryPerJobDigestTest(unittest.TestCase):
     is superseded (RED, CACHE-006)."""
 
     def setUp(self) -> None:
-        ci, findings = load_ci_toml(REPO)
+        _loaded = load_ci_toml(REPO)
+        ci = _loaded.ci
+        findings = _loaded.findings
         assert ci is not None, findings
         self.ci = ci
         entries = list_caches(_fetch_from(_load("caches-registry-per-job.json")), TOKEN, REPO_SLUG)
@@ -600,7 +622,9 @@ class FamilyLiveExcessTest(unittest.TestCase):
     MB = 1024 * 1024
 
     def setUp(self) -> None:
-        ci, findings = load_ci_toml(REPO)
+        _loaded = load_ci_toml(REPO)
+        ci = _loaded.ci
+        findings = _loaded.findings
         assert ci is not None, findings
         self.ci = ci
 
@@ -778,7 +802,7 @@ class LiveExcessShapesTest(unittest.TestCase):
         from ci_lint.cache.audit import _check_family_live_excess
         from ci_lint.schema import CacheShape
 
-        ci, _ = load_ci_toml(REPO)
+        ci = load_ci_toml(REPO).ci
         fam = replace(
             ci.cache.family["deps"],
             max="10MB",
@@ -813,7 +837,9 @@ class Cache005DeclaredMinTest(unittest.TestCase):
     KEY = "soldr-mini-v2-linux-x64-glibc-v0.9.25"
 
     def setUp(self) -> None:
-        ci, findings = load_ci_toml(REPO)
+        _loaded = load_ci_toml(REPO)
+        ci = _loaded.ci
+        findings = _loaded.findings
         assert ci is not None, findings
         self.ci = ci
 
@@ -865,7 +891,9 @@ class CacheAttestationSideEntryTest(unittest.TestCase):
     PR_KEY = "att1-rust.x86_64-unknown-linux-gnu.test-m2189-c1-18204251ce-pr-3532"
 
     def setUp(self) -> None:
-        ci, findings = load_ci_toml(REPO)
+        _loaded = load_ci_toml(REPO)
+        ci = _loaded.ci
+        findings = _loaded.findings
         assert ci is not None, findings
         self.ci = ci
 
@@ -934,7 +962,9 @@ class DefaultBranchInferenceTest(unittest.TestCase):
     guessed one (obs-studio's `master` drew 33 false CACHE-003)."""
 
     def setUp(self) -> None:
-        ci, findings = load_ci_toml(REPO)
+        _loaded = load_ci_toml(REPO)
+        ci = _loaded.ci
+        findings = _loaded.findings
         assert ci is not None, findings
         self.ci = ci
         self._saved_env = os.environ.get("GITHUB_EVENT_PATH")
@@ -1050,7 +1080,9 @@ class Cache006LruFamilyTest(unittest.TestCase):
     share a shape once the hash is stripped, but every one is live."""
 
     def setUp(self) -> None:
-        ci, findings = load_ci_toml(REPO)
+        _loaded = load_ci_toml(REPO)
+        ci = _loaded.ci
+        findings = _loaded.findings
         assert ci is not None, findings
         self.ci = ci
 
@@ -1099,7 +1131,9 @@ class SameLockGenerationTest(unittest.TestCase):
     MINI_NEW = "soldr-mini-v2-linux-x64-glibc-v0.9.27"
 
     def setUp(self) -> None:
-        ci, findings = load_ci_toml(REPO)
+        _loaded = load_ci_toml(REPO)
+        ci = _loaded.ci
+        findings = _loaded.findings
         assert ci is not None, findings
         self.ci = ci
 

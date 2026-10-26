@@ -16,7 +16,9 @@ from ci_lint.tests.helpers import fixture
 
 
 def load_ci():
-    ci, findings = load_ci_toml(fixture("TAG-001", "green"))
+    _loaded = load_ci_toml(fixture("TAG-001", "green"))
+    ci = _loaded.ci
+    findings = _loaded.findings
     assert ci is not None, findings
     return ci
 

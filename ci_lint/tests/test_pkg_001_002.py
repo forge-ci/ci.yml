@@ -14,11 +14,11 @@ from ci_lint.tests.helpers import fixture, requires_yaml_tooling
 class Pkg001Test(unittest.TestCase):
     def test_pkg_001_flow_pr_missing_wheel_smoke_suite(self) -> None:
         repo = fixture("PKG-001", "red")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         self.assertIn("PKG-001", [f.rule for f in check_pkg_001(ci)])
 
         repo = fixture("PKG-001", "green")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         self.assertEqual([], check_pkg_001(ci))
 
 

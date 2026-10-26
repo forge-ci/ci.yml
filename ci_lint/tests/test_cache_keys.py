@@ -14,7 +14,9 @@ REPO = FIXTURES / "runtime" / "cache" / "repo"
 
 class BuildFamilyKeyTest(unittest.TestCase):
     def setUp(self) -> None:
-        ci, findings = load_ci_toml(REPO)
+        _loaded = load_ci_toml(REPO)
+        ci = _loaded.ci
+        findings = _loaded.findings
         assert ci is not None, findings
         self.ci = ci
 
@@ -34,7 +36,9 @@ class BuildFamilyKeyTest(unittest.TestCase):
         from ci_lint.cache.families import resolve_prefix
         from ci_lint.schema import load_ci_toml
         from ci_lint.tests.helpers import FIXTURES
-        ci, findings = load_ci_toml(FIXTURES / "CACHE-004" / "green-cpp")
+        _loaded = load_ci_toml(FIXTURES / "CACHE-004" / "green-cpp")
+        ci = _loaded.ci
+        findings = _loaded.findings
         assert ci is not None, findings
         self.assertEqual("zccache-v1-", resolve_prefix("zccache", "zccache"))
         fk = build_family_key(ci, "ccache", platform_id="linux-x64", repo_root=FIXTURES / "CACHE-004" / "green-cpp")
