@@ -89,8 +89,19 @@ dataclasses. Loading is **strict**:
 | Key | Type | Meaning |
 | --- | --- | --- |
 | `schema` | int | Must be `3`. |
-| `profile` | string | e.g. `"rust-pypi-app"`. Only `rust-pypi-app` has enforced requirements in round 1A (below); other profiles load but are not yet cross-checked. |
+| `profile` | string | e.g. `"rust-pypi-app"`. An open string: any value loads. Only `rust-pypi-app` has enforced table requirements (below). The known profiles (`ci_lint.schema.KNOWN_PROFILES`) are listed in [Profiles](#profiles); they decide whether `CT-006` applies and which rule families are dropped. |
 | `linter` | string | `"zackees/ci.yml@<40-hex-sha>"` -- the exact `ci-lint` commit precheck runs. Validated by regex at load time; the workflow's actual checkout of `zackees/ci.yml` is cross-checked against it by `CT-004`. |
+
+### Profiles
+
+| Profile | Builds Rust (`CT-006` applies) | Rule families that never apply |
+| --- | --- | --- |
+| `rust-pypi-app`, `rust-library`, `rust-bin-app`, `rust-cli`, `cpp-rust-library` | yes | none |
+| `cpp` (CMake, e.g. zackees/llvm-ld; see [policy-cpp.md](policy-cpp.md)) | no | none dropped by the profile; `RUST-*` rules that look for Rust surfaces simply find none |
+| `github-action` (a TypeScript/JavaScript GitHub Action, e.g. forge-ci/setup-soldr) | no | `RUST-*`, `PKG-*`, `BIN-*`, `CPP-*` |
+| any other value | yes (unchanged, so an unlisted profile is never silently weakened) | none |
+
+`github-action` ships no crate, no PyPI/npm distribution, no native binary and no CMake tree: an action is consumed by ref from its `dist/` bundle. Precheck drops every `RUST-`/`PKG-`/`BIN-`/`CPP-` finding for it before `[[exceptions]]` are applied, including Rust that its own smoke workflows build only to exercise the action. Everything else applies: `CT`, `TAG`, `WF`, `GEN`, `SEC`, `RUN`, `TOOL`, `CACHE`, `TEST`, `GATE`, `ACT`, `GHAPI`, `PY` (for its Python helper scripts), `PERF`, `REL`, `LAYOUT`, and the live/fleet families.
 
 ## `[platforms.<id>]`
 
@@ -997,7 +1008,7 @@ when neither PyYAML nor `yq` is available).
 | `CT-003` | `schema` is not `3`. | Set `schema = 3`. |
 | `CT-004` | The workflow's checkout of `zackees/ci.yml` does not use the exact SHA in `ci.toml`'s `linter` field (or no such checkout exists). | Align the checkout `ref` (or `linter`) to the intended commit. |
 | `CT-005` | A declared `[[exceptions]]` entry is past its `expires` date. | Fix the underlying finding and delete the entry, or renew it after review. |
-| `CT-006` | `[platforms].*.target` does not match `Cargo.toml`'s `[workspace.metadata.soldr].targets` (or that table is missing). | Make the two target sets identical. |
+| `CT-006` | `[platforms].*.target` does not match `Cargo.toml`'s `[workspace.metadata.soldr].targets` (or that table is missing). Skipped for the non-Rust profiles `cpp` and `github-action` ([Profiles](#profiles)). | Make the two target sets identical. |
 | `TAG-001` | A PR-title bracket token looks reserved (`ci-`, `no-test`, `release` prefix) but is not a known tag. | Fix the spelling, or declare the tag in `[tags]`. |
 | `TAG-002` | `[release]` combined with any `[no-test*]` tag. | Remove one or the other. |
 | `TAG-003` | `on.pull_request.types` omits `edited`. | Add `edited` to the `types` list. |

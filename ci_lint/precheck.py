@@ -67,7 +67,7 @@ from ci_lint.rules.swatinem_ban import check_cache_025
 from ci_lint.rules.shell import check_group3
 from ci_lint.rules.tools import check_group4
 from ci_lint.rules.workflows import check_group2
-from ci_lint.schema import CiToml, load_ci_toml
+from ci_lint.schema import CiToml, load_ci_toml, profile_excludes_rule
 from ci_lint.workflow_scan import discover_composite_actions, discover_workflow_files
 from ci_lint.yaml_io import yaml_tooling_available
 
@@ -291,6 +291,10 @@ def run_precheck(repo_root: Path, *, title: str = "", local: bool = False, live:
                         fix="delete local-gate.toml; ci.toml's [local.gate] is the declaration",
                     )
                 )
+
+        # A profile's excluded rule families never apply (e.g. no RUST-*/PKG-*
+        # for a `github-action` repository); drop them before exceptions.
+        all_findings = [f for f in all_findings if not profile_excludes_rule(ci.profile, f.rule)]
 
         outcome = apply_exceptions(ci, all_findings)
         all_findings = outcome.findings

@@ -15,7 +15,7 @@ from pathlib import Path
 
 from ci_lint.finding import Finding
 from ci_lint.resolve import derive_tag_registry, is_reserved_token
-from ci_lint.schema import CiToml
+from ci_lint.schema import CiToml, profile_requires_cargo
 
 BRACKET_RE = re.compile(r"\[([^\[\]]+)\]")
 
@@ -67,8 +67,14 @@ def check_tag_002(title: str) -> list[Finding]:
 
 def check_ct_006(ci: CiToml, repo_root: Path) -> list[Finding]:
     """[platforms] targets must match Cargo.toml's
-    [workspace.metadata.soldr].targets."""
+    [workspace.metadata.soldr].targets.
 
+    Only Rust profiles: a known non-Rust profile (`cpp`, `github-action`)
+    has no Cargo workspace to cross-check, so CT-006 is silent for it.
+    """
+
+    if not profile_requires_cargo(ci.profile):
+        return []
     cargo_path = repo_root / "Cargo.toml"
     declared_targets = sorted({p.target for p in ci.platforms.values()})
     if not cargo_path.is_file():
