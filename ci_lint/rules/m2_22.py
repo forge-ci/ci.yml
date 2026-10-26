@@ -49,6 +49,8 @@ uploads).
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from pathlib import Path
 
 from ci_lint.finding import Finding, Status
@@ -167,6 +169,13 @@ def _job_commands(job: dict[str, YamlValue]) -> list[list[str]]:
     return commands
 
 
+@dataclass(frozen=True)
+class _FastJob:
+    path: str
+    job_id: str
+    job: dict[str, YamlValue]
+
+
 def check_rust_008(ci: CiToml, repo_root: Path) -> list[Finding]:  # noqa: C901
     targets = sorted({p.target for p in ci.platforms.values()})
     if not targets:
@@ -174,14 +183,14 @@ def check_rust_008(ci: CiToml, repo_root: Path) -> list[Finding]:  # noqa: C901
     if _has_boundary_lint(repo_root):
         return []
 
-    fast_jobs: list[tuple[str, str, dict[str, YamlValue]]] = []
+    fast_jobs: list[_FastJob] = []
     for wf in load_workflows(repo_root):
         if wf.status != LoadStatus.OK:
             continue
         doc = as_dict(wf.document)
         for job_id, job in jobs_of(doc).items():
             if any(hint in job_id.lower() for hint in _FAST_QUICK_JOB_ID_HINTS):
-                fast_jobs.append((wf.path, job_id, job))
+                fast_jobs.append(_FastJob(wf.path, job_id, job))
 
     if not fast_jobs:
         return [
@@ -204,7 +213,8 @@ def check_rust_008(ci: CiToml, repo_root: Path) -> list[Finding]:  # noqa: C901
 
     covered: set[str] = set()
     uses_matrix_target = False
-    for _path, _job_id, job in fast_jobs:
+    for fast in fast_jobs:
+        job = fast.job
         strategy = job.get("strategy")
         if isinstance(strategy, dict) and isinstance(strategy.get("matrix"), dict):
             uses_matrix_target = True
@@ -217,11 +227,11 @@ def check_rust_008(ci: CiToml, repo_root: Path) -> list[Finding]:  # noqa: C901
         return []
 
     status = Status.NEEDS_REVIEW if uses_matrix_target else Status.VIOLATION
-    locs = ", ".join(f"{path}:{job_id}" for path, job_id, _job in fast_jobs)
+    locs = ", ".join(f"{f.path}:{f.job_id}" for f in fast_jobs)
     return [
         Finding(
             rule="RUST-008",
-            path=fast_jobs[0][0],
+            path=fast_jobs[0].path,
             status=status,
             message=(
                 f"the quick gate job(s) ({locs}) run check-only analysis for "

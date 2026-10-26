@@ -18,16 +18,16 @@ import tomllib
 from pathlib import Path
 
 from ci_lint.finding import Finding
+from ci_lint.rules.cache_static import _loaded_files
 from ci_lint.rules.tools import _iter_uses_with
 from ci_lint.schema import CiToml
-from ci_lint.workflow_scan import as_dict, load_composite_actions, load_workflows
-from ci_lint.yaml_io import LoadStatus
+from ci_lint.toml_cursor import TomlValue
 
 SOLDR_EXACT_PIN_RE = re.compile(r"^soldr\s*==\s*\S+")
 SOLDR_FLOOR_RE = re.compile(r"^soldr\s*(>=|~=|>)\s*\S+")
 
 
-def _load_toml(path: Path) -> dict[str, object] | None:
+def _load_toml(path: Path) -> dict[str, TomlValue] | None:
     try:
         with path.open("rb") as fh:
             return tomllib.load(fh)
@@ -76,15 +76,8 @@ def _is_literal_version(value: object) -> bool:
 def _check_setup_soldr_version_input(repo_root: Path) -> list[Finding]:
     findings: list[Finding] = []
 
-    files: list[tuple[str, bool, dict[str, object]]] = []
-    for wf in load_workflows(repo_root):
-        if wf.status == LoadStatus.OK:
-            files.append((wf.path, False, as_dict(wf.document)))
-    for act in load_composite_actions(repo_root):
-        if act.status == LoadStatus.OK:
-            files.append((act.path, True, as_dict(act.document)))
-
-    for path, is_composite, doc in files:
+    for loaded in _loaded_files(repo_root):
+        path, is_composite, doc = loaded.path, loaded.is_composite, loaded.doc
         for use_step in _iter_uses_with(doc, is_composite=is_composite):
             uses = use_step.uses
             loc = use_step.loc

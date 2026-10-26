@@ -46,7 +46,7 @@ class Rust015ClassifyTest(unittest.TestCase):
             with self.subTest(line=line):
                 found = find_test_invocation(tuple(split_commands(line)[0]))
                 assert found is not None
-                self.assertIsNone(_classify(found.args)[1], found)
+                self.assertIsNone(_classify(found.args).filt, found)
 
 
 if __name__ == "__main__":

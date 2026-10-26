@@ -18,6 +18,7 @@ triple) is flagged as a substitution.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 
 from ci_lint.finding import Finding
@@ -27,9 +28,15 @@ _MUSL_SUFFIX = "-unknown-linux-musl"
 _MSVC_SUFFIX = "-pc-windows-msvc"
 _GNU_WINDOWS_SUFFIX = "-pc-windows-gnu"
 
-_ARCH_HINTS: tuple[tuple[str, str], ...] = (
-    ("arm64", "aarch64"),
-    ("x64", "x86_64"),
+@dataclass(frozen=True)
+class _ArchHint:
+    id_hint: str
+    arch_prefix: str
+
+
+_ARCH_HINTS: tuple[_ArchHint, ...] = (
+    _ArchHint("arm64", "aarch64"),
+    _ArchHint("x64", "x86_64"),
 )
 
 
@@ -97,7 +104,8 @@ def check_bin_002(ci: CiToml) -> list[Finding]:
         # aarch64 triple, never the x64 one, and vice versa -- a swap is a
         # silent substitution that the profile-required-table check alone
         # cannot see, since both are valid MSVC targets).
-        for id_hint, arch_prefix in _ARCH_HINTS:
+        for hint in _ARCH_HINTS:
+            id_hint, arch_prefix = hint.id_hint, hint.arch_prefix
             if id_hint in pid.lower() and not plat.target.startswith(f"{arch_prefix}-"):
                 findings.append(
                     Finding(

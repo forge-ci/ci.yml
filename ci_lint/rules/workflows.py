@@ -221,22 +221,28 @@ def check_sec_003(workflows: list[ParsedYamlFile]) -> list[Finding]:
     return findings
 
 
+@dataclass(frozen=True)
+class _UsesRef:
+    uses: str
+    loc: str
+
+
 def _iter_uses(
     doc: dict[str, YamlValue], *, is_composite: bool
-) -> list[tuple[str, str]]:
-    out: list[tuple[str, str]] = []
+) -> list[_UsesRef]:
+    out: list[_UsesRef] = []
     if is_composite:
         runs = doc.get("runs")
         if isinstance(runs, dict):
             for i, step in enumerate(as_list(runs.get("steps"))):
                 if isinstance(step, dict) and isinstance(step.get("uses"), str):
-                    out.append((step["uses"], f"runs.steps[{i}]"))
+                    out.append(_UsesRef(step["uses"], f"runs.steps[{i}]"))
     else:
         for job_id, job in jobs_of(doc).items():
             for i, step in enumerate(steps_of(job)):
                 uses = step.get("uses")
                 if isinstance(uses, str):
-                    out.append((uses, f"jobs.{job_id}.steps[{i}]"))
+                    out.append(_UsesRef(uses, f"jobs.{job_id}.steps[{i}]"))
     return out
 
 
@@ -307,13 +313,13 @@ def check_sec_004(
     for wf in workflows:
         if wf.status != LoadStatus.OK:
             continue
-        for uses, loc in _iter_uses(as_dict(wf.document), is_composite=False):
-            findings.extend(_check_one_use(uses, wf.path, loc, allowed))
+        for ref in _iter_uses(as_dict(wf.document), is_composite=False):
+            findings.extend(_check_one_use(ref.uses, wf.path, ref.loc, allowed))
     for act in actions:
         if act.status != LoadStatus.OK:
             continue
-        for uses, loc in _iter_uses(as_dict(act.document), is_composite=True):
-            findings.extend(_check_one_use(uses, act.path, loc, allowed))
+        for ref in _iter_uses(as_dict(act.document), is_composite=True):
+            findings.extend(_check_one_use(ref.uses, act.path, ref.loc, allowed))
     return findings
 
 
