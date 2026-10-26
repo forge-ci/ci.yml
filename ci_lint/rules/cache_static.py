@@ -667,7 +667,7 @@ def check_cache_030(ci: CiToml) -> list[Finding]:
             "but setup-soldr's ancestor mechanism is an opt-in pilot that is off: `auto-key` defaults "
             'to "false" and `auto-key-trusted-writers` must name reviewed immutable writer jobs '
             "(no fleet repository has a live `setup-soldr-ancestor-build-v1-*` entry as of 2026-10-05)",
-            fix="opt in at the workflow: pass `cache-key: auto` (or `auto-key: \"true\"`) plus an "
+            fix="opt in at the workflow: pass `key: auto` (or `auto-key: \"true\"`) plus an "
             "explicit auto-key-trusted-writers list, per zackees/setup-soldr#552. Until a live "
             "setup-soldr-ancestor-build-v1-* entry is observed on this repository, promotion does "
             "not happen -- keep the drift backstop (a scheduled full default-branch run, or enough "
@@ -783,7 +783,7 @@ def check_cache_032(ci: CiToml) -> list[Finding]:
 
     SEC-004 requires a 40-hex SHA pin (`zackees/setup-soldr@v0` is the single
     sanctioned float), so a repository cannot reach the feature at all. The
-    failure is silent: `cache-key: auto` or `auto-key: "true"` is accepted as
+    failure is silent: `key: auto` or `auto-key: "true"` is accepted as
     an ordinary input, the pilot code never runs, and every restore falls back
     to the legacy key with no error.
 
