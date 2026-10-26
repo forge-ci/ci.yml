@@ -244,6 +244,7 @@ class MaintenanceDependencyTest(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     prove_replay(self.raw, replace(self.expected, required_jobs=(self.expected.required_jobs[0], required)))
 
+    @requires_yaml_tooling
     def test_hosted_decision_refuses_base_remote_job_even_if_local_checks_bypassed(self):
         fixture = trust_fixtures.TrustCase()
         fixture.setUp()

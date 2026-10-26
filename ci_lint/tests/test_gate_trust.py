@@ -271,6 +271,7 @@ class DecideTest(TrustCase):
 class AttestedJobsTest(TrustCase):
     """GATE-010: per-job skip from the base's ci-attestations.yml and the head's trailers."""
 
+    @requires_yaml_tooling
     def test_hosted_skip_obeys_base_lane_freshness(self) -> None:
         from unittest.mock import patch
         from ci_lint.attestations import make
@@ -297,6 +298,7 @@ class AttestedJobsTest(TrustCase):
                     jobs = {j.job: j.skip for j in _job_decisions(self.repo, inp, True)}
                 self.assertEqual(jobs["ci.yml:lint"], expected)
 
+    @requires_yaml_tooling
     def test_job_skips_only_when_all_its_gates_are_attested(self) -> None:
         from ci_lint.attestations import make
         from ci_lint.local_gate_cli import _job_decisions

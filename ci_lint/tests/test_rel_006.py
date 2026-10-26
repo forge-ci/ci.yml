@@ -7,6 +7,7 @@ import unittest
 from ci_lint.finding import Status
 from ci_lint.rules.macos_signing import check_rel_006
 from ci_lint.tests.test_complexity import _Repo
+from ci_lint.tests.helpers import requires_yaml_tooling
 
 RELEASE_JOB = """\
   sign:
@@ -41,24 +42,29 @@ class Rel006Test(unittest.TestCase):
         cond = "if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'"
         self.assertEqual([], _run(_wf("[merge_group, release, workflow_dispatch]", cond)))
 
+    @requires_yaml_tooling
     def test_unconfined_pr_job_is_violation(self) -> None:
         findings = _run(_wf("[pull_request]"))
         self.assertEqual(1, len(findings))
         self.assertEqual(Status.VIOLATION, findings[0].status)
         self.assertEqual("REL-006", findings[0].rule)
 
+    @requires_yaml_tooling
     def test_merge_group_unconfined_is_violation(self) -> None:
         self.assertEqual([Status.VIOLATION], [f.status for f in _run(_wf("[merge_group]"))])
 
+    @requires_yaml_tooling
     def test_pull_request_target_is_violation_regardless(self) -> None:
         findings = _run(_wf("[pull_request_target]", "if: startsWith(github.ref, 'refs/tags/v')"))
         self.assertEqual([Status.VIOLATION], [f.status for f in findings])
         self.assertIn("pull_request_target", findings[0].message)
 
+    @requires_yaml_tooling
     def test_pr_exclusion_only_is_needs_review(self) -> None:
         findings = _run(_wf("[pull_request, push]", "if: github.event_name != 'pull_request'"))
         self.assertEqual([Status.NEEDS_REVIEW], [f.status for f in findings])
 
+    @requires_yaml_tooling
     def test_bare_secret_reference_without_action(self) -> None:
         text = (
             "on: pull_request\njobs:\n  build:\n    runs-on: macos-latest\n    environment: release\n"
@@ -68,6 +74,7 @@ class Rel006Test(unittest.TestCase):
         self.assertEqual(1, len(findings))
         self.assertIn("MACOS_NOTARY_API_KEY", findings[0].message)
 
+    @requires_yaml_tooling
     def test_workflow_level_env_counts_for_every_job(self) -> None:
         text = (
             "on: pull_request\nenv:\n  P: ${{ secrets.MACOS_NOTARIZATION_PASSWORD }}\njobs:\n"
@@ -79,11 +86,13 @@ class Rel006Test(unittest.TestCase):
         text = "on: pull_request\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo ${{ secrets.GITHUB_TOKEN }}\n"
         self.assertEqual([], _run(text))
 
+    @requires_yaml_tooling
     def test_missing_environment_is_needs_review(self) -> None:
         findings = _run(_wf("{push: {tags: ['v*']}}", env_line=""))
         self.assertEqual([Status.NEEDS_REVIEW], [f.status for f in findings])
         self.assertIn("environment", findings[0].message)
 
+    @requires_yaml_tooling
     def test_local_reusable_called_from_pr_workflow(self) -> None:
         caller = "on: pull_request\njobs:\n  rel:\n    uses: ./.github/workflows/sign.yml\n"
         callee = _wf("workflow_call")
