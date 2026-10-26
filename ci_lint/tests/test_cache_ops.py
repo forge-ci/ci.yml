@@ -59,7 +59,9 @@ def _failing_delete():
 
 class TrimTest(unittest.TestCase):
     def setUp(self) -> None:
-        ci, findings = load_ci_toml(REPO)
+        _loaded = load_ci_toml(REPO)
+        ci = _loaded.ci
+        findings = _loaded.findings
         assert ci is not None, findings
         self.ci = ci
         self.fetch = _fetch_from(_load("caches-synthetic-rules.json"))
@@ -114,7 +116,9 @@ class TrimTest(unittest.TestCase):
 
 class JanitorTest(unittest.TestCase):
     def setUp(self) -> None:
-        ci, findings = load_ci_toml(REPO)
+        _loaded = load_ci_toml(REPO)
+        ci = _loaded.ci
+        findings = _loaded.findings
         assert ci is not None, findings
         self.ci = ci
         self.fetch = _fetch_from(_load("caches-synthetic-rules.json"))
@@ -208,7 +212,9 @@ class JanitorIssue23Test(unittest.TestCase):
     fail-safe lookup, grace window, LRU convergence, newest-entry protection."""
 
     def setUp(self) -> None:
-        ci, findings = load_ci_toml(REPO)
+        _loaded = load_ci_toml(REPO)
+        ci = _loaded.ci
+        findings = _loaded.findings
         assert ci is not None, findings
         self.ci = ci
         old = _iso(-3600)
@@ -311,7 +317,9 @@ class HealTest(unittest.TestCase):
 
 class PrepruneTest(unittest.TestCase):
     def setUp(self) -> None:
-        ci, findings = load_ci_toml(REPO)
+        _loaded = load_ci_toml(REPO)
+        ci = _loaded.ci
+        findings = _loaded.findings
         assert ci is not None, findings
         self.ci = ci
 
@@ -358,7 +366,7 @@ class LruFootprintTest(unittest.TestCase):
     def _ci(self, fam: object):
         from dataclasses import replace as _replace
 
-        ci, _ = load_ci_toml(REPO)
+        ci = load_ci_toml(REPO).ci
         return _replace(ci, cache=_replace(ci.cache, family={"compile": fam}))
 
     def _entry(self, eid: int, used: str, mb: int) -> object:
@@ -412,7 +420,9 @@ class JanitorRepoBudgetTest(unittest.TestCase):
     def setUp(self) -> None:
         from dataclasses import replace
 
-        ci, findings = load_ci_toml(REPO)
+        _loaded = load_ci_toml(REPO)
+        ci = _loaded.ci
+        findings = _loaded.findings
         assert ci is not None, findings
         self.ci = replace(ci, cache=replace(ci.cache, budget="100MB"))
 

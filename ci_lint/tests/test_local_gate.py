@@ -107,7 +107,9 @@ class ConfigTest(TempRepoCase):
         text = EXAMPLE.read_text(encoding="utf-8")
         text += '\n[local.gate]\nrun = ["python3", "ci/gate.py"]\nmirrors = ["ci.yml:fast"]\nverify = "ci.yml:precheck"\n'
         (self.tmp / "ci.toml").write_text(text, encoding="utf-8")
-        ci, findings = load_ci_toml(self.tmp)
+        _loaded = load_ci_toml(self.tmp)
+        ci = _loaded.ci
+        findings = _loaded.findings
         self.assertFalse([f for f in findings if "local" in f.message or f.rule == "GATE-001"], findings)
         assert ci is not None and ci.local.gate is not None
         self.assertEqual(ci.local.gate.run, ("python3", "ci/gate.py"))

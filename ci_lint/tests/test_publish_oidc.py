@@ -249,7 +249,9 @@ class NeverPrintsTokenTest(unittest.TestCase):
             self.assertEqual(2, exit_code)
 
     def test_ci_toml_loads_and_is_mock_mode(self) -> None:
-        ci, findings = load_ci_toml(REPO)
+        _loaded = load_ci_toml(REPO)
+        ci = _loaded.ci
+        findings = _loaded.findings
         assert ci is not None, findings
         self.assertIsNotNone(ci.publish.pypi)
         self.assertEqual("mock", ci.publish.pypi.mode)

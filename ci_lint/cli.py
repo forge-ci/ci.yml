@@ -375,7 +375,7 @@ def _cmd_precheck(args: argparse.Namespace) -> int:
     write_step_summary(result)
 
     if args.plan_out or args.github_output:
-        ci, _ = load_ci_toml(repo_root)
+        ci = load_ci_toml(repo_root).ci
         if ci is not None:
             event_name = "pull_request" if title else "push"
             try:
@@ -403,7 +403,9 @@ def _cmd_precheck(args: argparse.Namespace) -> int:
 
 def _cmd_plan(args: argparse.Namespace) -> int:
     repo_root = Path(args.repo).resolve()
-    ci, findings = load_ci_toml(repo_root)
+    _loaded = load_ci_toml(repo_root)
+    ci = _loaded.ci
+    findings = _loaded.findings
     if ci is None:
         for f in findings:
             print(f.render())
@@ -451,7 +453,9 @@ def _cmd_plan(args: argparse.Namespace) -> int:
 
 
 def _load_ci_or_die(repo_root: Path, command: str) -> CiToml | None:
-    ci, findings = load_ci_toml(repo_root)
+    _loaded = load_ci_toml(repo_root)
+    ci = _loaded.ci
+    findings = _loaded.findings
     if ci is None:
         for f in findings:
             print(f.render())

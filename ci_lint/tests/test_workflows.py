@@ -45,10 +45,10 @@ class WorkflowFixtureTest(unittest.TestCase):
 
     def test_gen_008_undeclared_workflow_file(self) -> None:
         repo = fixture("GEN-008", "red")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         self.assertIn("GEN-008", rule_ids(check_gen_008(ci, load_workflows(repo))))
         repo = fixture("GEN-008", "green")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         self.assertNotIn("GEN-008", rule_ids(check_gen_008(ci, load_workflows(repo))))
 
     def test_tag_003_missing_edited(self) -> None:
@@ -65,10 +65,10 @@ class WorkflowFixtureTest(unittest.TestCase):
 
     def test_sec_004_unpinned_action(self) -> None:
         repo = fixture("SEC-004", "red")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         self.assertIn("SEC-004", rule_ids(check_sec_004(ci, load_workflows(repo), [])))
         repo = fixture("SEC-004", "green")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         self.assertNotIn("SEC-004", rule_ids(check_sec_004(ci, load_workflows(repo), [])))
 
     # ── SEC-004 x setup-soldr@v0 (M2-29, ci.yml#33) ────────────────────────
@@ -117,7 +117,7 @@ class WorkflowFixtureTest(unittest.TestCase):
 
     def test_run_001_bad_runner_label(self) -> None:
         repo = fixture("RUN-001", "red")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         findings = check_run_001(ci, load_workflows(repo))
         self.assertIn("RUN-001", rule_ids(findings))
         # The literal 'ubuntu-latest' on jobs.build.
@@ -125,7 +125,7 @@ class WorkflowFixtureTest(unittest.TestCase):
             any("jobs.build.runs-on" in f.message for f in findings), msg=[f.message for f in findings]
         )
         repo = fixture("RUN-001", "green")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         self.assertNotIn("RUN-001", rule_ids(check_run_001(ci, load_workflows(repo))))
 
     def test_run_001_matrix_over_platform_lanes_is_resolved_not_needs_review(self) -> None:
@@ -135,7 +135,7 @@ class WorkflowFixtureTest(unittest.TestCase):
         [platforms]) is resolvable. RUN-001 must validate ci.toml's own
         [platforms].*.runs-on values instead of reporting needs_review."""
         repo = fixture("RUN-001", "red")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         findings = check_run_001(ci, load_workflows(repo))
         self.assertNotIn(Status.NEEDS_REVIEW, [f.status for f in findings])
         # windows-x64's runs-on is 'windows-latest' in the red ci.toml --
@@ -148,7 +148,7 @@ class WorkflowFixtureTest(unittest.TestCase):
         )
 
         repo = fixture("RUN-001", "green")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         findings = check_run_001(ci, load_workflows(repo))
         self.assertEqual([], [f for f in findings if f.status == Status.NEEDS_REVIEW])
         self.assertEqual([], [f for f in findings if f.path == "ci.toml"])
@@ -158,7 +158,7 @@ class WorkflowFixtureTest(unittest.TestCase):
         platform-lanes output can't be statically resolved and must stay
         needs_review, exactly as before round-6C."""
         repo = fixture("RUN-001", "green")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         wfs = load_workflows(repo)
         doc = as_dict(wfs[0].document)
         doc["jobs"]["unresolvable"] = {
@@ -212,10 +212,10 @@ class WorkflowFixtureTest(unittest.TestCase):
 
     def test_ct_004_linter_pin_mismatch(self) -> None:
         repo = fixture("CT-004", "red")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         self.assertIn("CT-004", rule_ids(check_ct_004(ci, load_workflows(repo))))
         repo = fixture("CT-004", "green")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         self.assertNotIn("CT-004", rule_ids(check_ct_004(ci, load_workflows(repo))))
 
 

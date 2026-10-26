@@ -35,7 +35,7 @@ class LintCacheTest(unittest.TestCase):
         wf = root / ".github" / "workflows"
         wf.mkdir(parents=True)
         (wf / "ci.yml").write_text(workflow, encoding="utf-8")
-        ci, _ = load_ci_toml(root)
+        ci = load_ci_toml(root).ci
         return sorted((f.rule, f.status.value) for f in check_lint_cache(ci, root))
 
     CLEAN = "on: [push, schedule]\njobs:\n" + _job("lint")

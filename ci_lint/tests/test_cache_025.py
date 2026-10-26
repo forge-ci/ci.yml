@@ -35,7 +35,7 @@ class Cache025Test(unittest.TestCase):
         self.assertNotIn("allow CACHE-025", findings[0].fix)
 
     def test_ci_toml_exception_cannot_waive_cache_025(self) -> None:
-        ci, _ = load_ci_toml(fixture("_e2e", "green"))
+        ci = load_ci_toml(fixture("_e2e", "green")).ci
         assert ci is not None
         entry = ExceptionEntry(
             rule="CACHE-025",

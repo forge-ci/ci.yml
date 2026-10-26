@@ -18,15 +18,15 @@ def rule_ids(findings) -> list[str]:
 
 class SchemaFixtureTest(unittest.TestCase):
     def test_ct_001_unknown_key(self) -> None:
-        _, red_findings = load_ci_toml(fixture("CT-001", "red"))
+        red_findings = load_ci_toml(fixture("CT-001", "red")).findings
         self.assertIn("CT-001", rule_ids(red_findings))
-        _, green_findings = load_ci_toml(fixture("CT-001", "green"))
+        green_findings = load_ci_toml(fixture("CT-001", "green")).findings
         self.assertNotIn("CT-001", rule_ids(green_findings))
 
     def test_ct_002_wrong_type(self) -> None:
-        _, red_findings = load_ci_toml(fixture("CT-002", "red"))
+        red_findings = load_ci_toml(fixture("CT-002", "red")).findings
         self.assertIn("CT-002", rule_ids(red_findings))
-        _, green_findings = load_ci_toml(fixture("CT-002", "green"))
+        green_findings = load_ci_toml(fixture("CT-002", "green")).findings
         self.assertNotIn("CT-002", rule_ids(green_findings))
 
     def test_ct_002_cache_family_per_is_a_strict_enum(self) -> None:
@@ -36,7 +36,9 @@ class SchemaFixtureTest(unittest.TestCase):
         message listing the allowed values, never a silent fallback to
         cardinality 1."""
 
-        ci, red_findings = load_ci_toml(fixture("CT-002", "red-cache-per"))
+        _loaded = load_ci_toml(fixture("CT-002", "red-cache-per"))
+        ci = _loaded.ci
+        red_findings = _loaded.findings
         self.assertIn("CT-002", rule_ids(red_findings))
         per_finding = next(f for f in red_findings if f.rule == "CT-002" and "dylint-out.per" in f.message)
         self.assertIn("target", per_finding.message)
@@ -49,7 +51,7 @@ class SchemaFixtureTest(unittest.TestCase):
         assert ci is not None
         self.assertEqual("target", ci.cache.family["dylint-out"].per)
 
-        _, green_findings = load_ci_toml(fixture("CT-002", "green-cache-per"))
+        green_findings = load_ci_toml(fixture("CT-002", "green-cache-per")).findings
         self.assertNotIn("CT-002", rule_ids(green_findings))
 
     def test_ct_002_cache_family_via_is_a_strict_allowlist(self) -> None:
@@ -59,48 +61,52 @@ class SchemaFixtureTest(unittest.TestCase):
         the two newly-declared via values (setup-soldr:soldr-mini,
         setup-soldr:dylint) are accepted."""
 
-        ci, red_findings = load_ci_toml(fixture("CT-002", "red-cache-via"))
+        _loaded = load_ci_toml(fixture("CT-002", "red-cache-via"))
+        ci = _loaded.ci
+        red_findings = _loaded.findings
         self.assertIn("CT-002", rule_ids(red_findings))
         via_finding = next(f for f in red_findings if f.rule == "CT-002" and "compile.via" in f.message)
         self.assertIn("setup-soldr:bogus-family", via_finding.message)
         assert ci is not None
         self.assertEqual("setup-soldr:bogus-family", ci.cache.family["compile"].via)
 
-        ci, green_findings = load_ci_toml(fixture("CT-002", "green-cache-via"))
+        _loaded = load_ci_toml(fixture("CT-002", "green-cache-via"))
+        ci = _loaded.ci
+        green_findings = _loaded.findings
         self.assertNotIn("CT-002", rule_ids(green_findings))
         assert ci is not None
         self.assertEqual("setup-soldr:soldr-mini", ci.cache.family["soldr-mini"].via)
         self.assertEqual("setup-soldr:dylint", ci.cache.family["dylint"].via)
 
     def test_ct_003_wrong_schema(self) -> None:
-        _, red_findings = load_ci_toml(fixture("CT-003", "red"))
+        red_findings = load_ci_toml(fixture("CT-003", "red")).findings
         self.assertIn("CT-003", rule_ids(red_findings))
-        _, green_findings = load_ci_toml(fixture("CT-003", "green"))
+        green_findings = load_ci_toml(fixture("CT-003", "green")).findings
         self.assertNotIn("CT-003", rule_ids(green_findings))
 
     def test_ct_006_platform_target_mismatch(self) -> None:
         repo = fixture("CT-006", "red")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         self.assertIn("CT-006", rule_ids(check_ct_006(ci, repo)))
 
         repo = fixture("CT-006", "green")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         self.assertNotIn("CT-006", rule_ids(check_ct_006(ci, repo)))
 
     def test_ct_006_missing_cargo_toml(self) -> None:
-        ci, _ = load_ci_toml(fixture("CT-006", "green"))
+        ci = load_ci_toml(fixture("CT-006", "green")).ci
         findings = check_ct_006(ci, fixture("CT-006", "green").parent.parent)  # no Cargo.toml here
         self.assertIn("CT-006", rule_ids(findings))
 
     def test_tag_001_unknown_reserved_tag(self) -> None:
-        ci, _ = load_ci_toml(fixture("TAG-001", "red"))
+        ci = load_ci_toml(fixture("TAG-001", "red")).ci
         self.assertIn("TAG-001", rule_ids(check_tag_001(ci, "[ci-bogus] add thing")))
 
-        ci, _ = load_ci_toml(fixture("TAG-001", "green"))
+        ci = load_ci_toml(fixture("TAG-001", "green")).ci
         self.assertNotIn("TAG-001", rule_ids(check_tag_001(ci, "[ci-windows] add thing")))
 
     def test_tag_001_ignores_non_reserved_brackets(self) -> None:
-        ci, _ = load_ci_toml(fixture("TAG-001", "green"))
+        ci = load_ci_toml(fixture("TAG-001", "green")).ci
         self.assertNotIn("TAG-001", rule_ids(check_tag_001(ci, "[WIP] still working")))
 
     def test_tag_002_release_with_no_test(self) -> None:
@@ -112,19 +118,19 @@ class SchemaFixtureTest(unittest.TestCase):
 
 class ExceptionFixtureTest(unittest.TestCase):
     def test_ct_005_expired_exception_is_a_violation(self) -> None:
-        ci, _ = load_ci_toml(fixture("CT-005", "red"))
+        ci = load_ci_toml(fixture("CT-005", "red")).ci
         outcome = apply_exceptions(ci, [])
         self.assertIn("CT-005", rule_ids(outcome.findings))
 
     def test_ct_005_unexpired_exception_is_silent(self) -> None:
-        ci, _ = load_ci_toml(fixture("CT-005", "green"))
+        ci = load_ci_toml(fixture("CT-005", "green")).ci
         outcome = apply_exceptions(ci, [])
         self.assertNotIn("CT-005", rule_ids(outcome.findings))
 
     def test_matched_exception_becomes_approved(self) -> None:
         from ci_lint.finding import Finding, Status
 
-        ci, _ = load_ci_toml(fixture("CT-005", "green"))
+        ci = load_ci_toml(fixture("CT-005", "green")).ci
         finding = Finding(rule="GEN-005", path="ci.sh", message="x", fix="y")
         outcome = apply_exceptions(ci, [finding])
         self.assertEqual(1, len(outcome.findings))

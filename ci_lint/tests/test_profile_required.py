@@ -19,7 +19,7 @@ from ci_lint.tests.helpers import fixture, requires_yaml_tooling
 class Gen003Test(unittest.TestCase):
     def test_missing_required_suite_step_is_needs_review(self) -> None:
         repo = fixture("GEN-003", "red")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         assert ci is not None
         findings = check_group13(ci, repo)
         rules = [f.rule for f in findings]
@@ -30,7 +30,7 @@ class Gen003Test(unittest.TestCase):
 
     def test_required_suite_disabled_with_literal_if_false(self) -> None:
         repo = fixture("GEN-003", "red-if-false")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         assert ci is not None
         findings = check_group13(ci, repo)
         smoke_findings = [f for f in findings if "smoke" in f.message]
@@ -40,7 +40,7 @@ class Gen003Test(unittest.TestCase):
 
     def test_green_all_required_suites_invoked(self) -> None:
         repo = fixture("GEN-003", "green")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         assert ci is not None
         findings = check_group13(ci, repo)
         self.assertEqual([], findings, msg=findings)

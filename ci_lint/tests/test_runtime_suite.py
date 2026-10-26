@@ -25,7 +25,9 @@ def rule_ids(findings) -> list[str]:
 class SuiteCheckRuntimeTest(unittest.TestCase):
     def setUp(self) -> None:
         self.repo = FIXTURES / "runtime" / "suite"
-        self.ci, findings = load_ci_toml(self.repo)
+        _loaded = load_ci_toml(self.repo)
+        self.ci = _loaded.ci
+        findings = _loaded.findings
         self.assertIsNotNone(self.ci, msg=str(findings))
 
     # -- RED: TEST-001, a skip inside a required suite -----------------

@@ -52,7 +52,9 @@ def _clean_table(*, default_branch: str = "main", gate_check_name: str = DEFAULT
 
 class SettingsAuditTest(unittest.TestCase):
     def setUp(self) -> None:
-        ci, findings = load_ci_toml(REPO)
+        _loaded = load_ci_toml(REPO)
+        ci = _loaded.ci
+        findings = _loaded.findings
         assert ci is not None, findings
         self.ci = ci
 

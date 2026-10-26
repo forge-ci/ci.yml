@@ -144,7 +144,9 @@ class CompareTest(unittest.TestCase):
 
 class GatingTest(unittest.TestCase):
     def setUp(self) -> None:
-        ci, findings = load_ci_toml(REPO_GATING_OFF)
+        _loaded = load_ci_toml(REPO_GATING_OFF)
+        ci = _loaded.ci
+        findings = _loaded.findings
         assert ci is not None, findings
         self.ci = ci
 

@@ -34,25 +34,25 @@ class SecretsFixtureTest(unittest.TestCase):
         same reference with an empty [allow].secrets (the red fixture) is."""
 
         repo = fixture("SEC-001", "green-allowed")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         self.assertEqual(("MY_TOKEN",), ci.allow.secrets)
         rules = [f.rule for f in check_sec_001(repo, ci.allow.secrets)]
         self.assertNotIn("SEC-001", rules)
 
         repo = fixture("SEC-001", "red")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         rules = [f.rule for f in check_sec_001(repo, ci.allow.secrets)]
         self.assertIn("SEC-001", rules)
 
     @requires_yaml_tooling
     def test_sec_002_wide_top_level_permissions(self) -> None:
         repo = fixture("SEC-002", "red")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         rules = [f.rule for f in check_sec_002(ci, repo)]
         self.assertIn("SEC-002", rules)
 
         repo = fixture("SEC-002", "green")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         rules = [f.rule for f in check_sec_002(ci, repo)]
         self.assertNotIn("SEC-002", rules)
 
@@ -63,12 +63,12 @@ class SecretsFixtureTest(unittest.TestCase):
         lists the 'cache-maint' job id."""
 
         repo = fixture("SEC-002", "red-job-grant")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         rules = [f.rule for f in check_sec_002(ci, repo)]
         self.assertIn("SEC-002", rules)
 
         repo = fixture("SEC-002", "green-job-grant")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         rules = [f.rule for f in check_sec_002(ci, repo)]
         self.assertNotIn("SEC-002", rules)
 
@@ -80,12 +80,12 @@ class SecretsFixtureTest(unittest.TestCase):
         rust-lang/crates-io-auth-action (crates.io trusted publishing)."""
 
         repo = fixture("SEC-002", "green-oidc-publishers")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         findings = check_sec_002(ci, repo)
         self.assertEqual([], findings, msg=[f.render() for f in findings])
 
         repo = fixture("SEC-002", "red-oidc-publishers")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         messages = [f.message for f in check_sec_002(ci, repo) if f.rule == "SEC-002"]
         self.assertEqual(2, len(messages), msg=messages)
         self.assertTrue(any("jobs.publish." in m for m in messages), msg=messages)
@@ -99,7 +99,7 @@ class SecretsFixtureTest(unittest.TestCase):
         entry required."""
 
         repo = fixture("SEC-002", "green-job-grant")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         findings = check_sec_002(ci, repo)
         self.assertFalse(
             [f for f in findings if "actions" in f.message and "read" in f.message],

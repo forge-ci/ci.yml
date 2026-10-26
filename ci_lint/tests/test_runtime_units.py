@@ -30,7 +30,9 @@ class CargoMessagesParseTest(unittest.TestCase):
 class UnitsRuntimeTest(unittest.TestCase):
     def setUp(self) -> None:
         self.repo = FIXTURES / "runtime" / "workspace"
-        self.ci, findings = load_ci_toml(self.repo)
+        _loaded = load_ci_toml(self.repo)
+        self.ci = _loaded.ci
+        findings = _loaded.findings
         self.assertIsNotNone(self.ci, msg=str(findings))
         self.crates = discover_workspace(self.repo)
         path = FIXTURES / "runtime" / "units" / "basic.jsonl"
@@ -74,7 +76,9 @@ class EmptyDefaultFeatureTest(unittest.TestCase):
 
     def setUp(self) -> None:
         repo = FIXTURES / "runtime" / "workspace"
-        ci, findings = load_ci_toml(repo)
+        _loaded = load_ci_toml(repo)
+        ci = _loaded.ci
+        findings = _loaded.findings
         assert ci is not None and ci.rust is not None, findings
         self.ci = replace(ci, rust=replace(ci.rust, ship=((),)))
         self.crates = discover_workspace(repo)

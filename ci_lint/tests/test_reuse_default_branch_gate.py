@@ -348,7 +348,9 @@ class ReuseSchemaTest(unittest.TestCase):
     def _load(self, body: str) -> tuple[object, list[str]]:
         root = pathlib.Path(tempfile.mkdtemp())
         (root / "ci.toml").write_text(self.BASE + "\n" + body, encoding="utf-8")
-        ci, findings = load_ci_toml(root)
+        _loaded = load_ci_toml(root)
+        ci = _loaded.ci
+        findings = _loaded.findings
         return (ci.reuse if ci else None), [f.message for f in findings if f.rule.startswith("CT-")]
 
     def test_absent_table_defaults_to_off(self) -> None:

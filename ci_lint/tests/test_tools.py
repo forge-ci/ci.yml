@@ -41,13 +41,13 @@ class ToolFixtureTest(unittest.TestCase):
 
     def test_rust_001_setup_soldr_outside_wrapper_is_soldr_bypass(self) -> None:
         repo = fixture("RUST-001", "red-outside-wrapper")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         assert ci is not None
         rules = [f.rule for f in check_cache_009(ci, repo)]
         self.assertIn("RUST-001", rules)
         self.assertIn("CACHE-009", rules)
         repo = fixture("CACHE-009", "green")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         assert ci is not None
         rules = [f.rule for f in check_cache_009(ci, repo)]
         self.assertNotIn("RUST-001", rules)
@@ -105,10 +105,10 @@ class ToolFixtureTest(unittest.TestCase):
 
     def test_cache_009_wrapper_misconfigured(self) -> None:
         repo = fixture("CACHE-009", "red")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         self.assertIn("CACHE-009", [f.rule for f in check_cache_009(ci, repo)])
         repo = fixture("CACHE-009", "green")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         self.assertNotIn("CACHE-009", [f.rule for f in check_cache_009(ci, repo)])
 
     def test_cache_009_require_plan_needs_a_plan_derived_expression(self) -> None:
@@ -118,11 +118,11 @@ class ToolFixtureTest(unittest.TestCase):
         matches some other require entry's style, like "auto") is CACHE-009."""
 
         repo = fixture("CACHE-009", "red-plan-save-cache")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         self.assertIn("CACHE-009", [f.rule for f in check_cache_009(ci, repo)])
 
         repo = fixture("CACHE-009", "green-plan-save-cache")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         self.assertNotIn("CACHE-009", [f.rule for f in check_cache_009(ci, repo)])
 
     def test_gen_004_fast_job_missing_ruff_pylint(self) -> None:

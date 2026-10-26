@@ -138,7 +138,9 @@ class WheelFilenameParseTest(unittest.TestCase):
 class WheelCheckTest(unittest.TestCase):
     def setUp(self) -> None:
         self.repo = FIXTURES / "runtime" / "workspace"
-        ci, findings = load_ci_toml(self.repo)
+        _loaded = load_ci_toml(self.repo)
+        ci = _loaded.ci
+        findings = _loaded.findings
         assert ci is not None, findings
         # This fixture's [python].cli.name/crate is "demo-cli" and
         # [python].abi3 is "cp310" -- reuse it rather than declaring a
@@ -248,7 +250,9 @@ class WheelCheckTest(unittest.TestCase):
 class WheelInstalledTest(unittest.TestCase):
     def setUp(self) -> None:
         self.repo = FIXTURES / "runtime" / "workspace"
-        ci, findings = load_ci_toml(self.repo)
+        _loaded = load_ci_toml(self.repo)
+        ci = _loaded.ci
+        findings = _loaded.findings
         assert ci is not None, findings
         self.ci = ci
         self._tmp = tempfile.TemporaryDirectory()

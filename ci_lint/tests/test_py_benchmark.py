@@ -17,7 +17,7 @@ from ci_lint.tests.helpers import fixture, requires_yaml_tooling
 class Py001Test(unittest.TestCase):
     def test_red_raw_dict_and_any(self) -> None:
         repo = fixture("PY-001", "red")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         assert ci is not None
         findings = check_group14(ci, repo)
         rules = [f.rule for f in findings]
@@ -26,7 +26,7 @@ class Py001Test(unittest.TestCase):
 
     def test_green_dataclass(self) -> None:
         repo = fixture("PY-001", "green")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         assert ci is not None
         findings = check_group14(ci, repo)
         self.assertEqual([], findings, msg=findings)

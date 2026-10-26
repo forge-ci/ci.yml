@@ -26,7 +26,9 @@ class LiveCacheFindingsCredentialsTest(unittest.TestCase):
         self.assertEqual([], _live_cache_findings(None, default_branch="main"))
 
     def test_missing_credentials_degrade_to_a_single_needs_review(self) -> None:
-        ci, findings = load_ci_toml(REPO)
+        _loaded = load_ci_toml(REPO)
+        ci = _loaded.ci
+        findings = _loaded.findings
         assert ci is not None, findings
         with mock.patch.dict(os.environ, {}, clear=False):
             os.environ.pop("GITHUB_TOKEN", None)

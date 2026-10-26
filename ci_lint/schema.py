@@ -239,6 +239,18 @@ CACHE_PROMOTE_MODES: tuple[str, ...] = ("off", "ancestor")
 CACHE_SHARE_SCOPES: tuple[str, ...] = ("branch", "repo")
 
 
+# Indexes of dataclasses and flat scalar maps -- shapes AGENTS.md's PY-002
+# directive allows ("flat scalar maps, indexes of dataclasses and single-level
+# parsed documents are fine"). Named so each field says what it keys.
+PlatformIndex = dict[str, Platform]
+SuiteIndex = dict[str, Suite]
+FlowIndex = dict[str, Flow]
+TagRuleIndex = dict[str, TagRule]
+CacheFamilyIndex = dict[str, CacheFamily]
+StrMap = dict[str, str]
+StrTupleMap = dict[str, tuple[str, ...]]
+
+
 @dataclass(frozen=True)
 class CachePromote:
     """`[cache.promote]` -- how a pull request's cache entry becomes the
@@ -277,7 +289,7 @@ class CacheConfig:
     never: tuple[str, ...]
     retired: tuple[str, ...]
     pr: PrCache
-    family: dict[str, CacheFamily]
+    family: CacheFamilyIndex
     promote: CachePromote = CachePromote()
     # A tuple of records, not a map: `[cache.share.<id>]` is a declaration
     # list, and the owner directive prefers a record sequence to a map even
@@ -351,7 +363,7 @@ class ReuseConfig:
 @dataclass(frozen=True)
 class SetupSoldrAllow:
     only_in: str
-    require: dict[str, str]
+    require: StrMap
 
 
 @dataclass(frozen=True)
@@ -363,7 +375,7 @@ class SetupUvAllow:
     precheck plan rather than a literal (`CACHE-003`; see
     `ci_lint.rules.cache_static.check_cache_003_setup_uv`)."""
 
-    require: dict[str, str]
+    require: StrMap
 
 
 @dataclass(frozen=True)
@@ -379,7 +391,7 @@ class CacheActionsAllow:
 
 @dataclass(frozen=True)
 class AllowConfig:
-    workflows: dict[str, tuple[str, ...]]
+    workflows: StrTupleMap
     actions: tuple[str, ...]
     setup_soldr: SetupSoldrAllow
     tools: tuple[str, ...]
@@ -387,7 +399,7 @@ class AllowConfig:
     platform_selector: str
     platform_code: tuple[str, ...]
     # Round-4B additions, all optional/backward-compatible (see _parse_allow).
-    permissions: dict[str, tuple[str, ...]]
+    permissions: StrTupleMap
     setup_uv: SetupUvAllow
     cache_actions: CacheActionsAllow
 
@@ -428,13 +440,13 @@ class CiToml:
     profile: str
     linter: str
     linter_sha: str | None
-    platforms: dict[str, Platform]
+    platforms: PlatformIndex
     python: PythonConfig | None
     rust: RustConfig | None
     lint_dylint: DylintConfig | None
-    suites: dict[str, Suite]
-    flows: dict[str, Flow]
-    tags: dict[str, TagRule]
+    suites: SuiteIndex
+    flows: FlowIndex
+    tags: TagRuleIndex
     cache: CacheConfig
     local: LocalConfig
     allow: AllowConfig
@@ -445,8 +457,8 @@ class CiToml:
     source_path: str
 
 
-def _parse_platforms(root: Cursor) -> dict[str, Platform]:
-    out: dict[str, Platform] = {}
+def _parse_platforms(root: Cursor) -> PlatformIndex:
+    out: PlatformIndex = {}
     for pid, raw in root.raw_table_of_tables("platforms", required=True).items():
         sub = Cursor(raw, f"platforms.{pid}", root.findings, root.source)
         target = sub.str_("target")
@@ -529,8 +541,8 @@ def _parse_lint_dylint(root: Cursor) -> DylintConfig | None:
     return result
 
 
-def _parse_suites(root: Cursor) -> dict[str, Suite]:
-    out: dict[str, Suite] = {}
+def _parse_suites(root: Cursor) -> SuiteIndex:
+    out: SuiteIndex = {}
     for sid, raw in root.raw_table_of_tables("suites", required=True).items():
         sub = Cursor(raw, f"suites.{sid}", root.findings, root.source)
         run = sub.str_("run") or ""
@@ -545,8 +557,8 @@ def _parse_suites(root: Cursor) -> dict[str, Suite]:
     return out
 
 
-def _parse_flows(root: Cursor) -> dict[str, Flow]:
-    out: dict[str, Flow] = {}
+def _parse_flows(root: Cursor) -> FlowIndex:
+    out: FlowIndex = {}
     for fid, raw in root.raw_table_of_tables("flow", required=True).items():
         sub = Cursor(raw, f"flow.{fid}", root.findings, root.source)
         extends = sub.str_("extends", required=False)
@@ -584,8 +596,8 @@ def _parse_flows(root: Cursor) -> dict[str, Flow]:
     return out
 
 
-def _parse_tags(root: Cursor) -> dict[str, TagRule]:
-    out: dict[str, TagRule] = {}
+def _parse_tags(root: Cursor) -> TagRuleIndex:
+    out: TagRuleIndex = {}
     for tid, raw in root.raw_table_of_tables("tags", required=True).items():
         sub = Cursor(raw, f"tags.{tid}", root.findings, root.source)
         add_raw = sub.table_("add", required=False)
@@ -746,7 +758,7 @@ def _parse_cache(root: Cursor) -> CacheConfig:
             expected_open_prs=expected_open_prs,
             measured_largest_delta=measured_largest_delta,
         )
-    family: dict[str, CacheFamily] = {}
+    family: CacheFamilyIndex = {}
     for fam_id, fam_raw in sub.raw_table_of_tables("family", required=True).items():
         fsub = Cursor(fam_raw, f"cache.family.{fam_id}", root.findings, root.source)
         # `via` is optional: a family may name the literal prefix its own
@@ -869,7 +881,7 @@ def _parse_cache_promote(root: Cursor, sub: Cursor) -> CachePromote:
 
 
 def _parse_cache_share(
-    root: Cursor, sub: Cursor, family: dict[str, CacheFamily]
+    root: Cursor, sub: Cursor, family: CacheFamilyIndex
 ) -> tuple[CacheShare, ...]:
     """`[cache.share.<family-id>]` -- the scope each named family is shared
     over. A share entry must name a family this ci.toml declares: a scope
@@ -940,7 +952,7 @@ def _parse_allow(root: Cursor) -> AllowConfig:
         )
     sub = Cursor(raw, "allow", root.findings, root.source)
     workflows_raw = sub.table_("workflows", required=True)
-    workflows: dict[str, tuple[str, ...]] = {}
+    workflows: StrTupleMap = {}
     if workflows_raw is not None:
         for wf_name, triggers in workflows_raw.items():
             if not isinstance(triggers, list) or not all(isinstance(t, str) for t in triggers):
@@ -1166,9 +1178,18 @@ def _parse_exceptions(root: Cursor) -> tuple[ExceptionEntry, ...]:
     return tuple(out)
 
 
-def load_ci_toml(repo_root: Path) -> tuple[CiToml | None, list[Finding]]:
-    """Load and strictly validate ci.toml. Returns (None, findings) on failure
-    to even parse; otherwise (CiToml, findings-from-validation)."""
+@dataclass(frozen=True)
+class LoadResult:
+    """What `load_ci_toml` returns: the parsed config (None when ci.toml is
+    missing or not valid TOML) and every validation finding."""
+
+    ci: CiToml | None
+    findings: list[Finding]
+
+
+def load_ci_toml(repo_root: Path) -> LoadResult:
+    """Load and strictly validate ci.toml. `ci` is None on failure to even
+    parse; otherwise the CiToml plus findings-from-validation."""
 
     findings: list[Finding] = []
     path = repo_root / "ci.toml"
@@ -1182,7 +1203,7 @@ def load_ci_toml(repo_root: Path) -> tuple[CiToml | None, list[Finding]]:
                 fix="create ci.toml at the repo root implementing schema 3 (see docs/ci-toml.md)",
             )
         )
-        return None, findings
+        return LoadResult(None, findings)
 
     try:
         with path.open("rb") as fh:
@@ -1196,7 +1217,7 @@ def load_ci_toml(repo_root: Path) -> tuple[CiToml | None, list[Finding]]:
                 fix="fix the TOML syntax error reported above",
             )
         )
-        return None, findings
+        return LoadResult(None, findings)
 
     root = Cursor(raw_root, "", findings, source)
 
@@ -1266,7 +1287,7 @@ def load_ci_toml(repo_root: Path) -> tuple[CiToml | None, list[Finding]]:
     )
 
     findings.extend(_validate_cross_refs(ci))
-    return ci, findings
+    return LoadResult(ci, findings)
 
 
 def _validate_cross_refs(ci: CiToml) -> list[Finding]:  # noqa: C901

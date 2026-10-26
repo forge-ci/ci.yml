@@ -49,7 +49,7 @@ class PrComponentTest(unittest.TestCase):
         self.assertIsNone(pr_from_ref("refs/heads/main"))
 
     def test_pr_keyed_entry_is_not_a_cache_003_base_layer(self) -> None:
-        ci, _ = load_ci_toml(REPO)
+        ci = load_ci_toml(REPO).ci
         assert ci is not None
         entry = CacheEntry(
             id=1, ref="refs/heads/feature", key="setup-soldr-buildcache-v2-linux-x64-pr-3-abcdef12",
@@ -61,7 +61,7 @@ class PrComponentTest(unittest.TestCase):
 
 class BudgetVerdictTest(unittest.TestCase):
     def setUp(self) -> None:
-        ci, _ = load_ci_toml(REPO)
+        ci = load_ci_toml(REPO).ci
         assert ci is not None
         # 100MB account budget, 30MB PR budget
         self.ci = replace(ci, cache=replace(ci.cache, budget="100MB", pr=replace(ci.cache.pr, budget="30MB")))
@@ -128,7 +128,9 @@ class Gen009BudgetRollupTest(unittest.TestCase):
     out of scope here; `cache audit` is the full rollup."""
 
     def _ci(self):
-        ci, findings = load_ci_toml(REPO)
+        _loaded = load_ci_toml(REPO)
+        ci = _loaded.ci
+        findings = _loaded.findings
         assert ci is not None, findings
         return ci
 
@@ -173,12 +175,16 @@ class EvictSchemaTest(unittest.TestCase):
             return load_ci_toml(dst)
 
     def test_lru_accepted(self) -> None:
-        ci, findings = self._load('dylint = { via = "setup-soldr:dylint", max = "80MB", evict = "lru" }')
+        _loaded = self._load('dylint = { via = "setup-soldr:dylint", max = "80MB", evict = "lru" }')
+        ci = _loaded.ci
+        findings = _loaded.findings
         assert ci is not None, findings
         self.assertEqual("lru", ci.cache.family["dylint"].evict)
 
     def test_unknown_value_is_ct_002(self) -> None:
-        _ci, findings = self._load('dylint = { via = "setup-soldr:dylint", max = "80MB", evict = "fifo" }')
+        _loaded = self._load('dylint = { via = "setup-soldr:dylint", max = "80MB", evict = "fifo" }')
+        _ci = _loaded.ci
+        findings = _loaded.findings
         self.assertTrue(any(f.rule == "CT-002" and "evict" in f.message for f in findings))
 
 

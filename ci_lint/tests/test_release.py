@@ -70,7 +70,9 @@ class ExpectedWheelTagPatternTest(unittest.TestCase):
 
 class ReleaseVerifyTest(unittest.TestCase):
     def setUp(self) -> None:
-        ci, findings = load_ci_toml(REPO)
+        _loaded = load_ci_toml(REPO)
+        ci = _loaded.ci
+        findings = _loaded.findings
         assert ci is not None, findings
         self.ci = ci
         self._tmp = tempfile.TemporaryDirectory()
@@ -248,7 +250,9 @@ class ReleaseReadbackTest(unittest.TestCase):
     publisher's staged destination back, not just write to it."""
 
     def setUp(self) -> None:
-        ci, findings = load_ci_toml(REPO)
+        _loaded = load_ci_toml(REPO)
+        ci = _loaded.ci
+        findings = _loaded.findings
         assert ci is not None, findings
         self.ci = ci
         self._tmp = tempfile.TemporaryDirectory()
@@ -308,7 +312,9 @@ class ReleaseResumeTest(unittest.TestCase):
     bytes a prior release-manifest.json hashed, never rebuild."""
 
     def setUp(self) -> None:
-        ci, findings = load_ci_toml(REPO)
+        _loaded = load_ci_toml(REPO)
+        ci = _loaded.ci
+        findings = _loaded.findings
         assert ci is not None, findings
         self.ci = ci
         self._tmp = tempfile.TemporaryDirectory()

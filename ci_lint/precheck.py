@@ -149,7 +149,9 @@ def is_local_run(local_flag: bool) -> bool:
 
 def run_precheck(repo_root: Path, *, title: str = "", local: bool = False, live: bool = False) -> PrecheckResult:
     start = time.monotonic()
-    ci, findings = load_ci_toml(repo_root)
+    _loaded = load_ci_toml(repo_root)
+    ci = _loaded.ci
+    findings = _loaded.findings
     all_findings: list[Finding] = list(findings)
     cache_arithmetic: str | None = None
     local_run = is_local_run(local)

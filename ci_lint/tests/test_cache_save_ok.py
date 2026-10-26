@@ -15,7 +15,9 @@ REPO = FIXTURES / "runtime" / "cache" / "repo"
 
 class SaveOkTest(unittest.TestCase):
     def setUp(self) -> None:
-        ci, findings = load_ci_toml(REPO)
+        _loaded = load_ci_toml(REPO)
+        ci = _loaded.ci
+        findings = _loaded.findings
         assert ci is not None, findings
         self.ci = ci
 
@@ -26,7 +28,9 @@ class SaveOkTest(unittest.TestCase):
 
     # -- C/C++ object-cache families (zackees/ci.yml#393) -----------------
     def test_ccache_family_follows_the_base_layer_writer_rule(self) -> None:
-        ci, findings = load_ci_toml(FIXTURES / "CACHE-004" / "green-cpp")
+        _loaded = load_ci_toml(FIXTURES / "CACHE-004" / "green-cpp")
+        ci = _loaded.ci
+        findings = _loaded.findings
         assert ci is not None, findings
         for fam in ("ccache", "zccache"):
             pr = evaluate_save_ok(ci, SaveOkRequest(family=fam, flow="pr", event="pull_request"))

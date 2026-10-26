@@ -13,12 +13,12 @@ from ci_lint.tests.helpers import fixture, requires_yaml_tooling
 class ShellFixtureTest(unittest.TestCase):
     def test_gen_005_multiline_run_step(self) -> None:
         repo = fixture("GEN-005", "red")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         rules = [f.rule for f in check_group3(ci, repo)]
         self.assertIn("GEN-005", rules)
 
         repo = fixture("GEN-005", "green")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         rules = [f.rule for f in check_group3(ci, repo)]
         self.assertNotIn("GEN-005", rules)
 
@@ -27,11 +27,11 @@ class ShellFixtureTest(unittest.TestCase):
         # command may wrap over backslash-continued lines; two commands,
         # control syntax, or a non-allowlisted cmake mode still may not.
         repo = fixture("GEN-005", "green-cmake")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         self.assertEqual([], [f for f in check_group3(ci, repo) if f.rule == "GEN-005"])
 
         repo = fixture("GEN-005", "red-cmake")
-        ci, _ = load_ci_toml(repo)
+        ci = load_ci_toml(repo).ci
         found = [f for f in check_group3(ci, repo) if f.rule == "GEN-005"]
         self.assertEqual(4, len(found), [f.message for f in found])
         by_step = {f.message.split(":", 1)[0]: f for f in found}

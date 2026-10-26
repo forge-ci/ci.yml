@@ -17,7 +17,9 @@ SHA = "c" * 40
 
 
 def load_ci():
-    ci, findings = load_ci_toml(fixture("TAG-001", "green"))
+    _loaded = load_ci_toml(fixture("TAG-001", "green"))
+    ci = _loaded.ci
+    findings = _loaded.findings
     assert ci is not None, findings
     return ci
 
@@ -204,7 +206,9 @@ class PlatformLanesFastSuitesLaneDigestsTest(unittest.TestCase):
         self.assertEqual({"fast", "dylint", "platform:windows-x64"}, set(plan.lane_digests))
 
     def test_platform_lane_wheel_is_carried_when_declared(self) -> None:
-        ci, findings = load_ci_toml(fixture("_e2e", "green"))
+        _loaded = load_ci_toml(fixture("_e2e", "green"))
+        ci = _loaded.ci
+        findings = _loaded.findings
         assert ci is not None, findings
         plan = compute_plan(ci, event_name="pull_request", title="[ci-windows] fix")
         lane = next(pl for pl in plan.platform_lanes if pl.id == "windows-x64")
