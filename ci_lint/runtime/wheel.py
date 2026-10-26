@@ -462,6 +462,18 @@ def check_wheel(  # noqa: C901
                     )
                 )
 
+        if ci.profile == "rust-pypi-app" and (parts.abi_tag != "abi3" or parts.python_tag != "cp310"):
+            findings.append(
+                Finding(
+                    rule="PKG-008",
+                    path=wheel_path.name,
+                    message=f"wheel tag is '{parts.python_tag}-{parts.abi_tag}', expected 'cp310-abi3' "
+                    "(the fleet abi3 floor, zackees/ci.yml#119)",
+                    fix='enable pyo3\'s "abi3-py310" feature on the Cargo dependency and rebuild with '
+                    'soldr wheel (a higher floor needs an [[exceptions]] entry, rule = "PKG-008")',
+                )
+            )
+
         native_member = next((n for n in names if _NATIVE_MEMBER_RE.search(n)), None)
         if native_member is None:
             findings.append(

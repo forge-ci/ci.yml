@@ -32,6 +32,9 @@ SDIST_RE = re.compile(r"^(?P<name>.+)-(?P<version>[^-]+)\.tar\.gz$")
 SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
 
 
+_CPXY_RE = re.compile(r"^cp3\d+$")
+
+
 class ReleaseVerifyError(Exception):
     """Bad input (missing --dist, unreadable ci.toml, ...) -- exit 2."""
 
@@ -288,6 +291,22 @@ def verify_staged_artifacts(  # noqa: C901
         )
     elif len(versions) == 1:
         version = next(iter(versions))
+
+    # PKG-008 (#119): a staged set must not contain any version-specific
+    # cpXY-cpXY wheel -- checked over every staged wheel, matched or not.
+    for staged_wheel in staged.wheels:
+        p = staged_wheel.parts
+        if _CPXY_RE.match(p.python_tag) and p.abi_tag == p.python_tag:
+            findings.append(
+                Finding(
+                    rule="PKG-008",
+                    path=staged_wheel.path.name,
+                    message=f"staged release set contains a version-specific '{p.python_tag}-{p.abi_tag}' "
+                    "wheel; a rust-pypi-app ships only cp310-abi3 wheels",
+                    fix='enable pyo3\'s "abi3-py310" feature on the Cargo dependency, rebuild, and '
+                    "re-stage only the cp310-abi3 wheels",
+                )
+            )
 
     # Reuse the existing wheel check (PKG-003/004/005) per staged wheel;
     # the sdist backend check only needs to run once (it reads the same
