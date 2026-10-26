@@ -8,7 +8,7 @@ import json
 import os
 import re
 import sys
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from ci_lint.act_audit import audit as run_act_audit
@@ -139,7 +139,22 @@ from ci_lint.settings_audit import run_audit as run_settings_audit
 from ci_lint.settings_audit import to_json_dict as settings_audit_to_json_dict
 
 
-def _load_event(path: str | None) -> dict[str, object]:
+@dataclass(frozen=True)
+class GitHubEvent:
+    """The GitHub event payload (the JSON boundary, typed `JsonValue`);
+    replaces the bare `dict[str, object]` record the helpers below took
+    (PY-002, zackees/ci.yml#193)."""
+
+    payload: dict[str, JsonValue]
+
+
+@dataclass(frozen=True)
+class CacheCreds:
+    token: str
+    repo_slug: str
+
+
+def _load_event(path: str | None) -> GitHubEvent:
     """Load the GitHub event payload from `--event`, falling back to the
     runner's `GITHUB_EVENT_PATH` (also set by act). Without this fallback a
     workflow step that omitted `--event` silently lost the PR head SHA, and
@@ -147,31 +162,31 @@ def _load_event(path: str | None) -> dict[str, object]:
     if path is None:
         path = os.environ.get("GITHUB_EVENT_PATH") or None
     if path is None:
-        return {}
+        return GitHubEvent({})
     try:
         with open(path, encoding="utf-8") as fh:
             data = json.load(fh)
     except (OSError, json.JSONDecodeError):
-        return {}
-    return data if isinstance(data, dict) else {}
+        return GitHubEvent({})
+    return GitHubEvent(data if isinstance(data, dict) else {})
 
 
-def _title_from_event(event: dict[str, object]) -> str | None:
-    pr = event.get("pull_request")
+def _title_from_event(event: GitHubEvent) -> str | None:
+    pr = event.payload.get("pull_request")
     if isinstance(pr, dict) and isinstance(pr.get("title"), str):
         return pr["title"]
     return None
 
 
-def _sha_from_event(event: dict[str, object]) -> str | None:
-    inputs = event.get("inputs")
+def _sha_from_event(event: GitHubEvent) -> str | None:
+    inputs = event.payload.get("inputs")
     if isinstance(inputs, dict) and isinstance(inputs.get("sha"), str):
         return inputs["sha"]
     return None
 
 
-def _pr_number_from_event(event: dict[str, object]) -> int | None:
-    pr = event.get("pull_request")
+def _pr_number_from_event(event: GitHubEvent) -> int | None:
+    pr = event.payload.get("pull_request")
     if isinstance(pr, dict):
         number = pr.get("number")
         if isinstance(number, int) and not isinstance(number, bool) and number > 0:
@@ -179,8 +194,8 @@ def _pr_number_from_event(event: dict[str, object]) -> int | None:
     return None
 
 
-def _head_sha_from_event(event: dict[str, object]) -> str | None:
-    pr = event.get("pull_request")
+def _head_sha_from_event(event: GitHubEvent) -> str | None:
+    pr = event.payload.get("pull_request")
     if isinstance(pr, dict):
         head = pr.get("head")
         if isinstance(head, dict) and isinstance(head.get("sha"), str):
@@ -188,7 +203,7 @@ def _head_sha_from_event(event: dict[str, object]) -> str | None:
     return None
 
 
-def _compute_reuse_for_plan(plan: Plan, event_name: str, event: dict[str, object]) -> ReuseResult:
+def _compute_reuse_for_plan(plan: Plan, event_name: str, event: GitHubEvent) -> ReuseResult:
     """Round-3A brief, Part 2. Only ever makes a network call for the
     `pull_request` event, and only when GITHUB_TOKEN, GITHUB_REPOSITORY,
     and the PR's head SHA (from the event payload) are all available --
@@ -685,8 +700,8 @@ def _cmd_gate(args: argparse.Namespace) -> int:
         repo=repo_slug,
         default_branch_reuse=db_reuse,
         push_sha=push_sha,
-        attested_jobs=_attested_gate_jobs(args, event, needs),
-        queue_reuse=_queue_gate_jobs(args, event, needs),
+        attested_jobs=_attested_gate_jobs(args, event.payload, needs),
+        queue_reuse=_queue_gate_jobs(args, event.payload, needs),
         workflow_jobs=_native_gate_jobs(args, needs),
     )
     print(json.dumps(gate_to_json_dict(report), indent=2) if args.json else render_gate_text(report))
@@ -717,7 +732,7 @@ def _cmd_audit(args: argparse.Namespace) -> int:
     creds = _cache_write_creds("audit")  # same env contract: GITHUB_TOKEN + GITHUB_REPOSITORY
     if creds is None:
         return 1
-    token, repo_slug = creds
+    token, repo_slug = creds.token, creds.repo_slug
     report = run_settings_audit(
         ci,
         fetch_status=default_fetch_status,
@@ -959,13 +974,13 @@ def _cmd_cache_save_ok(args: argparse.Namespace) -> int:
     return 0
 
 
-def _cache_write_creds(command: str) -> tuple[str, str] | None:
+def _cache_write_creds(command: str) -> CacheCreds | None:
     token = os.environ.get("GITHUB_TOKEN")
     repo_slug = os.environ.get("GITHUB_REPOSITORY")
     if not token or not repo_slug:
         print(f"ci-lint cache {command}: GITHUB_TOKEN and GITHUB_REPOSITORY are required", file=sys.stderr)
         return None
-    return token, repo_slug
+    return CacheCreds(token, repo_slug)
 
 
 def _cmd_cache_payload_check(args: argparse.Namespace) -> int:
@@ -1019,7 +1034,7 @@ def _cmd_cache_audit(args: argparse.Namespace) -> int:
     creds = _cache_write_creds("audit")  # "write" is a misnomer here -- audit only needs actions: read
     if creds is None:
         return 1
-    token, repo_slug = creds
+    token, repo_slug = creds.token, creds.repo_slug
     try:
         report = run_audit(
             ci, fetch=default_fetch, graphql=default_graphql, token=token, repo=repo_slug,
@@ -1074,7 +1089,7 @@ def _cmd_cache_trim(args: argparse.Namespace) -> int:
     creds = _cache_write_creds("trim")
     if creds is None:
         return 1
-    token, repo_slug = creds
+    token, repo_slug = creds.token, creds.repo_slug
     delete_fn = None if args.dry_run else default_delete
     result = cache_trim(
         ci, fetch=default_fetch, graphql=default_graphql, delete=delete_fn, token=token, repo=repo_slug,
@@ -1092,7 +1107,7 @@ def _cmd_cache_janitor(args: argparse.Namespace) -> int:
     creds = _cache_write_creds("janitor")
     if creds is None:
         return 1
-    token, repo_slug = creds
+    token, repo_slug = creds.token, creds.repo_slug
     delete_fn = None if args.dry_run else default_delete
     janitor_report = cache_janitor(
         ci, fetch=default_fetch, graphql=default_graphql, delete=delete_fn, token=token, repo=repo_slug,
@@ -1120,7 +1135,7 @@ def _cmd_cache_budget(args: argparse.Namespace) -> int:
     creds = _cache_write_creds("budget")  # only needs actions: read
     if creds is None:
         return 1
-    token, repo_slug = creds
+    token, repo_slug = creds.token, creds.repo_slug
     event = _load_event(args.event)
     event_name = args.event_name or os.environ.get("GITHUB_EVENT_NAME") or ""
     ref = args.ref or os.environ.get("GITHUB_REF") or ""
@@ -1147,7 +1162,7 @@ def _cmd_cache_heal(args: argparse.Namespace) -> int:
     creds = _cache_write_creds("heal")
     if creds is None:
         return 1
-    token, repo_slug = creds
+    token, repo_slug = creds.token, creds.repo_slug
     delete_fn = None if args.dry_run else default_delete
     result = cache_heal(delete=delete_fn, token=token, repo=repo_slug, key=args.key, ref=args.ref, dry_run=args.dry_run)
     print(json.dumps(result.to_json_dict(), indent=2) if args.json else result.render())
@@ -1162,7 +1177,7 @@ def _cmd_cache_preprune(args: argparse.Namespace) -> int:
     creds = _cache_write_creds("preprune")
     if creds is None:
         return 1
-    token, repo_slug = creds
+    token, repo_slug = creds.token, creds.repo_slug
     delete_fn = None if args.dry_run else default_delete
     preprune_report = cache_preprune(
         ci, fetch=default_fetch, graphql=default_graphql, delete=delete_fn, token=token, repo=repo_slug,

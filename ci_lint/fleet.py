@@ -47,6 +47,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
+from ci_lint.cargo_messages import JsonValue
 from ci_lint.finding import Finding, Status
 from ci_lint.github_api import FetchStatusFn, GitHubApiError
 from ci_lint.rules.default_branch_skip import _REUSE_CHECK_RE
@@ -124,32 +125,69 @@ class FleetReport:
 # ── API helpers ────────────────────────────────────────────────────────────
 
 
-def _get(fetch_status: FetchStatusFn, token: str, url: str) -> tuple[int, object] | None:
+def _get(fetch_status: FetchStatusFn, token: str, url: str) -> SettingsReply | None:
     try:
-        return fetch_status(url, token)
+        status, body = fetch_status(url, token)
+        return SettingsReply(status, body)
     except GitHubApiError:
         return None
 
 
-def list_owner_repos(fetch_status: FetchStatusFn, token: str, owner: str) -> tuple[list[RepoRef], str | None]:
-    """Every repository of `owner` (user or org), paginated. Returns
-    (repos, error-or-None)."""
+@dataclass(frozen=True)
+class OwnerListing:
+    """`list_owner_repos`'s result: the repositories read so far, plus an
+    error message when a page could not be listed."""
+
+    repos: tuple[RepoRef, ...]
+    error: str | None
+
+
+@dataclass(frozen=True)
+class FetchedFile:
+    """A contents-API read: HTTP status (0 = network failure) and the
+    decoded text, or None when unreadable."""
+
+    status: int
+    text: str | None
+
+
+@dataclass(frozen=True)
+class CiTomlCheck:
+    schema: int | None
+    findings: tuple[Finding, ...]
+
+
+@dataclass(frozen=True)
+class WorkflowCheck:
+    workflow_count: int
+    pr_entrypoints: tuple[str, ...]
+    findings: tuple[Finding, ...]
+
+
+@dataclass(frozen=True)
+class CacheUsageCheck:
+    cache_bytes: int | None
+    findings: tuple[Finding, ...]
+
+
+def list_owner_repos(fetch_status: FetchStatusFn, token: str, owner: str) -> OwnerListing:
+    """Every repository of `owner` (user or org), paginated."""
 
     repos: list[RepoRef] = []
     page = 1
     while True:
         url = f"{API_ROOT}/users/{owner}/repos?per_page=100&type=owner&page={page}"
         result = _get(fetch_status, token, url)
-        if result is None or result[0] != 200 or not isinstance(result[1], list):
-            status = "network error" if result is None else f"HTTP {result[0]}"
-            return repos, f"{owner}: listing repositories failed ({status})"
-        body = result[1]
+        if result is None or result.status != 200 or not isinstance(result.body, list):
+            status = "network error" if result is None else f"HTTP {result.status}"
+            return OwnerListing(tuple(repos), f"{owner}: listing repositories failed ({status})")
+        body = result.body
         for item in body:
             ref = _repo_ref(item)
             if ref is not None:
                 repos.append(ref)
         if len(body) < 100:
-            return repos, None
+            return OwnerListing(tuple(repos), None)
         page += 1
 
 
@@ -170,46 +208,51 @@ def _repo_ref(item: object) -> RepoRef | None:
 
 def fetch_repo(fetch_status: FetchStatusFn, token: str, full_name: str) -> RepoRef | None:
     result = _get(fetch_status, token, f"{API_ROOT}/repos/{full_name}")
-    if result is None or result[0] != 200:
+    if result is None or result.status != 200:
         return None
-    return _repo_ref(result[1])
+    return _repo_ref(result.body)
 
 
-def _fetch_file(fetch_status: FetchStatusFn, token: str, repo: str, path: str) -> tuple[int, str | None]:
-    """(status, decoded text or None). status 0 = network failure."""
+def _fetch_file(fetch_status: FetchStatusFn, token: str, repo: str, path: str) -> FetchedFile:
+    """The decoded text or None; status 0 = network failure."""
 
     result = _get(fetch_status, token, f"{API_ROOT}/repos/{repo}/contents/{path}")
     if result is None:
-        return 0, None
-    status, body = result
+        return FetchedFile(0, None)
+    status, body = result.status, result.body
     if status != 200 or not isinstance(body, dict):
-        return status, None
+        return FetchedFile(status, None)
     content = body.get("content")
     if not isinstance(content, str) or body.get("encoding") != "base64":
-        return status, None
+        return FetchedFile(status, None)
     try:
-        return status, base64.b64decode(content).decode("utf-8")
+        return FetchedFile(status, base64.b64decode(content).decode("utf-8"))
     except (ValueError, UnicodeDecodeError):
-        return status, None
+        return FetchedFile(status, None)
 
 
 # ── checks ─────────────────────────────────────────────────────────────────
 
 
-def check_ci_toml(repo: str, status: int, text: str | None) -> tuple[int | None, list[Finding]]:
+def check_ci_toml(repo: str, status: int, text: str | None) -> CiTomlCheck:
     subject = f"repo:{repo}"
     if status == 0:
-        return None, [
+        return CiTomlCheck(
+            None,
+            (
             Finding(
                 rule="FLEET-001",
                 path=subject,
                 status=Status.NEEDS_REVIEW,
                 message="could not read ci.toml (network error)",
                 fix="re-run `ci-lint fleet scan` once the GitHub API is reachable",
-            )
-        ]
+            ),
+            ),
+        )
     if status == 404 or text is None:
-        return None, [
+        return CiTomlCheck(
+            None,
+            (
             Finding(
                 rule="FLEET-001",
                 path=subject,
@@ -217,34 +260,41 @@ def check_ci_toml(repo: str, status: int, text: str | None) -> tuple[int | None,
                 fix="adopt ci.toml schema 3: start from examples/rust-pypi-app/ci.toml (or the "
                 "zackees/template-python-rust-cmd reference), keep only this repository's real "
                 "platforms/suites, and run `python3 -m ci_lint precheck --local` until it is clean",
-            )
-        ]
+            ),
+            ),
+        )
     try:
         doc = tomllib.loads(text)
     except tomllib.TOMLDecodeError as exc:
-        return 0, [
+        return CiTomlCheck(
+            0,
+            (
             Finding(
                 rule="FLEET-001",
                 path="ci.toml",
                 message=f"ci.toml does not parse as TOML: {exc}",
                 fix="fix the TOML syntax, then run `python3 -m ci_lint precheck --local`",
-            )
-        ]
+            ),
+            ),
+        )
     schema = doc.get("schema")
     if schema != 3:
-        return (schema if isinstance(schema, int) else 0), [
+        return CiTomlCheck(
+            (schema if isinstance(schema, int) else 0),
+            (
             Finding(
                 rule="FLEET-001",
                 path="ci.toml",
                 message=f"ci.toml declares schema = {schema!r}, not 3",
                 fix="migrate ci.toml to schema 3 (docs/ci-toml.md) and set `schema = 3`; the "
                 "schema-1 units/groups layout from proposal.md is superseded",
-            )
-        ]
-    return 3, []
+            ),
+            ),
+        )
+    return CiTomlCheck(3, ())
 
 
-def check_workflows(repo_root: Path) -> tuple[int, tuple[str, ...], list[Finding]]:
+def check_workflows(repo_root: Path) -> WorkflowCheck:
     """GEN-001, GEN-008, RUN-001 over materialized workflow files."""
 
     findings: list[Finding] = []
@@ -310,28 +360,33 @@ def check_workflows(repo_root: Path) -> tuple[int, tuple[str, ...], list[Finding
                 "then remove the pull_request trigger from the others",
             )
         )
-    return len(workflows), tuple(pr_entrypoints), findings
+    return WorkflowCheck(len(workflows), tuple(pr_entrypoints), tuple(findings))
 
 
-def check_cache_usage(fetch_status: FetchStatusFn, token: str, repo: str) -> tuple[int | None, list[Finding]]:
+def check_cache_usage(fetch_status: FetchStatusFn, token: str, repo: str) -> CacheUsageCheck:
     url = f"{API_ROOT}/repos/{repo}/actions/cache/usage"
     result = _get(fetch_status, token, url)
-    if result is None or result[0] != 200 or not isinstance(result[1], dict):
-        what = "network error" if result is None else f"HTTP {result[0]}"
-        return None, [
+    if result is None or result.status != 200 or not isinstance(result.body, dict):
+        what = "network error" if result is None else f"HTTP {result.status}"
+        return CacheUsageCheck(
+            None,
+            (
             Finding(
                 rule="FLEET-002",
                 path=f"repo:{repo}",
                 status=Status.NEEDS_REVIEW,
                 message=f"could not read Actions cache usage ({what})",
                 fix="re-run with a token that can read this repository's Actions caches",
-            )
-        ]
-    size = result[1].get("active_caches_size_in_bytes")
+            ),
+            ),
+        )
+    size = result.body.get("active_caches_size_in_bytes")
     if not isinstance(size, int):
-        return None, []
+        return CacheUsageCheck(None, ())
     if size >= FLEET_CACHE_LIMIT_BYTES * FLEET_CACHE_WARN_FRACTION:
-        return size, [
+        return CacheUsageCheck(
+            size,
+            (
             Finding(
                 rule="FLEET-002",
                 path=f"repo:{repo}",
@@ -339,9 +394,10 @@ def check_cache_usage(fetch_status: FetchStatusFn, token: str, repo: str) -> tup
                 f"{int(FLEET_CACHE_WARN_FRACTION * 100)}% of the 10 GiB repository limit (eviction churn)",
                 fix="declare a [cache] budget in ci.toml and run `ci-lint cache audit`/`cache janitor` "
                 "to remove CACHE-008 entries (closed-PR, stale-base, retired families)",
-            )
-        ]
-    return size, []
+            ),
+            ),
+        )
+    return CacheUsageCheck(size, ())
 
 
 # ── FLEET-003: default-branch CI burn ─────────────────────────────────────
@@ -430,8 +486,8 @@ def check_fleet_003(
             return []
     url = f"{API_ROOT}/repos/{repo}/actions/runs?per_page={FLEET_BURN_RUNS_PER_PAGE}"
     result = _get(fetch_status, token, url)
-    if result is None or result[0] != 200 or not isinstance(result[1], dict):
-        what = "network error" if result is None else f"HTTP {result[0]}"
+    if result is None or result.status != 200 or not isinstance(result.body, dict):
+        what = "network error" if result is None else f"HTTP {result.status}"
         return [
             Finding(
                 rule="FLEET-003",
@@ -441,7 +497,7 @@ def check_fleet_003(
                 fix="re-run `ci-lint fleet scan` with a token that can read this repository's Actions runs",
             )
         ]
-    runs = result[1].get("workflow_runs")
+    runs = result.body.get("workflow_runs")
     burn = burn_share(runs if isinstance(runs, list) else [], default_branch)
     if burn.push_runs == 0 or burn.share < FLEET_BURN_SHARE:
         return []
@@ -473,19 +529,21 @@ def check_fleet_003(
 def scan_repo(fetch_status: FetchStatusFn, token: str, ref: RepoRef) -> RepoScan:
     repo = ref.full_name
     findings: list[Finding] = []
-    status, text = _fetch_file(fetch_status, token, repo, "ci.toml")
-    schema, ci_findings = check_ci_toml(repo, status, text)
-    findings.extend(ci_findings)
+    ci_file = _fetch_file(fetch_status, token, repo, "ci.toml")
+    text = ci_file.text
+    ci_check = check_ci_toml(repo, ci_file.status, text)
+    schema = ci_check.schema
+    findings.extend(ci_check.findings)
 
     workflow_texts: dict[str, str] = {}
     listing = _get(fetch_status, token, f"{API_ROOT}/repos/{repo}/contents/.github/workflows")
-    if listing is not None and listing[0] == 200 and isinstance(listing[1], list):
-        for item in listing[1]:
+    if listing is not None and listing.status == 200 and isinstance(listing.body, list):
+        for item in listing.body:
             if not isinstance(item, dict):
                 continue
             name = item.get("name")
             if isinstance(name, str) and name.endswith((".yml", ".yaml")) and item.get("type") == "file":
-                _, wf_text = _fetch_file(fetch_status, token, repo, f".github/workflows/{name}")
+                wf_text = _fetch_file(fetch_status, token, repo, f".github/workflows/{name}").text
                 if wf_text is not None:
                     workflow_texts[f".github/workflows/{name}"] = wf_text
     elif listing is None:
@@ -506,8 +564,8 @@ def scan_repo(fetch_status: FetchStatusFn, token: str, ref: RepoRef) -> RepoScan
             dest = root / rel
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_text(wf_text, encoding="utf-8")
-        wf_count, pr_entrypoints, wf_findings = check_workflows(root)
-        findings.extend(wf_findings)
+        wf_check = check_workflows(root)
+        findings.extend(wf_check.findings)
         findings.extend(check_rust_014(fetch_status, token, root))
         findings.extend(check_cache_025(root))
         relief = workflow_relief(root)
@@ -527,15 +585,15 @@ def scan_repo(fetch_status: FetchStatusFn, token: str, ref: RepoRef) -> RepoScan
         )
     )
 
-    cache_bytes, cache_findings = check_cache_usage(fetch_status, token, repo)
-    findings.extend(cache_findings)
+    cache_check = check_cache_usage(fetch_status, token, repo)
+    findings.extend(cache_check.findings)
     return RepoScan(
         repo=repo,
         default_branch=ref.default_branch,
         ci_toml_schema=schema,
-        workflow_count=wf_count,
-        pr_entrypoints=pr_entrypoints,
-        cache_bytes=cache_bytes,
+        workflow_count=wf_check.workflow_count,
+        pr_entrypoints=wf_check.pr_entrypoints,
+        cache_bytes=cache_check.cache_bytes,
         findings=tuple(findings),
         sync_issues_opt_in=sync_issues_opt_in,
     )
@@ -567,10 +625,10 @@ def run_fleet_scan(
                 targets.append(found)
     else:
         for owner in owners:
-            owned, err = list_owner_repos(fetch_status, token, owner)
-            if err:
-                errors.append(err)
-            targets.extend(r for r in owned if not r.archived and (include_forks or not r.fork))
+            listing = list_owner_repos(fetch_status, token, owner)
+            if listing.error:
+                errors.append(listing.error)
+            targets.extend(r for r in listing.repos if not r.archived and (include_forks or not r.fork))
     scans = [scan_repo(fetch_status, token, t) for t in targets]
     scans.sort(key=lambda s: (-s.score, s.repo))
     return FleetReport(owners=owners, repos=tuple(scans), errors=tuple(errors))
@@ -579,7 +637,7 @@ def run_fleet_scan(
 # ── rendering ──────────────────────────────────────────────────────────────
 
 
-def finding_to_json(f: Finding) -> dict[str, str | int | None]:
+def finding_to_json(f: Finding) -> dict[str, JsonValue]:
     return {
         "rule": f.rule,
         "status": f.status.value,
@@ -590,7 +648,7 @@ def finding_to_json(f: Finding) -> dict[str, str | int | None]:
     }
 
 
-def to_json_dict(report: FleetReport) -> dict[str, object]:
+def to_json_dict(report: FleetReport) -> dict[str, JsonValue]:
     return {
         "owners": list(report.owners),
         "errors": list(report.errors),

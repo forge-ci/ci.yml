@@ -32,7 +32,7 @@ class EventPathFallbackTest(unittest.TestCase):
 
     def test_no_flag_no_env_is_empty(self) -> None:
         with mock.patch.dict(os.environ, {}, clear=True):
-            self.assertEqual(_load_event(None), {})
+            self.assertEqual(_load_event(None).payload, {})
 
 
 if __name__ == "__main__":

@@ -16,6 +16,7 @@ from contextlib import redirect_stdout
 from ci_lint import cli
 from ci_lint.finding import Finding, Status
 from ci_lint.fleet import (
+    CiTomlCheck,
     RepoScan,
     burn_share,
     check_ci_toml,
@@ -97,9 +98,10 @@ class FleetUnitTest(unittest.TestCase):
                 workflow.write_text("on: [pull_request]\njobs: {}\n", encoding="utf-8")
                 unreadable = LoadResult(LoadStatus.NEEDS_REVIEW, None, reason)
                 with patch("ci_lint.workflow_scan.load_yaml_file", return_value=unreadable):
-                    count, prs, found = check_workflows(root)
-                self.assertEqual(count, 1)
-                self.assertEqual(prs, ())
+                    check = check_workflows(root)
+                found = check.findings
+                self.assertEqual(check.workflow_count, 1)
+                self.assertEqual(check.pr_entrypoints, ())
                 trigger_findings = [finding for finding in found if finding.rule == "GEN-001"]
                 self.assertEqual(len(trigger_findings), 1)
                 self.assertEqual(trigger_findings[0].status, Status.NEEDS_REVIEW)
@@ -107,10 +109,10 @@ class FleetUnitTest(unittest.TestCase):
                 self.assertEqual(plan_repo(_scan(tuple(found)), []), [])
 
     def test_ci_toml_schema_states(self) -> None:
-        self.assertEqual(check_ci_toml("o/r", 200, "schema = 3\n"), (3, []))
-        schema, f = check_ci_toml("o/r", 200, "schema = 1\n")
-        self.assertEqual((schema, f[0].rule), (1, "FLEET-001"))
-        self.assertEqual(check_ci_toml("o/r", 0, None)[1][0].status, Status.NEEDS_REVIEW)
+        self.assertEqual(check_ci_toml("o/r", 200, "schema = 3\n"), CiTomlCheck(3, ()))
+        one = check_ci_toml("o/r", 200, "schema = 1\n")
+        self.assertEqual((one.schema, one.findings[0].rule), (1, "FLEET-001"))
+        self.assertEqual(check_ci_toml("o/r", 0, None).findings[0].status, Status.NEEDS_REVIEW)
 
     def test_gen_001_without_ci_yml_entrypoint(self) -> None:
         import tempfile
@@ -122,8 +124,8 @@ class FleetUnitTest(unittest.TestCase):
             wf = Path(tmp) / ".github" / "workflows" / "test.yml"
             wf.parent.mkdir(parents=True)
             wf.write_text("on:\n  push:\njobs:\n  a:\n    runs-on: ubuntu-24.04\n", encoding="utf-8")
-            count, prs, found = check_workflows(Path(tmp))
-        self.assertEqual((count, prs, [f.rule for f in found]), (1, (), ["GEN-001"]))
+            check = check_workflows(Path(tmp))
+        self.assertEqual((check.workflow_count, check.pr_entrypoints, [f.rule for f in check.findings]), (1, (), ["GEN-001"]))
 
 
 _RUNS = "https://api.github.com/repos/o/r/actions/runs?per_page=100"
