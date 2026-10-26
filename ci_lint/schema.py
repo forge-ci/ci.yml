@@ -85,6 +85,12 @@ class RustConfig:
     private: str
     ship: tuple[tuple[str, ...], ...]
     tests: RustTests | None
+    # #95: "amalgam" (default) -- the public crate is a re-export amalgam whose
+    # [features] wire private crates only (RUST-011's shape clause). "library"
+    # -- the public crate IS the implementation of a `rust-library` profile and
+    # its [features] gate optional public integrations; RUST-011 skips only the
+    # feature-shape clause (private-crate, command and runtime halves still run).
+    public_role: str = "amalgam"
 
 
 # ── Lint lanes ────────────────────────────────────────────────────────────
@@ -329,6 +335,7 @@ class FleetConfig:
 # ── Reuse (GEN-021 default-branch reuse, phase 2) ────────────────────────
 
 _REUSE_MODES: tuple[str, ...] = ("off", "shadow", "enforce")
+RUST_PUBLIC_ROLES: tuple[str, ...] = ("amalgam", "library")
 _MAX_AGE_HOURS_MAX = 168.0
 
 
@@ -505,6 +512,7 @@ def _parse_rust(root: Cursor) -> RustConfig | None:
     public = sub.str_("public") or ""
     private = sub.str_("private") or ""
     ship = sub.list_str_list("ship", required=False)
+    public_role = sub.str_("public-role", required=False, default="amalgam") or "amalgam"
     tests_raw = sub.table_("tests", required=False)
     tests = None
     if tests_raw is not None:
@@ -515,7 +523,7 @@ def _parse_rust(root: Cursor) -> RustConfig | None:
         tsub.finish()
         tests = RustTests(max_binary=max_binary, max_total=max_total, binaries=binaries)
     sub.finish()
-    return RustConfig(public=public, private=private, ship=ship, tests=tests)
+    return RustConfig(public=public, private=private, ship=ship, tests=tests, public_role=public_role)
 
 
 def _parse_lint_dylint(root: Cursor) -> DylintConfig | None:
@@ -1359,6 +1367,21 @@ def _validate_cross_refs(ci: CiToml) -> list[Finding]:  # noqa: C901
             bad(
                 f"'tags.{tid}.flow' references unknown flow '{tag.flow}'",
                 f"declare '[flow.{tag.flow}]' in ci.toml, or fix 'tags.{tid}.flow'",
+            )
+
+    # #95: [rust].public-role is an enum, and "library" only fits a library profile.
+    if ci.rust is not None:
+        if ci.rust.public_role not in RUST_PUBLIC_ROLES:
+            bad(
+                f"'rust.public-role' must be one of {', '.join(repr(r) for r in RUST_PUBLIC_ROLES)}, "
+                f"got {ci.rust.public_role!r}",
+                "set 'rust.public-role' to \"amalgam\" (default) or \"library\"",
+            )
+        elif ci.rust.public_role == "library" and ci.profile != "rust-library":
+            bad(
+                f"'rust.public-role' = \"library\" requires profile 'rust-library', got {ci.profile!r}",
+                "remove 'rust.public-role' (a shipped app's public crate is a re-export amalgam), "
+                "or fix 'profile'",
             )
 
     # profile requirements (section A)
