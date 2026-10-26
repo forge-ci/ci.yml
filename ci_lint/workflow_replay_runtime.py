@@ -111,7 +111,8 @@ def run_checked_command(repo: Path, argv: tuple[str, ...], config: ReplayConfig,
     expectation = ReplayExpectation(config.repository, repo, head, tree, plan.workflow,
                                     plan.selected, config.mode, plan.required,
                                     "pr" if plan.event == "pull_request" else plan.event, plan.event,
-                                    plan.inputs, config.execution_pins)
+                                    plan.inputs, config.execution_pins,
+                                    repository_aliases=config.repository_aliases)
     start = time.monotonic()
     with tempfile.TemporaryDirectory(prefix="ci-replay-") as scratch:
         report = Path(scratch) / "report.json"

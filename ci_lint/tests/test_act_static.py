@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from ci_lint.act_static import check_act_002
+from ci_lint.act_static import check_act_002, check_act_003
 from ci_lint.finding import Status
 
 
@@ -65,3 +65,38 @@ class Act002Test(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Act003Test(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = Path(tempfile.mkdtemp())
+
+    def tearDown(self) -> None:
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _wf(self, text: str) -> None:
+        path = self.tmp / ".github" / "workflows" / "ci.yml"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+
+    def test_clud_setup_uv_exception_is_clean(self) -> None:
+        self._wf(
+            "jobs:\n  t:\n    steps:\n      - name: Set up uv\n        uses: astral-sh/setup-uv@v5\n"
+            "        with:\n          # exception zackees/ci.yml#226\n"
+            "          prune-cache: ${{ !env.ACT }}\n"
+            "          cache-suffix: ${{ env.ACT && 'act-unpruned' || '' }}\n"
+            "      - run: echo $ACT_BIN\n"
+        )
+        self.assertEqual(check_act_003(self.tmp), [])
+
+    def test_soldr_save_cache_override_and_run_condition(self) -> None:
+        self._wf(
+            "jobs:\n  t:\n    steps:\n      - uses: zackees/setup-soldr@v0\n        with:\n"
+            "          save-cache: ${{ env.ACT && 'true' || 'auto' }}\n"
+            "      - if: ${{ !env.ACT }}\n        run: echo hi\n"
+            "      - run: '[ \"$ACT\" = true ] && exit 0'\n"
+            "      - uses: astral-sh/setup-uv@v5\n        with:\n          enable-cache: ${{ env.ACT }}\n"
+            "      - run: echo ${{ env.ACT }}  # ci-lint: allow ACT-003 diagnostic only\n"
+        )
+        lines = sorted(f.line or 0 for f in check_act_003(self.tmp))
+        self.assertEqual(lines, [6, 7, 9, 12])

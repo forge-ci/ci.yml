@@ -135,6 +135,18 @@ class WorkflowReplayTest(unittest.TestCase):
             }]}]},
         }
 
+    def test_repository_accepts_only_declared_former_names(self) -> None:
+        moved = replace(self.expected, repository="new/repo", repository_aliases=("owner/repo",))
+        self.assertEqual(prove_replay(self.raw, moved).jobs, ("CI/Tests",))
+        for expected in (replace(self.expected, repository="new/repo"),
+                         replace(self.expected, repository="new/repo", repository_aliases=("other/repo",))):
+            with self.assertRaisesRegex(ValueError, "metadata mismatch: repository"):
+                prove_replay(self.raw, expected)
+        raw = copy.deepcopy(self.raw)
+        del raw["repository"]
+        with self.assertRaisesRegex(ValueError, "metadata mismatch: repository"):
+            prove_replay(raw, moved)
+
     def test_public_proof_requires_every_source_excluded_job(self) -> None:
         executed = replace(self.expected.required_jobs[0], identity=(identity_part("tests"),))
         excluded = derive_checks(ExpandedJob(
