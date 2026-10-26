@@ -33,6 +33,7 @@ from ci_lint.github_api import GitHubApiError, default_fetch, default_fetch_stat
 from ci_lint.merge_queue_trust import decide_merge_group, merge_group_event
 from ci_lint.gate_bare_tools import check_no_bare_rust
 from ci_lint.remote_only import check_gate_012
+from ci_lint.act_static import check_act_002
 from ci_lint.rules.cpp_ctest import check_cpp_001
 from ci_lint.rules.host_sweeps import check_gen_030
 from ci_lint.rules.swatinem_ban import check_cache_025
@@ -285,6 +286,7 @@ def _cmd_lint(args: argparse.Namespace) -> int:
     if config is not None:
         findings = findings + check_gate_static(config, repo) + check_no_bare_rust(repo, config.run) + check_gate_012(repo)
         findings = findings + check_cache_025(repo)
+        findings = findings + check_act_002(repo, (config.run, *(lane.run for lane in config.lanes)))
         gate_scripts = tuple(
             tok for argv in (config.run, *(lane.run for lane in config.lanes)) for tok in argv if CI_SCRIPT_RE.match(tok)
         )
