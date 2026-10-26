@@ -198,3 +198,83 @@ def check_act_002(repo_root: Path, gate_runs: Sequence[Sequence[str]] = ()) -> l
         findings.extend(_file_findings(path, path.relative_to(repo_root).as_posix()))
     findings.extend(_bosn_findings(repo_root))
     return findings
+
+
+# --- ACT-003 (zackees/ci.yml#226): act-only workarounds in workflows ---------
+
+RULE_003 = "ACT-003"
+# Registered exceptions: (action prefix, input) pairs a workflow may key on
+# `ACT`, each with its tracking issue. Only a stock action that exposes the
+# knob but has no runner-aware default qualifies (docs/policy-general.md).
+@dataclass(frozen=True)
+class ActException:
+    action_prefix: str
+    input_name: str
+    issue: str
+
+
+ACT_003_EXCEPTIONS: tuple[ActException, ...] = (
+    ActException("astral-sh/setup-uv@", "prune-cache", "zackees/ci.yml#226"),
+    ActException("astral-sh/setup-uv@", "cache-suffix", "zackees/ci.yml#226"),
+)
+FIX_003 = ("drop the act-only workaround -- fix it in act2, bosn or the action -- or register an ACT-003 "
+           "exception (docs/policy-general.md 'Stock actions work out of the box under act2')")
+_ACT_REF_RE = re.compile(r"""\benv\.ACT\b|\benv\[\s*['"]ACT['"]\s*\]|\$\{?ACT\b(?!_)""")
+_STEP_RE = re.compile(r"^\s*-\s")
+_USES_RE = re.compile(r"^\s*(?:-\s+)?uses:\s*['\"]?([^\s'\"#]+)")
+_KEY_RE = re.compile(r"^\s*(?:-\s+)?([\w-]+):")
+
+
+def _workflow_files(repo_root: Path) -> list[Path]:
+    files: list[Path] = []
+    wf = repo_root / ".github" / "workflows"
+    if wf.is_dir():
+        files.extend(p for p in sorted(wf.iterdir()) if p.suffix in (".yml", ".yaml"))
+    for name in ("action.yml", "action.yaml"):
+        files.extend(sorted(repo_root.glob(f".github/actions/*/{name}")))
+        if (repo_root / name).is_file():
+            files.append(repo_root / name)
+    return files
+
+
+def _registered(uses: str | None, key: str | None) -> str | None:
+    for exc in ACT_003_EXCEPTIONS:
+        if uses is not None and uses.startswith(exc.action_prefix) and key == exc.input_name:
+            return exc.issue
+    return None
+
+
+def _act_003_file(path: Path, rel: str) -> list[Finding]:
+    try:
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return []
+    out: list[Finding] = []
+    uses: str | None = None
+    for idx, line in enumerate(lines, start=1):
+        if line.lstrip().startswith("#"):
+            continue
+        if _STEP_RE.match(line):
+            uses = None
+        m = _USES_RE.match(line)
+        if m:
+            uses = m.group(1)
+        if not _ACT_REF_RE.search(line) or allowed(line, RULE_003):
+            continue
+        km = _KEY_RE.match(line)
+        if _registered(uses, km.group(1) if km else None) is not None:
+            continue
+        out.append(Finding(rule=RULE_003, path=rel, line=idx,
+                           message=f"act-only workaround keyed on ACT (`{line.strip()[:100]}`)", fix=FIX_003))
+    return out
+
+
+def check_act_003(repo_root: Path) -> list[Finding]:
+    """An `ACT`-keyed expression in a workflow or composite action is a
+    violation unless it is a registered exception (`ACT_003_EXCEPTIONS`) or
+    the line carries `# ci-lint: allow ACT-003 <reason>`."""
+
+    findings: list[Finding] = []
+    for path in _workflow_files(repo_root):
+        findings.extend(_act_003_file(path, path.relative_to(repo_root).as_posix()))
+    return findings

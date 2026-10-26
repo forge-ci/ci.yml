@@ -30,7 +30,7 @@ from ci_lint.rules.merge_queue import check_gen_022
 from ci_lint.gate_bare_tools import check_no_bare_rust
 from ci_lint.local_gate import GATE_FILE, check_gate_static
 from ci_lint.remote_only import check_gate_012
-from ci_lint.act_static import check_act_002
+from ci_lint.act_static import check_act_002, check_act_003
 from ci_lint.rules.ci_pre import check_group12
 from ci_lint.rules.contract import check_ct_006, check_tag_001, check_tag_002
 from ci_lint.rules.layout import check_group6
@@ -141,7 +141,7 @@ GROUP_LABELS: dict[int, str] = {
     15: "paths blast radius + platform check-only coverage + cook safety (GEN-007, RUST-008/010)",
     16: "default-branch skips only through verified reuse (GEN-021)",
     17: "local gate first: remote quick gate mirrors the local gate, PR entry verifies it (GATE-001/002)",
-    18: "remote-only checks never gate a PR: CodeRabbit suppressed, act-impossible steps confined, no app waits (GATE-012); local workflow runs go through bosn -> pinned act2, no legacy action-cache flags (ACT-002)",
+    18: "remote-only checks never gate a PR: CodeRabbit suppressed, act-impossible steps confined, no app waits (GATE-012); local workflow runs go through bosn -> pinned act2, no legacy action-cache flags (ACT-002); no unregistered ACT-keyed workaround in a workflow (ACT-003)",
     19: "function-complexity ratchet: clippy and ruff ceilings, per-function expect/noqa only (RUST-018, PY-004)",
     20: "GitHub API budget: no unbounded GitHub re-read loops in run:, ci/ or skill/tool scripts (GHAPI-001)",
     21: "async guard lints: workspace deny + member inheritance + clippy.toml well-formed (RUST-019)",
@@ -229,6 +229,7 @@ def run_precheck(repo_root: Path, *, title: str = "", local: bool = False, live:
         gate_cfg = ci.local.gate
         gate_runs = () if gate_cfg is None else (gate_cfg.run, *(lane.run for lane in gate_cfg.lanes))
         all_findings.extend(check_act_002(repo_root, gate_runs))
+        all_findings.extend(check_act_003(repo_root))
         if ci.local.gate is not None:
             all_findings.extend(check_gate_static(ci.local.gate, repo_root))
             all_findings.extend(check_no_bare_rust(repo_root, ci.local.gate.run, workflows=False))
