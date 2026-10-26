@@ -37,14 +37,13 @@ network.
 from __future__ import annotations
 
 import json
-
 import re
 import urllib.parse
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta, timezone
 
 from ci_lint.cargo_messages import JsonValue
-from ci_lint.github_api import FetchStatusFn, GitHubApiError
+from ci_lint.github_api import FetchStatusFn, GitHubApiError, HttpResult
 
 API_ROOT = "https://api.github.com"
 SCHEMA_VERSION = 1
@@ -202,7 +201,7 @@ class _Api:
     fetch_status: FetchStatusFn
     token: str
     calls: int = 0
-    cache: dict[str, tuple[int, JsonValue]] = field(default_factory=dict)
+    cache: dict[str, HttpResult] = field(default_factory=dict)
 
     def get(self, path: str) -> JsonValue:
         """GET `API_ROOT + path`; any non-200, transport failure, or rate
@@ -215,11 +214,12 @@ class _Api:
         if cached is None:
             self.calls += 1
             try:
-                cached = self.fetch_status(url, self.token)
+                fetched_status, fetched_body = self.fetch_status(url, self.token)
             except GitHubApiError as exc:
                 raise _Stop("api-error", f"GET {path} failed: {exc}") from exc
+            cached = HttpResult(fetched_status, fetched_body)
             self.cache[url] = cached
-        status, body = cached
+        status, body = cached.status, cached.body
         if status == 200:
             return body
         message = body.get("message") if isinstance(body, dict) else None
@@ -270,7 +270,20 @@ def _tree_of(api: _Api, repo: str, sha: str) -> str:
     return tree
 
 
-def _associated_pr(api: _Api, req: ReuseRequest) -> tuple[int, str]:
+@dataclass(frozen=True)
+class _AssociatedPr:
+    number: int
+    head_sha: str
+
+
+@dataclass(frozen=True)
+class _RunCandidate:
+    created: datetime
+    run_id: int
+    run: dict[str, JsonValue]
+
+
+def _associated_pr(api: _Api, req: ReuseRequest) -> _AssociatedPr:
     pulls = api.get(f"/repos/{req.repo}/commits/{req.sha}/pulls?per_page={PER_PAGE}")
     if not isinstance(pulls, list):
         raise _Stop("api-malformed", f"commits/{req.sha}/pulls: not a list")
@@ -306,7 +319,7 @@ def _associated_pr(api: _Api, req: ReuseRequest) -> tuple[int, str]:
             f"PR #{number}'s head is in '{head_repo or '<deleted repository>'}', not '{req.repo}' -- a fork "
             "head's CI ran with a restricted token/secrets and is never reused",
         )
-    return number, head_sha
+    return _AssociatedPr(number, head_sha)
 
 
 def _select_run(  # noqa: C901
@@ -316,7 +329,7 @@ def _select_run(  # noqa: C901
     head_sha: str,
     event: str = "pull_request",
 ) -> dict[str, JsonValue]:
-    candidates: list[tuple[datetime, int, dict[str, JsonValue]]] = []
+    candidates: list[_RunCandidate] = []
     for run in runs:
         # The listing is already filtered by head_sha/event server-side;
         # re-check both so a mis-filtered response can never widen the proof.
@@ -330,9 +343,10 @@ def _select_run(  # noqa: C901
             raise _Stop("api-malformed", f"a {workflow} run has no created_at/id")
         if created > req.now:
             continue  # did not exist yet at the evaluation clock
-        candidates.append((created, run_id, run))
-    candidates.sort(key=lambda c: (c[0], c[1]), reverse=True)
-    for _created, run_id, run in candidates:
+        candidates.append(_RunCandidate(created, run_id, run))
+    candidates.sort(key=lambda c: (c.created, c.run_id), reverse=True)
+    for candidate in candidates:
+        run_id, run = candidate.run_id, candidate.run
         status = _str(run.get("status"))
         conclusion = _str(run.get("conclusion"))
         if status != "completed":
@@ -490,7 +504,8 @@ def _decide(req: ReuseRequest, api: _Api | None) -> ReuseDecision:
     tree: str | None = None
     evidence: list[RunEvidence] = []
     try:
-        pr, head_sha = _associated_pr(api, req)
+        associated = _associated_pr(api, req)
+        pr, head_sha = associated.number, associated.head_sha
         tree = _tree_of(api, req.repo, req.sha)
         proof = f"tree {tree[:12]} == PR #{pr} head {head_sha[:12]}"
         proving_sha = head_sha

@@ -53,6 +53,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from ci_lint.cargo_messages import JsonValue
 from ci_lint.finding import Finding
 from ci_lint.plan import dylint_target_platform_ids
 from ci_lint.schema import CiToml
@@ -105,8 +106,16 @@ class DylintLogEvidence:
 
 
 @dataclass(frozen=True)
+class RequiredTarget:
+    """A `[platforms]` entry the plan requires a Dylint pass for."""
+
+    platform_id: str
+    target: str
+
+
+@dataclass(frozen=True)
 class DylintCoverageReport:
-    required: tuple[tuple[str, str], ...]  # (platform_id, target triple) the plan requires
+    required: tuple[RequiredTarget, ...]  # the targets the plan requires
     sources: tuple[DylintLogEvidence, ...]
     covered_targets: frozenset[str]
     findings: tuple[Finding, ...]
@@ -214,7 +223,7 @@ def _parse_log(path: Path) -> DylintLogEvidence:
 
 def compute_dylint_coverage(ci: CiToml, log_paths: list[Path]) -> DylintCoverageReport:
     required_ids = dylint_target_platform_ids(ci)
-    required = tuple((pid, ci.platforms[pid].target) for pid in required_ids)
+    required = tuple(RequiredTarget(pid, ci.platforms[pid].target) for pid in required_ids)
 
     sources = tuple(_parse_log(p) for p in log_paths)
 
@@ -222,7 +231,7 @@ def compute_dylint_coverage(ci: CiToml, log_paths: list[Path]) -> DylintCoverage
     for ev in sources:
         covered.update(ev.completed_targets)
         for toolchain in ev.toolchain_strings:
-            for _pid, target in required:
+            for target in (r.target for r in required):
                 if toolchain.endswith(target):
                     covered.add(target)
 
@@ -248,7 +257,7 @@ def compute_dylint_coverage(ci: CiToml, log_paths: list[Path]) -> DylintCoverage
             )
         )
 
-    for pid, target in required:
+    for pid, target in ((r.platform_id, r.target) for r in required):
         if target in covered or target in missing_std_targets:
             continue
         findings.append(
@@ -269,9 +278,9 @@ def compute_dylint_coverage(ci: CiToml, log_paths: list[Path]) -> DylintCoverage
     )
 
 
-def to_json_dict(report: DylintCoverageReport) -> dict[str, object]:
+def to_json_dict(report: DylintCoverageReport) -> dict[str, JsonValue]:
     return {
-        "required": [{"platform_id": pid, "target": target} for pid, target in report.required],
+        "required": [{"platform_id": r.platform_id, "target": r.target} for r in report.required],
         "sources": [
             {
                 "source": s.source,
@@ -293,7 +302,7 @@ def to_json_dict(report: DylintCoverageReport) -> dict[str, object]:
 def render_text(report: DylintCoverageReport) -> str:
     lines = [f"ci-lint dylint coverage: {len(report.required)} declared target(s), " f"{len(report.sources)} log source(s)"]
     lines.append(f"{'platform':<16} {'target':<26} {'covered':>7}")
-    for pid, target in report.required:
+    for pid, target in ((r.platform_id, r.target) for r in report.required):
         lines.append(f"{pid:<16} {target:<26} {'yes' if target in report.covered_targets else 'no':>7}")
     lines.append("")
     if not report.findings:

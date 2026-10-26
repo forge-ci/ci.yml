@@ -16,7 +16,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from ci_lint.cargo_messages import CompilerArtifact
+from ci_lint.cargo_messages import CompilerArtifact, JsonValue
 from ci_lint.cargo_scan import CargoCrate, effective_features
 from ci_lint.finding import Finding
 from ci_lint.globs import matches_any
@@ -47,6 +47,17 @@ class UnitsReport:
     unmatched_packages: tuple[str, ...]  # artifact package names not a workspace member
 
 
+@dataclass(frozen=True, order=True)
+class _UnitKey:
+    """A distinct compilation unit of one workspace member."""
+
+    package: str
+    features: tuple[str, ...]
+    profile: str
+    target_kind: str
+    target_triple: str
+
+
 def _profile_key(a: CompilerArtifact) -> str:
     return f"opt={a.opt_level}/debug={a.debuginfo}/test={a.profile_test}"
 
@@ -71,7 +82,7 @@ def compute_units(ci: CiToml, crates: list[CargoCrate], artifacts: list[Compiler
     member_names = {c.name for c in crates}
     declared_targets = frozenset(p.target for p in ci.platforms.values())
 
-    by_crate: dict[str, dict[tuple[tuple[str, ...], str, str, str], int]] = {}
+    counts: dict[_UnitKey, int] = {}
     unmatched: set[str] = set()
     for a in artifacts:
         if a.package_name not in member_names:
@@ -80,15 +91,18 @@ def compute_units(ci: CiToml, crates: list[CargoCrate], artifacts: list[Compiler
             continue
         target_kind = ",".join(sorted(a.target_kinds)) or "unknown"
         triple = _target_triple(declared_targets, a.filenames)
-        key = (a.features, _profile_key(a), target_kind, triple)
-        crate_units = by_crate.setdefault(a.package_name, {})
-        crate_units[key] = crate_units.get(key, 0) + 1
+        key = _UnitKey(a.package_name, a.features, _profile_key(a), target_kind, triple)
+        counts[key] = counts.get(key, 0) + 1
 
     crate_reports: list[CrateUnitsReport] = []
-    for name in sorted(by_crate):
+    for name in sorted({k.package for k in counts}):
         units = tuple(
-            CrateUnit(features=k[0], profile=k[1], target_kind=k[2], target_triple=k[3], occurrences=v)
-            for k, v in sorted(by_crate[name].items())
+            CrateUnit(
+                features=k.features, profile=k.profile, target_kind=k.target_kind, target_triple=k.target_triple,
+                occurrences=v,
+            )
+            for k, v in sorted(counts.items())
+            if k.package == name
         )
         crate_reports.append(CrateUnitsReport(package=name, units=units))
 
@@ -162,7 +176,7 @@ def _rust_011_findings(
     return findings
 
 
-def to_json_dict(report: UnitsReport) -> dict[str, object]:
+def to_json_dict(report: UnitsReport) -> dict[str, JsonValue]:
     return {
         "crates": [
             {

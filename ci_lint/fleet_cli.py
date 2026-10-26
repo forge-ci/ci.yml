@@ -15,15 +15,16 @@ import argparse
 import json
 import os
 import sys
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
+from ci_lint.cargo_messages import JsonValue
 from ci_lint.finding import Status
 from ci_lint.fleet import DEFAULT_OWNERS, FleetReport, load_report_json, run_fleet_scan
 from ci_lint.fleet import render_text as render_fleet_text
 from ci_lint.fleet import to_json_dict as fleet_to_json_dict
-from ci_lint.cargo_messages import JsonValue
-from ci_lint.github_api import FetchStatusFn, GitHubApiError, default_fetch_status, default_write
+from ci_lint.github_api import FetchStatusFn, GitHubApiError, HttpResult, default_fetch_status, default_write
 from ci_lint.history import build_history, load_snapshot
 from ci_lint.history import render_text as render_history_text
 from ci_lint.history import to_json_dict as history_to_json_dict
@@ -44,20 +45,20 @@ def _token() -> str | None:
 
 
 def replay_fetch(table: RecordTable) -> FetchStatusFn:
-    def fetch_status(url: str, token: str) -> tuple[int, object]:
+    def fetch_status(url: str, token: str) -> HttpResult:
         entry = table.get(url)
         if entry is None:
             raise GitHubApiError(f"GET {url}: not in the recorded fixture")
-        return int(entry[0]), entry[1]  # type: ignore[arg-type]
+        return HttpResult(int(entry[0]), entry[1])  # type: ignore[arg-type,index]
 
     return fetch_status  # type: ignore[return-value]
 
 
 def _recording(inner: FetchStatusFn, table: RecordTable) -> FetchStatusFn:
-    def fetch_status(url: str, token: str) -> tuple[int, object]:
+    def fetch_status(url: str, token: str) -> HttpResult:
         status, body = inner(url, token)
         table[url] = [status, body]
-        return status, body
+        return HttpResult(status, body)
 
     return fetch_status  # type: ignore[return-value]
 
@@ -68,18 +69,28 @@ def _split(value: str | None) -> tuple[str, ...]:
     return tuple(v.strip() for v in value.split(",") if v.strip())
 
 
-def _fetcher(args: argparse.Namespace, command: str) -> tuple[FetchStatusFn, str, RecordTable | None] | None:
+@dataclass(frozen=True)
+class Fetcher:
+    """A resolved fetch function, its token (`"replay"` for a fixture), and
+    the `--record` table being filled, if any (PY-002, #193)."""
+
+    fetch: FetchStatusFn
+    token: str
+    table: RecordTable | None = None
+
+
+def _fetcher(args: argparse.Namespace, command: str) -> Fetcher | None:
     if args.replay:
         table = json.loads(Path(args.replay).read_text(encoding="utf-8"))
-        return replay_fetch(table), "replay", None
+        return Fetcher(replay_fetch(table), "replay")
     token = _token()
     if not token:
         print(f"ci-lint {command}: GITHUB_TOKEN (or GH_TOKEN) is required for a live run", file=sys.stderr)
         return None
     if args.record:
         table: RecordTable = {}
-        return _recording(default_fetch_status, table), token, table
-    return default_fetch_status, token, None
+        return Fetcher(_recording(default_fetch_status, table), token, table)
+    return Fetcher(default_fetch_status, token)
 
 
 def _scan(args: argparse.Namespace, fetch: FetchStatusFn, token: str) -> FleetReport:
@@ -91,7 +102,7 @@ def _cmd_fleet_scan(args: argparse.Namespace) -> int:
     got = _fetcher(args, "fleet scan")
     if got is None:
         return 2
-    fetch, token, table = got
+    fetch, token, table = got.fetch, got.token, got.table
     report = _scan(args, fetch, token)
     if table is not None:
         Path(args.record).write_text(json.dumps(table, indent=1, sort_keys=True), encoding="utf-8")
@@ -138,12 +149,12 @@ def _cmd_sync_issues(args: argparse.Namespace) -> int:  # noqa: C901
         got = _fetcher(args, "sync-issues")
         if got is None:
             return 2
-        fetch, token, _ = got
+        fetch, token = got.fetch, got.token
     else:
         got = _fetcher(args, "sync-issues")
         if got is None:
             return 2
-        fetch, token, _ = got
+        fetch, token = got.fetch, got.token
         report = _scan(args, fetch, token)
 
     if args.apply:

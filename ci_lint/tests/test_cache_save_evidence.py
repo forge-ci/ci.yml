@@ -26,7 +26,7 @@ class Cache011Test(unittest.TestCase):
         log = fixture("CACHE-011", "github") / "red.log"
         for conclusion in ("failure", "cancelled"):
             with self.subTest(conclusion=conclusion):
-                self.assertEqual(check_cache_011([log], conclusion=conclusion), ((), ()))
+                self.assertEqual(tuple(check_cache_011([log], conclusion=conclusion)), ((), ()))
 
     def test_successful_run_that_saved_nothing_is_flagged(self) -> None:
         """RED: zackees/clud main run 36463271709, job 109067163056 --

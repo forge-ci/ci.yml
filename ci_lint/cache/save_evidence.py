@@ -36,9 +36,11 @@ Mechanical signals (issue #7's own evidence, zackees/clud run
 from __future__ import annotations
 
 import re
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
+from ci_lint.cargo_messages import JsonValue
 from ci_lint.finding import Finding
 
 # "<layer>: <free text> skipping save" -- covers both clud log lines
@@ -105,6 +107,32 @@ class UnusableRestoreEvent:
     archive_bytes: int
 
 
+@dataclass(frozen=True)
+class Cache011Result:
+    """CACHE-011's skipped-save events and the findings they raise.
+
+    Iterable so `events, findings = check_cache_011(...)` keeps working
+    (PY-002, #193)."""
+
+    events: tuple[SaveSkipEvent, ...]
+    findings: tuple[Finding, ...]
+
+    def __iter__(self) -> Iterator[tuple[SaveSkipEvent, ...] | tuple[Finding, ...]]:
+        return iter((self.events, self.findings))
+
+
+@dataclass(frozen=True)
+class Cache012Result:
+    """CACHE-012's unusable-restore events and the findings they raise
+    (iterable like `Cache011Result`)."""
+
+    events: tuple[UnusableRestoreEvent, ...]
+    findings: tuple[Finding, ...]
+
+    def __iter__(self) -> Iterator[tuple[UnusableRestoreEvent, ...] | tuple[Finding, ...]]:
+        return iter((self.events, self.findings))
+
+
 def _read(path: Path) -> str:
     try:
         text = path.read_text(encoding="utf-8", errors="replace")
@@ -115,7 +143,7 @@ def _read(path: Path) -> str:
 
 def check_cache_011(
     log_paths: list[Path], *, conclusion: str, run_url: str | None = None
-) -> tuple[tuple[SaveSkipEvent, ...], tuple[Finding, ...]]:
+) -> Cache011Result:
     """`conclusion` is the run/job's ACTUAL GitHub conclusion, supplied by
     the caller (e.g. `gh run view --json conclusion`) -- CACHE-011 only
     ever fires when it is exactly `"success"`. A failed or cancelled build
@@ -124,7 +152,7 @@ def check_cache_011(
     with log evidence")."""
 
     if conclusion != "success":
-        return (), ()
+        return Cache011Result((), ())
 
     events: list[SaveSkipEvent] = []
     for path in log_paths:
@@ -156,12 +184,12 @@ def check_cache_011(
                 "the writer flow itself is broken, not that there was nothing new to save (issue #7)",
             )
         )
-    return tuple(events), tuple(findings)
+    return Cache011Result(tuple(events), tuple(findings))
 
 
 def check_cache_012(
     log_paths: list[Path], *, threshold: int = DEFAULT_UNUSABLE_STREAK_THRESHOLD
-) -> tuple[tuple[UnusableRestoreEvent, ...], tuple[Finding, ...]]:
+) -> Cache012Result:
     """`log_paths` must be given OLDEST-FIRST (successive runs' logs against
     the same repository). A layer whose restore reports an unusable
     (0-extracted) payload on `threshold` or more CONSECUTIVE logs never
@@ -198,7 +226,7 @@ def check_cache_012(
                 "alone only clears the symptom until the same broken writer poisons it again",
             )
         )
-    return tuple(events), tuple(findings)
+    return Cache012Result(tuple(events), tuple(findings))
 
 
 @dataclass(frozen=True)
@@ -215,14 +243,14 @@ def run_save_check(
     run_url: str | None = None,
     threshold: int = DEFAULT_UNUSABLE_STREAK_THRESHOLD,
 ) -> SaveEvidenceReport:
-    skip_events, cache011 = check_cache_011(log_paths, conclusion=conclusion, run_url=run_url)
-    unusable_events, cache012 = check_cache_012(log_paths, threshold=threshold)
+    r011 = check_cache_011(log_paths, conclusion=conclusion, run_url=run_url)
+    r012 = check_cache_012(log_paths, threshold=threshold)
     return SaveEvidenceReport(
-        skip_events=skip_events, unusable_events=unusable_events, findings=cache011 + cache012
+        skip_events=r011.events, unusable_events=r012.events, findings=r011.findings + r012.findings
     )
 
 
-def to_json_dict(report: SaveEvidenceReport) -> dict[str, object]:
+def to_json_dict(report: SaveEvidenceReport) -> dict[str, JsonValue]:
     return {
         "skip_events": [
             {"source": e.source, "layer": e.layer, "reason": e.reason} for e in report.skip_events

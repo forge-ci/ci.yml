@@ -74,6 +74,7 @@ from ci_lint.perf import (
 from ci_lint.perf import render_text as render_perf_text
 from ci_lint.perf import to_json_dict as perf_to_json_dict
 from ci_lint.runtime.pr_timing import (
+    HistoryScan,
     PrTimingError,
     compute_pr_timing,
     load_history_file,
@@ -868,7 +869,7 @@ def _cmd_perf_compare(args: argparse.Namespace) -> int:
 
 def _cmd_perf_pr_timing(args: argparse.Namespace) -> int:
     try:
-        scans = [(str(p), load_history_file(Path(p))) for p in args.history]
+        scans = [HistoryScan(str(p), load_history_file(Path(p))) for p in args.history]
     except PrTimingError as exc:
         print(f"ci-lint perf pr-timing: {exc}", file=sys.stderr)
         return 2

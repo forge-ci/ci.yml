@@ -82,8 +82,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from ci_lint.cargo_messages import JsonValue
 from ci_lint.attestations import JobDecision
+from ci_lint.cargo_messages import JsonValue
 from ci_lint.default_branch_reuse import SCHEMA_VERSION as REUSE_DOC_SCHEMA
 from ci_lint.finding import Finding, Status
 from ci_lint.github_api import FetchFn, GitHubApiError
@@ -117,6 +117,15 @@ class ReuseVerdict:
     run_id: int | None
 
 
+@dataclass(frozen=True)
+class _LaneEntry:
+    """One lane's `reuse` entry from the plan and its expected digest."""
+
+    lane: str
+    entry: dict[str, JsonValue]
+    digest: str
+
+
 def _lane_keys_for_job(job_id: str, lane_digests: dict[str, JsonValue]) -> list[str]:
     if job_id in ("fast", "dylint"):
         return [job_id]
@@ -146,21 +155,22 @@ def _verify_reuse(  # noqa: C901
         # itself be "required" in that case) is never treated as reused.
         return ReuseVerdict(status="fail", run_id=None)
 
-    entries: list[tuple[str, dict[str, JsonValue], str]] = []
+    entries: list[_LaneEntry] = []
     for lane in lane_keys:
         raw_entry = reuse.get(lane)
         digest = lane_digests.get(lane)
         if not isinstance(raw_entry, dict) or not isinstance(digest, str):
             return ReuseVerdict(status="fail", run_id=None)
-        entries.append((lane, raw_entry, digest))
+        entries.append(_LaneEntry(lane, raw_entry, digest))
 
-    first_run_id_raw = entries[0][1].get("run_id")
+    first_run_id_raw = entries[0].entry.get("run_id")
     first_run_id = first_run_id_raw if isinstance(first_run_id_raw, int) else None
 
     if fetch is None or token is None or repo is None:
         return ReuseVerdict(status="needs_review", run_id=first_run_id)
 
-    for _lane, entry, digest in entries:
+    for lane_entry in entries:
+        entry, digest = lane_entry.entry, lane_entry.digest
         run_id = entry.get("run_id")
         job_id_ref = entry.get("job_id")
         if not isinstance(run_id, int) or not isinstance(job_id_ref, int):
@@ -694,7 +704,7 @@ def compute_gate(
     )
 
 
-def to_json_dict(report: GateReport) -> dict[str, object]:
+def to_json_dict(report: GateReport) -> dict[str, JsonValue]:
     return {
         "required_jobs": list(report.required_jobs),
         "statuses": [

@@ -31,6 +31,9 @@ import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
+from ci_lint.cargo_messages import JsonValue
+from ci_lint.toml_cursor import TomlValue
+
 
 class FbuildCoverageError(Exception):
     """A `ci.toml` or board registry input could not be read or parsed --
@@ -96,7 +99,7 @@ class CoverageSet:
     standalone_required_checks: frozenset[str]
 
 
-def _load_toml(path: Path, label: str) -> dict[str, object]:
+def _load_toml(path: Path, label: str) -> dict[str, TomlValue]:
     try:
         with open(path, "rb") as fh:
             return tomllib.load(fh)
@@ -146,13 +149,14 @@ class CoverageFinding:
     missing_id: str
 
 
-_CATEGORIES: tuple[tuple[str, str], ...] = (
-    ("board_env_names", "board build case"),
-    ("macos_archs", "macOS architecture"),
-    ("python_facades_ignored", "ignored Python facade suite"),
-    ("full_graph_gates", "full-graph gate"),
-    ("standalone_required_checks", "standalone required check"),
-)
+# CoverageSet field -> human label, in report order.
+_CATEGORIES: dict[str, str] = {
+    "board_env_names": "board build case",
+    "macos_archs": "macOS architecture",
+    "python_facades_ignored": "ignored Python facade suite",
+    "full_graph_gates": "full-graph gate",
+    "standalone_required_checks": "standalone required check",
+}
 
 
 def check_coverage_preserved(existing: CoverageSet, declared: CoverageSet) -> tuple[CoverageFinding, ...]:
@@ -161,7 +165,7 @@ def check_coverage_preserved(existing: CoverageSet, declared: CoverageSet) -> tu
     `declared`, across every category -- empty means the subset relation
     holds (GREEN)."""
     out: list[CoverageFinding] = []
-    for field, _label in _CATEGORIES:
+    for field in _CATEGORIES:
         existing_ids: frozenset[str] = getattr(existing, field)
         declared_ids: frozenset[str] = getattr(declared, field)
         for missing in sorted(existing_ids - declared_ids):
@@ -172,7 +176,7 @@ def check_coverage_preserved(existing: CoverageSet, declared: CoverageSet) -> tu
 def render_text(
     findings: tuple[CoverageFinding, ...], *, existing_path: Path, declared_path: Path
 ) -> str:
-    labels = dict(_CATEGORIES)
+    labels = _CATEGORIES
     lines = [f"ci-lint fbuild coverage-check: {existing_path} (existing) vs {declared_path} (declared)"]
     if not findings:
         lines.append("existing required coverage is a subset of declared coverage (GREEN)")
@@ -190,7 +194,7 @@ def render_text(
     return "\n".join(lines)
 
 
-def to_json_dict(findings: tuple[CoverageFinding, ...]) -> dict[str, object]:
+def to_json_dict(findings: tuple[CoverageFinding, ...]) -> dict[str, JsonValue]:
     return {
         "findings": [{"category": f.category, "missing_id": f.missing_id} for f in findings],
         "missing_count": len(findings),
