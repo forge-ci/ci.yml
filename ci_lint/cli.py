@@ -40,6 +40,9 @@ from ci_lint.cache.ops import heal as cache_heal
 from ci_lint.cache.ops import janitor as cache_janitor
 from ci_lint.cache.ops import preprune as cache_preprune
 from ci_lint.cache.ops import trim as cache_trim
+from ci_lint.cache.hit_rate import HitRateError, check_hit_rate
+from ci_lint.cache.hit_rate import render_text as render_hit_rate_text
+from ci_lint.cache.hit_rate import to_json_dict as hit_rate_to_json_dict
 from ci_lint.cache.save_evidence import SaveEvidenceError, run_save_check
 from ci_lint.cache.save_evidence import render_text as render_save_check_text
 from ci_lint.cache.save_evidence import to_json_dict as save_check_to_json_dict
@@ -1063,6 +1066,20 @@ def _cmd_cache_rework(args: argparse.Namespace) -> int:
     return 1 if report.findings else 0
 
 
+def _cmd_cache_hit_rate(args: argparse.Namespace) -> int:
+    """GEN-023 log-evidence clauses (#411): compile-cache stats present and hit rate judged."""
+
+    try:
+        report = check_hit_rate(
+            [Path(p) for p in (args.log or [])], threshold=args.threshold, min_compilations=args.min_compilations
+        )
+    except HitRateError as exc:
+        print(f"ci-lint cache hit-rate: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(hit_rate_to_json_dict(report), indent=2) if args.json else render_hit_rate_text(report))
+    return 1 if report.findings else 0
+
+
 def _cmd_cache_save_check(args: argparse.Namespace) -> int:
     """CACHE-011/CACHE-012 (issue #7) from `--log` evidence -- pure
     filesystem, no GITHUB_TOKEN/GITHUB_REPOSITORY required (unlike `cache
@@ -1467,6 +1484,19 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_cache_audit.add_argument("--json", action="store_true")
     p_cache_audit.set_defaults(func=_cmd_cache_audit)
+
+    p_cache_hit_rate = cache_sub.add_parser(
+        "hit-rate",
+        help="GEN-023 (#411) from real job-log evidence: a compiling job with no compile-cache stats line, "
+        "or a hit rate below the threshold (needs_review)",
+    )
+    p_cache_hit_rate.add_argument("--log", action="append", default=[], help="gh run view --log output; repeatable")
+    p_cache_hit_rate.add_argument("--threshold", type=float, default=0.80, help="hit-rate floor (default: 0.80)")
+    p_cache_hit_rate.add_argument(
+        "--min-compilations", type=int, default=50, help="judge the rate only at or above this many (default: 50)"
+    )
+    p_cache_hit_rate.add_argument("--json", action="store_true")
+    p_cache_hit_rate.set_defaults(func=_cmd_cache_hit_rate)
 
     p_cache_save_check = cache_sub.add_parser(
         "save-check",
