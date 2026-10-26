@@ -1,0 +1,8 @@
+name: ci
+on: [pull_request]
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: sudo apt-get install -y libudev-dev pkg-config
+      - run: soldr cargo test

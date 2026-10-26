@@ -48,7 +48,9 @@ from ci_lint.rules.rust_dylint_target import check_rust_016
 from ci_lint.rules.cpp_ctest import check_cpp_001
 from ci_lint.rules.rust_async_guards import check_rust_019
 from ci_lint.rules.cache_stats_summary import check_gen_023
+from ci_lint.rules.rust_doc_lane import check_rust_027
 from ci_lint.rules.rust_nocapture import check_rust_017
+from ci_lint.rules.rust_system_packages import check_rust_028
 from ci_lint.rules.lint_job_tests import check_gen_019
 from ci_lint.rules.rust_test_selectors import check_rust_015
 from ci_lint.rules.rust_units import check_group7
@@ -198,6 +200,8 @@ def run_precheck(repo_root: Path, *, title: str = "", local: bool = False, live:
         all_findings.extend(check_cpp_001(repo_root))
         all_findings.extend(check_rust_015(repo_root))
         all_findings.extend(check_rust_016(repo_root))
+        all_findings.extend(check_rust_027(repo_root))
+        all_findings.extend(check_rust_028(repo_root))
         all_findings.extend(check_cache_039(repo_root))
         all_findings.extend(check_gen_021(repo_root))
         all_findings.extend(check_gen_022(ci, repo_root))

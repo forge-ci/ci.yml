@@ -1,0 +1,4 @@
+[workspace]
+members = ["pub", "priv", "inherit", "meta"]
+[workspace.package]
+publish = false

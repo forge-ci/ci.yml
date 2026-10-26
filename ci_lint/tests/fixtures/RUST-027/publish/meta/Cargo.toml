@@ -1,0 +1,6 @@
+[package]
+name = "metacrate"
+version = "0.1.0"
+publish = false
+[package.metadata.docs.rs]
+all-features = true
