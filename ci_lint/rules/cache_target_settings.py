@@ -175,7 +175,8 @@ def _job_calls(repo_root: Path, wf_path: str, job_id: str, job: dict[str, YamlVa
         loc = f"jobs.{job_id}.steps[{i}]"
         for ln in logical_lines(run_text):
             raw_line = with_yaml_comment(ln, raw)
-            for inline_env, tokens in split_commands_with_env(ln):
+            for cmd in split_commands_with_env(ln):
+                inline_env, tokens = cmd.env, cmd.tokens
                 t = tuple(tokens)
                 cmd_env = {**env, **inline_env}
                 found = _call(t, cmd_env, cwd, BuildCall(wf_path, None, loc, raw_line, "", Settings("", "", "")))

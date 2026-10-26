@@ -1,7 +1,6 @@
 {
   "_comment": "PY-002 ratchet (owner directives 2026-10-01 and 2026-10-02): pre-existing record-shaped tuple/dict annotations per module -- returns and dataclass fields (any dict/heterogeneous tuple), plus parameters and annotated variables (nested or untyped maps, heterogeneous tuples). Counts may only go down; a module not listed must stay at 0. Lower an entry (or delete it at 0) when you convert one to a dataclass. Burn-down: zackees/ci.yml#193.",
   "counts": {
-    "ci_lint/act_audit.py": 5,
     "ci_lint/cache/audit.py": 0,
     "ci_lint/cache/budget.py": 1,
     "ci_lint/cache/github_cache.py": 0,
@@ -21,15 +20,12 @@
     "ci_lint/github_api.py": 3,
     "ci_lint/lane_cache.py": 1,
     "ci_lint/perf.py": 1,
-    "ci_lint/plan.py": 6,
     "ci_lint/precheck.py": 1,
     "ci_lint/publish_oidc.py": 3,
-    "ci_lint/release.py": 4,
     "ci_lint/reuse.py": 3,
     "ci_lint/reuse_cli.py": 2,
     "ci_lint/rules/bin_artifacts.py": 1,
     "ci_lint/rules/cache_payload.py": 1,
-    "ci_lint/rules/cache_static.py": 5,
     "ci_lint/rules/ci_pre.py": 4,
     "ci_lint/rules/default_branch_skip.py": 3,
     "ci_lint/rules/doc_claims.py": 2,
@@ -44,7 +40,6 @@
     "ci_lint/rules/setup_soldr_freshness.py": 0,
     "ci_lint/rules/shell.py": 1,
     "ci_lint/rules/soldr_pin.py": 2,
-    "ci_lint/rules/test_invocations.py": 6,
     "ci_lint/rules/tools.py": 0,
     "ci_lint/rules/workflows.py": 2,
     "ci_lint/runtime/dylint.py": 2,
@@ -57,7 +52,6 @@
     "ci_lint/runtime/wheel.py": 0,
     "ci_lint/rust_lexer.py": 1,
     "ci_lint/schema.py": 0,
-    "ci_lint/sync_issues.py": 6,
     "ci_lint/toml_cursor.py": 3
   }
 }

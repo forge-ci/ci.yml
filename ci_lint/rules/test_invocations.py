@@ -20,6 +20,7 @@ import re
 import shlex
 from dataclasses import dataclass
 from pathlib import Path
+from types import MappingProxyType
 
 from ci_lint.rules.tools import CI_SCRIPT_RE, ENV_ASSIGN_RE, SUBPROCESS_METHODS
 from ci_lint.workflow_scan import (
@@ -42,6 +43,35 @@ class CommandSite:
     line: int | None  # 1-based, known for ci/*.py sites only
     loc: str  # human-readable location (jobs.<id>.steps[i] / line N)
     raw: str  # the logical source line, comment included
+
+
+@dataclass(frozen=True)
+class ShellCommand:
+    """One command of a shell line: its leading env assignments and tokens."""
+
+    env: MappingProxyType[str, str]  # read-only: the record is frozen
+    tokens: list[str]
+
+
+@dataclass(frozen=True)
+class TestCommand:
+    """`find_test_invocation`'s match: the runner kind and its arguments."""
+
+    kind: str  # "nextest" or "cargo-test"
+    args: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class StringConstant:
+    value: str
+    line: int
+
+
+@dataclass(frozen=True)
+class RunLine:
+    line: str  # the logical run: line
+    path: str
+    loc: str
 
 
 @dataclass(frozen=True)
@@ -91,7 +121,7 @@ def normalize_expr(text: str) -> str:
     return _EXPR_RE.sub(lambda m: "${{" + m.group(1).replace(" ", "") + "}}", text)
 
 
-def split_commands_with_env(line: str) -> list[tuple[dict[str, str], list[str]]]:
+def split_commands_with_env(line: str) -> list[ShellCommand]:
     """Tokenize one logical shell line into (leading env assignments,
     command tokens) pairs, splitting on unquoted `;`/`&&`/`||`/`|`/`&` only
     (a quoted nextest filter like `'test(a) | test(b)'` stays one token)."""
@@ -107,7 +137,7 @@ def split_commands_with_env(line: str) -> list[tuple[dict[str, str], list[str]]]
                 commands[-1].append(tok)
     except ValueError:
         return []
-    out: list[tuple[dict[str, str], list[str]]] = []
+    out: list[ShellCommand] = []
     for tokens in commands:
         env: dict[str, str] = {}
         i = 0
@@ -116,12 +146,12 @@ def split_commands_with_env(line: str) -> list[tuple[dict[str, str], list[str]]]
             env[key] = value
             i += 1
         if i < len(tokens):
-            out.append((env, tokens[i:]))
+            out.append(ShellCommand(MappingProxyType(env), tokens[i:]))
     return out
 
 
 def split_commands(line: str) -> list[list[str]]:
-    return [tokens for _env, tokens in split_commands_with_env(line)]
+    return [cmd.tokens for cmd in split_commands_with_env(line)]
 
 
 def is_cargo_token(token: str) -> bool:
@@ -129,7 +159,7 @@ def is_cargo_token(token: str) -> bool:
     return base in ("cargo", "cargo.exe") or _CARGO_VAR_RE.match(token) is not None
 
 
-def find_test_invocation(tokens: tuple[str, ...]) -> tuple[str, tuple[str, ...]] | None:
+def find_test_invocation(tokens: tuple[str, ...]) -> TestCommand | None:
     """`("nextest", args)` / `("cargo-test", args)` or `None`. Accepts any
     wrapper prefix (`soldr cargo ...`, `rustup run <tc> cargo ...`,
     `"$CARGO_BIN" test`) and a `+toolchain` override."""
@@ -140,7 +170,7 @@ def find_test_invocation(tokens: tuple[str, ...]) -> tuple[str, tuple[str, ...]]
             if j < len(tokens) and tokens[j] == "nextest":
                 j += 1
             if j < len(tokens) and tokens[j] == "run":
-                return ("nextest", tokens[j + 1 :])
+                return TestCommand("nextest", tokens[j + 1 :])
             continue
         if not is_cargo_token(tok):
             continue
@@ -148,9 +178,9 @@ def find_test_invocation(tokens: tuple[str, ...]) -> tuple[str, tuple[str, ...]]
         while j < len(tokens) and tokens[j].startswith("+"):
             j += 1
         if j + 1 < len(tokens) and tokens[j] == "nextest" and tokens[j + 1] == "run":
-            return ("nextest", tokens[j + 2 :])
+            return TestCommand("nextest", tokens[j + 2 :])
         if j < len(tokens) and tokens[j] == "test":
-            return ("cargo-test", tokens[j + 1 :])
+            return TestCommand("cargo-test", tokens[j + 1 :])
     return None
 
 
@@ -210,13 +240,13 @@ def script_calls(path: Path) -> list[ScriptCall]:  # noqa: C901
     return out
 
 
-def script_string_constants(path: Path) -> list[tuple[str, int]]:
+def script_string_constants(path: Path) -> list[StringConstant]:
     try:
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     except (SyntaxError, UnicodeDecodeError, OSError):
         return []
     return [
-        (n.value, n.lineno)
+        StringConstant(n.value, n.lineno)
         for n in ast.walk(tree)
         if isinstance(n, ast.Constant) and isinstance(n.value, str)
     ]
@@ -250,10 +280,10 @@ def with_yaml_comment(line: str, raw_lines: list[str]) -> str:
     return line
 
 
-def iter_run_lines(repo_root: Path) -> list[tuple[str, str, str]]:  # noqa: C901
+def iter_run_lines(repo_root: Path) -> list[RunLine]:  # noqa: C901
     """(logical_line, path, loc) for every workflow / composite-action run: line."""
 
-    out: list[tuple[str, str, str]] = []
+    out: list[RunLine] = []
     for wf in load_workflows(repo_root):
         if wf.status != LoadStatus.OK:
             continue
@@ -263,7 +293,7 @@ def iter_run_lines(repo_root: Path) -> list[tuple[str, str, str]]:  # noqa: C901
                 run_text = step.get("run")
                 if isinstance(run_text, str):
                     for ln in logical_lines(run_text):
-                        out.append((with_yaml_comment(ln, raw_lines), wf.path, f"jobs.{job_id}.steps[{i}]"))
+                        out.append(RunLine(with_yaml_comment(ln, raw_lines), wf.path, f"jobs.{job_id}.steps[{i}]"))
     for act in load_composite_actions(repo_root):
         if act.status != LoadStatus.OK:
             continue
@@ -273,7 +303,7 @@ def iter_run_lines(repo_root: Path) -> list[tuple[str, str, str]]:  # noqa: C901
             for i, step in enumerate(as_list(runs.get("steps"))):
                 if isinstance(step, dict) and isinstance(step.get("run"), str):
                     for ln in logical_lines(step["run"]):
-                        out.append((with_yaml_comment(ln, raw_lines), act.path, f"runs.steps[{i}]"))
+                        out.append(RunLine(with_yaml_comment(ln, raw_lines), act.path, f"runs.steps[{i}]"))
     return out
 
 
@@ -281,8 +311,8 @@ def referenced_scripts(repo_root: Path) -> list[str]:
     """Repo-relative `ci/*.py` scripts named by any run: line, sorted, unique."""
 
     seen: set[str] = set()
-    for line, _path, _loc in iter_run_lines(repo_root):
-        for tokens in split_commands(line):
+    for run in iter_run_lines(repo_root):
+        for tokens in split_commands(run.line):
             for tok in tokens:
                 if CI_SCRIPT_RE.match(tok) and (repo_root / tok).is_file():
                     seen.add(tok)
@@ -293,9 +323,9 @@ def iter_command_sites(repo_root: Path) -> list[CommandSite]:
     """Every run: line command, plus one level into referenced ci/*.py scripts."""
 
     out: list[CommandSite] = []
-    for line, path, loc in iter_run_lines(repo_root):
-        for tokens in split_commands(line):
-            out.append(CommandSite(tuple(tokens), path, None, loc, line))
+    for run in iter_run_lines(repo_root):
+        for tokens in split_commands(run.line):
+            out.append(CommandSite(tuple(tokens), run.path, None, run.loc, run.line))
     for rel in referenced_scripts(repo_root):
         script = repo_root / rel
         for call in script_calls(script):
@@ -310,5 +340,5 @@ def iter_test_invocations(repo_root: Path) -> list[TestInvocation]:
     for site in iter_command_sites(repo_root):
         found = find_test_invocation(site.tokens)
         if found is not None:
-            out.append(TestInvocation(found[0], found[1], site))
+            out.append(TestInvocation(found.kind, found.args, site))
     return out

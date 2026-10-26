@@ -84,10 +84,34 @@ def _is_cache_action_slug(slug: str) -> bool:
     return slug == "actions/cache" or slug.startswith(f"{CACHE_ACTION_SLUGS_PREFIX}/")
 
 
-def _loaded_files(repo_root: Path) -> list[tuple[str, bool, dict[str, YamlValue]]]:
-    files = [(w.path, False, as_dict(w.document)) for w in load_workflows(repo_root) if w.status == LoadStatus.OK]
+@dataclass(frozen=True)
+class LoadedFile:
+    path: str
+    is_composite: bool
+    doc: dict[str, YamlValue]
+
+
+@dataclass(frozen=True)
+class CacheBudgetResult:
+    """Findings plus the human-readable CACHE-004 budget arithmetic."""
+
+    findings: list[Finding]
+    arithmetic: str
+
+
+@dataclass(frozen=True)
+class EnvEntry:
+    name: str
+    value: YamlValue
+    loc: str
+
+
+def _loaded_files(repo_root: Path) -> list[LoadedFile]:
+    files = [LoadedFile(w.path, False, as_dict(w.document)) for w in load_workflows(repo_root) if w.status == LoadStatus.OK]
     files += [
-        (a.path, True, as_dict(a.document)) for a in load_composite_actions(repo_root) if a.status == LoadStatus.OK
+        LoadedFile(a.path, True, as_dict(a.document))
+        for a in load_composite_actions(repo_root)
+        if a.status == LoadStatus.OK
     ]
     return files
 
@@ -95,7 +119,8 @@ def _loaded_files(repo_root: Path) -> list[tuple[str, bool, dict[str, YamlValue]
 def check_cache_001(ci: CiToml, repo_root: Path) -> list[Finding]:
     findings: list[Finding] = []
     only_in = ci.allow.cache_actions.only_in.strip("/")
-    for path, is_composite, doc in _loaded_files(repo_root):
+    for loaded in _loaded_files(repo_root):
+        path, is_composite, doc = loaded.path, loaded.is_composite, loaded.doc
         file_dir = Path(path).parent.as_posix()
         for use_step in _iter_uses_with(doc, is_composite=is_composite):
             uses = use_step.uses
@@ -164,7 +189,8 @@ def _check_wrapper_key_is_dynamic(value: YamlValue, path: str, loc: str) -> list
 def check_cache_002(ci: CiToml, repo_root: Path) -> list[Finding]:
     findings: list[Finding] = []
     only_in = ci.allow.cache_actions.only_in.strip("/")
-    for path, is_composite, doc in _loaded_files(repo_root):
+    for loaded in _loaded_files(repo_root):
+        path, is_composite, doc = loaded.path, loaded.is_composite, loaded.doc
         file_dir = Path(path).parent.as_posix()
         for use_step in _iter_uses_with(doc, is_composite=is_composite):
             uses = use_step.uses
@@ -213,7 +239,8 @@ def check_cache_003_setup_uv(ci: CiToml, repo_root: Path) -> list[Finding]:
     require = ci.allow.setup_uv.require
     if not require:
         return findings
-    for path, is_composite, doc in _loaded_files(repo_root):
+    for loaded in _loaded_files(repo_root):
+        path, is_composite, doc = loaded.path, loaded.is_composite, loaded.doc
         for use_step in _iter_uses_with(doc, is_composite=is_composite):
             uses = use_step.uses
             loc = use_step.loc
@@ -294,7 +321,7 @@ def family_footprint(ci: CiToml, fam: CacheFamily) -> int:
     return (parse_size(fam.max) or 0) * cardinality(ci, fam.per)
 
 
-def check_cache_004(ci: CiToml) -> tuple[list[Finding], str]:  # noqa: C901
+def check_cache_004(ci: CiToml) -> CacheBudgetResult:  # noqa: C901
     findings: list[Finding] = []
     budget = parse_size(ci.cache.budget)
     if budget is None:
@@ -306,7 +333,7 @@ def check_cache_004(ci: CiToml) -> tuple[list[Finding], str]:  # noqa: C901
                 fix="set [cache].budget to a number + unit, e.g. '9GB'",
             )
         )
-        return findings, "CACHE-004: could not compute arithmetic -- [cache].budget is unparseable"
+        return CacheBudgetResult(findings, "CACHE-004: could not compute arithmetic -- [cache].budget is unparseable")
 
     if budget > TEN_GB:
         findings.append(
@@ -391,7 +418,7 @@ def check_cache_004(ci: CiToml) -> tuple[list[Finding], str]:  # noqa: C901
     )
 
     if unparseable:
-        return findings, arithmetic
+        return CacheBudgetResult(findings, arithmetic)
 
     if worst > budget:
         fix = (
@@ -413,7 +440,7 @@ def check_cache_004(ci: CiToml) -> tuple[list[Finding], str]:  # noqa: C901
             )
         )
 
-    return findings, arithmetic
+    return CacheBudgetResult(findings, arithmetic)
 
 
 def _is_truthy(value: YamlValue) -> bool:
@@ -422,14 +449,14 @@ def _is_truthy(value: YamlValue) -> bool:
     return str(value).strip().lower() in _TRUTHY_STRINGS
 
 
-def _iter_env_entries(doc: dict[str, YamlValue]) -> list[tuple[str, YamlValue, str]]:
+def _iter_env_entries(doc: dict[str, YamlValue]) -> list[EnvEntry]:
     """`(name, value, loc)` for every env var set at workflow, job, or step
     level -- a kill-switch is just as effective set at any of the three."""
 
-    out: list[tuple[str, YamlValue, str]] = []
+    out: list[EnvEntry] = []
     top_env = doc.get("env")
     if isinstance(top_env, dict):
-        out.extend((k, v, "env") for k, v in top_env.items())
+        out.extend(EnvEntry(k, v, "env") for k, v in top_env.items())
     jobs = doc.get("jobs")
     if isinstance(jobs, dict):
         for job_id, job in jobs.items():
@@ -437,7 +464,7 @@ def _iter_env_entries(doc: dict[str, YamlValue]) -> list[tuple[str, YamlValue, s
                 continue
             job_env = job.get("env")
             if isinstance(job_env, dict):
-                out.extend((k, v, f"jobs.{job_id}.env") for k, v in job_env.items())
+                out.extend(EnvEntry(k, v, f"jobs.{job_id}.env") for k, v in job_env.items())
             steps = job.get("steps")
             if isinstance(steps, list):
                 for i, step in enumerate(steps):
@@ -445,7 +472,7 @@ def _iter_env_entries(doc: dict[str, YamlValue]) -> list[tuple[str, YamlValue, s
                         continue
                     step_env = step.get("env")
                     if isinstance(step_env, dict):
-                        out.extend((k, v, f"jobs.{job_id}.steps[{i}].env") for k, v in step_env.items())
+                        out.extend(EnvEntry(k, v, f"jobs.{job_id}.steps[{i}].env") for k, v in step_env.items())
     return out
 
 
@@ -464,8 +491,10 @@ def check_cache_010(ci: CiToml, repo_root: Path) -> list[Finding]:
         return []
 
     findings: list[Finding] = []
-    for path, _is_composite, doc in _loaded_files(repo_root):
-        for name, value, loc in _iter_env_entries(doc):
+    for loaded in _loaded_files(repo_root):
+        path, doc = loaded.path, loaded.doc
+        for entry in _iter_env_entries(doc):
+            name, value, loc = entry.name, entry.value, entry.loc
             applies = ccache_active if name in _CCACHE_SWITCHES else soldr_active
             if name in KILL_SWITCH_ENV_VARS and applies and _is_truthy(value):
                 findings.append(
@@ -647,14 +676,15 @@ def check_cache_030(ci: CiToml) -> list[Finding]:
     ]
 
 
-def check_group9(ci: CiToml, repo_root: Path) -> tuple[list[Finding], str]:
+def check_group9(ci: CiToml, repo_root: Path) -> CacheBudgetResult:
     findings: list[Finding] = []
     findings.extend(check_cache_001(ci, repo_root))
     findings.extend(check_cache_002(ci, repo_root))
     findings.extend(check_cache_003_setup_uv(ci, repo_root))
     findings.extend(check_cache_010(ci, repo_root))
-    cache_004_findings, arithmetic = check_cache_004(ci)
-    findings.extend(cache_004_findings)
+    cache_004 = check_cache_004(ci)
+    arithmetic = cache_004.arithmetic
+    findings.extend(cache_004.findings)
     findings.extend(check_cache_014(ci))
     findings.extend(check_cache_029(ci))
     findings.extend(check_cache_030(ci))
@@ -665,7 +695,7 @@ def check_group9(ci: CiToml, repo_root: Path) -> tuple[list[Finding], str]:
     from ci_lint.rules.lint_cache import check_lint_cache  # pylint: disable=import-outside-toplevel
 
     findings.extend(check_lint_cache(ci, repo_root))
-    return findings, arithmetic
+    return CacheBudgetResult(findings, arithmetic)
 
 
 def check_cache_031(ci: CiToml) -> list[Finding]:

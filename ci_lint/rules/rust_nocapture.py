@@ -132,14 +132,15 @@ def check_rust_017(repo_root: Path) -> list[Finding]:  # noqa: C901
         builds_tests = any(find_test_invocation(c.tokens) is not None for c in script_calls(script))
         constants = script_string_constants(script)
         if not builds_tests:
-            builds_tests = any(v in ("nextest", "test") for v, _ in constants) and any(
-                v == "cargo" or v.endswith("/cargo") for v, _ in constants
+            builds_tests = any(v in ("nextest", "test") for v in (c.value for c in constants)) and any(
+                v == "cargo" or v.endswith("/cargo") for v in (c.value for c in constants)
             )
         if not builds_tests:
             continue
         if rel in flagged_paths:
             continue  # the literal argv is already a violation above
-        for value, lineno in constants:
+        for const in constants:
+            value, lineno = const.value, const.line
             if value not in NOCAPTURE_FLAGS:
                 continue
             if allowed(source_line(script, lineno), RULE):

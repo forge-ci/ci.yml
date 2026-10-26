@@ -251,8 +251,10 @@ class CtestSite:
 def _run_line_sites(repo_root: Path) -> list[CtestSite]:
     scopes = env_scopes(repo_root)
     out: list[CtestSite] = []
-    for line, path, loc in iter_run_lines(repo_root):
-        for env, tokens in split_commands_with_env(line):
+    for run in iter_run_lines(repo_root):
+        line, path, loc = run.line, run.path, run.loc
+        for cmd in split_commands_with_env(line):
+            env, tokens = cmd.env, cmd.tokens
             args = find_ctest(tuple(tokens))
             if args is None:
                 continue
@@ -311,7 +313,7 @@ def check_cpp_001(repo_root: Path, *, extra_scripts: tuple[str, ...] = ()) -> li
     scripts = sorted({*referenced_scripts(repo_root), *(s for s in extra_scripts if (repo_root / s).is_file())})
     for rel in scripts:
         script = repo_root / rel
-        constants = [value for value, _line in script_string_constants(script)]
+        constants = [c.value for c in script_string_constants(script)]
         try:
             env_mentioned = ENV_VAR in script.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
@@ -329,7 +331,7 @@ def check_cpp_001(repo_root: Path, *, extra_scripts: tuple[str, ...] = ()) -> li
                 findings.append(finding)
         if literal or env_mentioned or not any(_is_ctest(c) for c in constants) or _mentions_parallelism(constants):
             continue
-        line = next(ln for value, ln in script_string_constants(script) if _is_ctest(value))
+        line = next(c.line for c in script_string_constants(script) if _is_ctest(c.value))
         if allowed(source_line(script, line), RULE):
             continue
         findings.append(

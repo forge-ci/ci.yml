@@ -133,23 +133,27 @@ class CacheStaticFixtureTest(unittest.TestCase):
         findings = _loaded.findings
         assert ci is not None, findings
         self.assertEqual([], [f for f in findings if f.rule == "CT-002"])
-        found, arithmetic = check_cache_004(ci)
+        _r = check_cache_004(ci)
+        found, arithmetic = _r.findings, _r.arithmetic
         self.assertNotIn("CACHE-004", [f.rule for f in found], msg=arithmetic)
         self.assertIn("ccache", arithmetic)
 
         ci = load_ci_toml(fixture("CACHE-004", "red-cpp")).ci
         assert ci is not None
-        found, arithmetic = check_cache_004(ci)
+        _r = check_cache_004(ci)
+        found, arithmetic = _r.findings, _r.arithmetic
         self.assertIn("CACHE-004", [f.rule for f in found], msg=arithmetic)
 
     def test_cache_004_budget_exceeded_without_pre_prune(self) -> None:
         ci = load_ci_toml(fixture("CACHE-004", "red")).ci
-        findings, arithmetic = check_cache_004(ci)
+        _r = check_cache_004(ci)
+        findings, arithmetic = _r.findings, _r.arithmetic
         self.assertIn("CACHE-004", [f.rule for f in findings])
         self.assertIn("worst case", arithmetic)
 
         ci = load_ci_toml(fixture("CACHE-004", "green")).ci
-        findings, arithmetic = check_cache_004(ci)
+        _r = check_cache_004(ci)
+        findings, arithmetic = _r.findings, _r.arithmetic
         self.assertNotIn("CACHE-004", [f.rule for f in findings])
 
     def test_cache_004_budget_over_10gb_is_always_a_violation(self) -> None:
@@ -158,7 +162,8 @@ class CacheStaticFixtureTest(unittest.TestCase):
 
         big = replace(ci.cache, budget="11GB")
         ci_big = replace(ci, cache=big)
-        findings, _ = check_cache_004(ci_big)
+        _r = check_cache_004(ci_big)
+        findings, _ = _r.findings, _r.arithmetic
         self.assertIn("CACHE-004", [f.rule for f in findings])
 
     def test_cache_004_full_pre_prune_removes_only_the_lockfile_peak_term(self) -> None:
@@ -182,7 +187,8 @@ class CacheStaticFixtureTest(unittest.TestCase):
         # the fixed formula must still fail, even though every writer flow
         # pre-prunes.
         tight = replace(ci, cache=replace(ci.cache, budget="1GB"))
-        findings, arithmetic = check_cache_004(tight)
+        _r = check_cache_004(tight)
+        findings, arithmetic = _r.findings, _r.arithmetic
         self.assertIn("CACHE-004", [f.rule for f in findings], msg=arithmetic)
         self.assertIn("lockfile peak waived", arithmetic)
 
@@ -190,7 +196,8 @@ class CacheStaticFixtureTest(unittest.TestCase):
         # i.e. below steady + lockfile-peak + pr.budget = ~1.104GB) to prove
         # the lockfile-peak term really was dropped, not just shrunk.
         just_enough = replace(ci, cache=replace(ci.cache, budget="1100MB"))
-        findings2, arithmetic2 = check_cache_004(just_enough)
+        _r = check_cache_004(just_enough)
+        findings2, arithmetic2 = _r.findings, _r.arithmetic
         self.assertNotIn("CACHE-004", [f.rule for f in findings2], msg=arithmetic2)
 
     def test_cache_004_partial_pre_prune_still_counts_the_lockfile_peak(self) -> None:
@@ -198,7 +205,8 @@ class CacheStaticFixtureTest(unittest.TestCase):
 
         ci = load_ci_toml(fixture("CACHE-004", "green")).ci
         one_flow_only = replace(ci, flows={**ci.flows, "nightly": replace(ci.flows["nightly"], pre_prune=False)})
-        findings, arithmetic = check_cache_004(replace(one_flow_only, cache=replace(one_flow_only.cache, budget="1100MB")))
+        _r = check_cache_004(replace(one_flow_only, cache=replace(one_flow_only.cache, budget="1100MB")))
+        findings, arithmetic = _r.findings, _r.arithmetic
         self.assertIn("CACHE-004", [f.rule for f in findings], msg=arithmetic)
         self.assertIn("not every writer flow pre-prunes", arithmetic)
 

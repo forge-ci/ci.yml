@@ -31,6 +31,8 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from ci_lint.cargo_messages import JsonValue
+
 _RECORD_RE = re.compile(
     rb'\{"id":\d+,"key":"[^"]*","version":"[^"]*","cacheSize":\d+,'
     rb'"complete":(?:true|false),"usedAt":\d+,"createdAt":\d+\}'
@@ -38,17 +40,23 @@ _RECORD_RE = re.compile(
 
 RULE = "ACT-001"
 
-_SIZE_UNITS: tuple[tuple[int, str], ...] = (
-    (1024**3, "GB"),
-    (1024**2, "MB"),
-    (1024, "KB"),
+@dataclass(frozen=True)
+class _SizeUnit:
+    factor: int
+    suffix: str
+
+
+_SIZE_UNITS: tuple[_SizeUnit, ...] = (
+    _SizeUnit(1024**3, "GB"),
+    _SizeUnit(1024**2, "MB"),
+    _SizeUnit(1024, "KB"),
 )
 
 
 def format_size(num_bytes: int) -> str:
-    for factor, suffix in _SIZE_UNITS:
-        if num_bytes >= factor:
-            return f"{num_bytes / factor:.2f}{suffix}"
+    for unit in _SIZE_UNITS:
+        if num_bytes >= unit.factor:
+            return f"{num_bytes / unit.factor:.2f}{unit.suffix}"
     return f"{num_bytes}B"
 
 
@@ -62,12 +70,18 @@ class CacheIndexEntry:
 
 
 @dataclass(frozen=True)
+class RetiredHit:
+    entry: CacheIndexEntry
+    family: str  # the matched retired family
+
+
+@dataclass(frozen=True)
 class ActCacheAuditResult:
     store_path: Path
     disk_bytes: int  # ground truth: real bytes on disk under cache/
     budget_bytes: int
     entries: tuple[CacheIndexEntry, ...]  # deduplicated, complete-only
-    retired_hits: tuple[tuple[CacheIndexEntry, str], ...]  # (entry, matched retired family)
+    retired_hits: tuple[RetiredHit, ...]
     findings: tuple[str, ...] = field(default_factory=tuple)
 
     @property
@@ -79,31 +93,27 @@ def _read_index(bolt_db: Path) -> list[CacheIndexEntry]:
     if not bolt_db.is_file():
         return []
     data = bolt_db.read_bytes()
-    by_id: dict[int, dict[str, object]] = {}
+    by_id: dict[int, CacheIndexEntry] = {}
     for m in _RECORD_RE.finditer(data):
         try:
             obj = json.loads(m.group(0))
         except json.JSONDecodeError:
             continue
-        rid = obj["id"]
-        prev = by_id.get(rid)
-        if prev is None:
-            by_id[rid] = obj
-        elif obj["complete"] and not prev["complete"]:
-            by_id[rid] = obj
-        elif obj["complete"] == prev["complete"] and obj["usedAt"] >= prev["usedAt"]:
-            by_id[rid] = obj
-    return [
-        CacheIndexEntry(
+        entry = CacheIndexEntry(
             id=obj["id"],
             key=obj["key"],
             cache_size=obj["cacheSize"],
             complete=obj["complete"],
             used_at=obj["usedAt"],
         )
-        for obj in by_id.values()
-        if obj["complete"]
-    ]
+        prev = by_id.get(entry.id)
+        if prev is None:
+            by_id[entry.id] = entry
+        elif entry.complete and not prev.complete:
+            by_id[entry.id] = entry
+        elif entry.complete == prev.complete and entry.used_at >= prev.used_at:
+            by_id[entry.id] = entry
+    return [entry for entry in by_id.values() if entry.complete]
 
 
 def _disk_bytes(cache_dir: Path) -> int:
@@ -134,12 +144,12 @@ def audit(store_path: Path, *, budget_bytes: int, retired_families: tuple[str, .
     disk_bytes = _disk_bytes(store_path)
 
     findings: list[str] = []
-    retired_hits: list[tuple[CacheIndexEntry, str]] = []
+    retired_hits: list[RetiredHit] = []
     for entry in entries:
         key_norm = entry.key.lower()
         for family in retired_families:
             if family.lower() in key_norm:
-                retired_hits.append((entry, family))
+                retired_hits.append(RetiredHit(entry, family))
                 findings.append(
                     f"{RULE}: local act cache saved key {entry.key!r} "
                     f"({format_size(entry.cache_size)}), which matches retired family "
@@ -182,7 +192,7 @@ def render(result: ActCacheAuditResult) -> str:
     return "\n".join(lines)
 
 
-def to_json_dict(result: ActCacheAuditResult) -> dict[str, object]:
+def to_json_dict(result: ActCacheAuditResult) -> dict[str, JsonValue]:
     return {
         "store_path": str(result.store_path),
         "disk_bytes": result.disk_bytes,

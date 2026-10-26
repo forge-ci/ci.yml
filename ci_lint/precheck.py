@@ -175,8 +175,9 @@ def run_precheck(repo_root: Path, *, title: str = "", local: bool = False, live:
         all_findings.extend(check_group8(ci, repo_root))
         if ci.profile in NATIVE_WHEEL_PROFILES:
             all_findings.extend(check_pkg_010(repo_root))
-        findings9, cache_arithmetic = check_group9(ci, repo_root)
-        all_findings.extend(findings9)
+        group9 = check_group9(ci, repo_root)
+        cache_arithmetic = group9.arithmetic
+        all_findings.extend(group9.findings)
         all_findings.extend(check_cache_007_static(ci, repo_root))
         all_findings.extend(check_cache_025(repo_root))
         all_findings.extend(check_cache_033(repo_root))

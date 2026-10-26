@@ -157,7 +157,8 @@ def _collect(repo_root: Path) -> dict[str, list[CargoCall]]:  # noqa: C901
                 loc = f"jobs.{job_id}.steps[{i}]"
                 for ln in logical_lines(run_text):
                     raw_line = with_yaml_comment(ln, raw)
-                    for inline_env, tokens in split_commands_with_env(ln):
+                    for cmd in split_commands_with_env(ln):
+                        inline_env, tokens = cmd.env, cmd.tokens
                         t = tuple(tokens)
                         cmd_env = {**env, **inline_env}
                         target = _flag_value(t, "--target-dir") or cmd_env.get("CARGO_TARGET_DIR")

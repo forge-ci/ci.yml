@@ -53,7 +53,8 @@ def _with_paths(with_: dict[str, object]) -> list[str]:
 
 def check_cache_007_static(ci: CiToml, repo_root: Path) -> list[Finding]:
     findings: list[Finding] = []
-    for path, is_composite, doc in _loaded_files(repo_root):
+    for loaded in _loaded_files(repo_root):
+        path, is_composite, doc = loaded.path, loaded.is_composite, loaded.doc
         for use_step in _iter_uses_with(doc, is_composite=is_composite):
             uses = use_step.uses
             loc = use_step.loc
