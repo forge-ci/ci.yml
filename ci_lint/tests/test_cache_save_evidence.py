@@ -83,3 +83,56 @@ class Cache012Test(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Cache026Test(unittest.TestCase):
+    """CACHE-026: forge-ci/zccache's pre-prune guard disabled cache writes on
+    every main push from 2026-10-22 (runs 39761957389..40260098569)."""
+
+    FROZEN = (
+        "Wait\tWait for the exact-SHA cache pre-prune run\t2026-10-24T03:11:02.1Z "
+        "##[warning]cache writes disabled for this job: cache pre-prune run 40001 concluded failure\n"
+    )
+    HEALTHY = "Build\tsave\t2026-10-24T03:11:02.1Z final cache summary: build=miss/saved id=9327196934\n"
+
+    def _logs(self, *bodies: str) -> list:
+        import tempfile
+        from pathlib import Path
+
+        d = Path(tempfile.mkdtemp())
+        self.addCleanup(__import__("shutil").rmtree, d)
+        out = []
+        for i, body in enumerate(bodies):
+            p = d / f"run{i}.log"
+            p.write_text(body, encoding="utf-8")
+            out.append(p)
+        return out
+
+    def test_three_consecutive_frozen_runs_is_a_violation(self) -> None:
+        from ci_lint.cache.save_evidence import check_cache_026
+
+        result = check_cache_026(self._logs(self.FROZEN, self.FROZEN, self.FROZEN))
+        self.assertEqual(len(result.events), 3)
+        self.assertEqual([f.rule for f in result.findings], ["CACHE-026"])
+        self.assertIn("pre-prune run 40001", result.findings[0].message)
+
+    def test_a_healthy_run_breaks_the_streak(self) -> None:
+        from ci_lint.cache.save_evidence import check_cache_026
+
+        result = check_cache_026(self._logs(self.FROZEN, self.FROZEN, self.HEALTHY, self.FROZEN))
+        self.assertEqual(len(result.events), 3)
+        self.assertEqual(result.findings, ())
+
+    def test_exported_flag_counts_and_threshold_is_configurable(self) -> None:
+        from ci_lint.cache.save_evidence import check_cache_026
+
+        flag = "env\tset\tZCCACHE_CACHE_WRITES=false\n"
+        self.assertEqual(check_cache_026(self._logs(flag), threshold=2).findings, ())
+        self.assertEqual(len(check_cache_026(self._logs(flag, flag), threshold=2).findings), 1)
+
+    def test_save_check_reports_cache_026(self) -> None:
+        from ci_lint.cache.save_evidence import run_save_check, to_json_dict
+
+        report = run_save_check(self._logs(self.FROZEN, self.FROZEN, self.FROZEN), conclusion="success")
+        self.assertIn("CACHE-026", [f.rule for f in report.findings])
+        self.assertEqual(len(to_json_dict(report)["guard_disabled_events"]), 3)

@@ -115,3 +115,51 @@ class Gen026Test(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+TEMPLATE_SWEEP_WF = """\
+name: ci
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  merge_group:
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@0123456789012345678901234567890123456789
+      - uses: actions/checkout@0123456789012345678901234567890123456789
+        with:
+          repository: {linter}
+          ref: 928cbbd0123456789012345678901234567890ab
+          path: .ci-lint
+  queue-only:
+    if: ${{{{ github.event_name == 'merge_group' }}}}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@0123456789012345678901234567890123456789
+        with:
+          ref: feature/x
+"""
+
+
+class SweepTemplateShapeTest(unittest.TestCase):
+    """forge-ci/ci.yml#480: template-python-rust-cmd's pinned ci-lint checkout."""
+
+    @requires_yaml_tooling
+    def test_pinned_ci_lint_checkout_and_queue_only_job_are_clean(self) -> None:
+        for linter in ("zackees/ci.yml", "forge-ci/ci.yml"):
+            wf = TEMPLATE_SWEEP_WF.format(linter=linter)
+            self.assertEqual(_run("x\n", workflows={"ci.yml": wf}), [], linter)
+
+    @requires_yaml_tooling
+    def test_own_repo_checkout_with_branch_ref_still_fails(self) -> None:
+        wf = SWEEP_WF.replace("ref: {ref}", "repository: ${{{{ github.repository }}}}\n          ref: {ref}")
+        f = _run("x\n", workflows={"sweep.yml": wf.format(ref="feature/x")})
+        self.assertEqual(len(f), 1)
+        self.assertEqual(f[0].status, Status.VIOLATION)
+
+    @requires_yaml_tooling
+    def test_job_admitting_schedule_still_checked(self) -> None:
+        wf = SWEEP_WF.replace("  s:\n", "  s:\n    if: ${{{{ github.event_name == 'schedule' }}}}\n")
+        self.assertEqual(len(_run("x\n", workflows={"sweep.yml": wf.format(ref="feature/x")})), 1)
