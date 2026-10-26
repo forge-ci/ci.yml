@@ -1,0 +1,11 @@
+[package]
+name = "a"
+version = "0.1.0"
+[features]
+default = []
+gui = ["dep:gtk"]
+[dependencies]
+gtk = { version = "0.18", optional = true }
+glib-sys = { version = "0.18", optional = true }
+[dev-dependencies]
+openssl-sys = "0.9"

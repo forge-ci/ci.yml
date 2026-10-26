@@ -18,7 +18,8 @@ from __future__ import annotations
 import json
 import urllib.error
 import urllib.request
-from typing import Callable
+from dataclasses import dataclass
+from typing import Callable, Iterator
 
 from ci_lint.cargo_messages import JsonValue
 
@@ -74,13 +75,36 @@ class GitHubApiError(Exception):
     """
 
 
-def _headers(token: str, *, accept: str = "application/vnd.github+json") -> dict[str, str]:
-    return {
-        "Authorization": f"Bearer {token}",
-        "Accept": accept,
-        "X-GitHub-Api-Version": "2022-11-28",
-        "User-Agent": "ci-lint",
-    }
+@dataclass(frozen=True)
+class HttpResult:
+    """`(status_code, parsed JSON body or None)` from a status-returning call.
+
+    Iterable so the `status, body = fetch(...)` unpacking every
+    `FetchStatusFn` caller uses keeps working (PY-002, #193)."""
+
+    status: int
+    body: JsonValue
+
+    def __iter__(self) -> Iterator[int | JsonValue]:
+        return iter((self.status, self.body))
+
+
+def _request(
+    url: str,
+    token: str,
+    *,
+    method: str | None = None,
+    data: bytes | None = None,
+    content_type: str | None = None,
+) -> urllib.request.Request:
+    request = urllib.request.Request(url, data=data, method=method)
+    request.add_header("Authorization", f"Bearer {token}")
+    request.add_header("Accept", "application/vnd.github+json")
+    request.add_header("X-GitHub-Api-Version", "2022-11-28")
+    request.add_header("User-Agent", "ci-lint")
+    if content_type:
+        request.add_header("Content-Type", content_type)
+    return request
 
 
 def default_fetch(url: str, token: str) -> JsonValue:
@@ -88,7 +112,7 @@ def default_fetch(url: str, token: str) -> JsonValue:
     client (AGENTS.md / worker contract: ci_lint is standard-library-only).
     """
 
-    request = urllib.request.Request(url, headers=_headers(token))
+    request = _request(url, token)
     try:
         with urllib.request.urlopen(request, timeout=15) as response:  # noqa: S310 -- fixed https GitHub API host
             body = response.read()
@@ -100,7 +124,7 @@ def default_fetch(url: str, token: str) -> JsonValue:
         raise GitHubApiError(f"GET {url}: invalid JSON response: {exc}") from exc
 
 
-def default_fetch_status(url: str, token: str) -> tuple[int, JsonValue]:
+def default_fetch_status(url: str, token: str) -> HttpResult:
     """Like `default_fetch`, but returns `(status_code, body)` instead of
     raising on a non-2xx HTTP status -- a 403 (often "this token lacks
     admin scope") and a 404 (often "this thing legitimately doesn't
@@ -111,7 +135,7 @@ def default_fetch_status(url: str, token: str) -> tuple[int, JsonValue]:
     GitHubApiError on an actual transport failure (DNS, timeout, ...),
     exactly like `default_fetch`."""
 
-    request = urllib.request.Request(url, headers=_headers(token))
+    request = _request(url, token)
     try:
         with urllib.request.urlopen(request, timeout=15) as response:  # noqa: S310 -- fixed https GitHub API host
             body = response.read()
@@ -122,11 +146,11 @@ def default_fetch_status(url: str, token: str) -> tuple[int, JsonValue]:
     except (urllib.error.URLError, OSError, ValueError) as exc:
         raise GitHubApiError(f"GET {url} failed: {exc}") from exc
     if not body:
-        return status, None
+        return HttpResult(status, None)
     try:
-        return status, json.loads(body)
+        return HttpResult(status, json.loads(body))
     except json.JSONDecodeError:
-        return status, None
+        return HttpResult(status, None)
 
 
 def default_delete(url: str, token: str) -> None:
@@ -134,7 +158,7 @@ def default_delete(url: str, token: str) -> None:
     trim/janitor) is the only caller; it requires `actions: write` on the
     token, and every deletion it performs is logged before this is called."""
 
-    request = urllib.request.Request(url, method="DELETE", headers=_headers(token))
+    request = _request(url, token, method="DELETE")
     try:
         with urllib.request.urlopen(request, timeout=15) as response:  # noqa: S310 -- fixed https GitHub API host
             response.read()
@@ -142,7 +166,7 @@ def default_delete(url: str, token: str) -> None:
         raise GitHubApiError(f"DELETE {url} failed: {exc}") from exc
 
 
-def default_write(url: str, token: str, method: str, payload: "dict[str, JsonValue]") -> tuple[int, JsonValue]:
+def default_write(url: str, token: str, method: str, payload: "dict[str, JsonValue]") -> HttpResult:
     """POST/PATCH via stdlib `urllib`. Round M2-42: `ci_lint.sync_issues`'s
     `--apply` path is the only caller (issue create/update/close). Like
     `default_fetch_status`, a non-2xx HTTP status is returned rather than
@@ -152,12 +176,7 @@ def default_write(url: str, token: str, method: str, payload: "dict[str, JsonVal
     if method not in ("POST", "PATCH"):
         raise ValueError(f"default_write: unsupported method {method!r}")
     body = json.dumps(payload).encode("utf-8")
-    request = urllib.request.Request(
-        url,
-        data=body,
-        method=method,
-        headers={**_headers(token), "Content-Type": "application/json"},
-    )
+    request = _request(url, token, method=method, data=body, content_type="application/json")
     try:
         with urllib.request.urlopen(request, timeout=15) as response:  # noqa: S310 -- fixed https GitHub API host
             resp_body = response.read()
@@ -168,11 +187,11 @@ def default_write(url: str, token: str, method: str, payload: "dict[str, JsonVal
     except (urllib.error.URLError, OSError, ValueError) as exc:
         raise GitHubApiError(f"{method} {url} failed: {exc}") from exc
     if not resp_body:
-        return status, None
+        return HttpResult(status, None)
     try:
-        return status, json.loads(resp_body)
+        return HttpResult(status, json.loads(resp_body))
     except json.JSONDecodeError:
-        return status, None
+        return HttpResult(status, None)
 
 
 def default_graphql(query: str, token: str) -> JsonValue:
@@ -182,12 +201,7 @@ def default_graphql(query: str, token: str) -> JsonValue:
     merged PRs via ONE GraphQL query for all referenced PR numbers")."""
 
     body = json.dumps({"query": query}).encode("utf-8")
-    request = urllib.request.Request(
-        f"{_API_ROOT}/graphql",
-        data=body,
-        method="POST",
-        headers={**_headers(token), "Content-Type": "application/json"},
-    )
+    request = _request(f"{_API_ROOT}/graphql", token, method="POST", data=body, content_type="application/json")
     try:
         with urllib.request.urlopen(request, timeout=15) as response:  # noqa: S310 -- fixed https GitHub API host
             resp_body = response.read()

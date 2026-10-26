@@ -44,6 +44,7 @@ from __future__ import annotations
 import fnmatch
 import re
 import shlex
+from dataclasses import dataclass
 from pathlib import Path
 
 from ci_lint.finding import Finding, Status
@@ -231,9 +232,24 @@ def _local_callee(repo_root: Path, job: dict[str, YamlValue]) -> ParsedYamlFile 
     return parsed if parsed.status == LoadStatus.OK else None
 
 
-def _reuse_check_runs(repo_root: Path, doc: dict[str, YamlValue]) -> tuple[set[str], list[str]]:
-    """(ids of jobs that make a reuse decision, every reuse-check `run:`
-    line in this workflow or its local reusable-workflow callees)."""
+@dataclass(frozen=True)
+class _ReuseRuns:
+    """Ids of jobs that make a reuse decision, and every reuse-check `run:`
+    line in this workflow or its local reusable-workflow callees."""
+
+    jobs: set[str]
+    lines: list[str]
+
+
+@dataclass(frozen=True)
+class _Gate:
+    """The gate job's id and its `needs:` set (both None: no gate job)."""
+
+    job_id: str | None
+    needs: set[str] | None
+
+
+def _reuse_check_runs(repo_root: Path, doc: dict[str, YamlValue]) -> _ReuseRuns:
 
     reuse_jobs: set[str] = set()
     lines: list[str] = []
@@ -246,7 +262,7 @@ def _reuse_check_runs(repo_root: Path, doc: dict[str, YamlValue]) -> tuple[set[s
         if own:
             reuse_jobs.add(job_id)
             lines.extend(own)
-    return reuse_jobs, lines
+    return _ReuseRuns(reuse_jobs, lines)
 
 
 def _required_job_args(line: str) -> list[str] | None:
@@ -275,15 +291,15 @@ def _covers(required: str, base: str) -> bool:
     return required == base or required.startswith(f"{base} / ") or required.startswith(f"{base} (")
 
 
-def _gate(jobs: dict[str, dict[str, YamlValue]]) -> tuple[str | None, set[str] | None]:
-    for job_id, job in jobs.items():
+def _gate(doc: dict[str, YamlValue]) -> _Gate:
+    for job_id, job in jobs_of(doc).items():
         name = job.get("name")
         if job_id in GATE_JOB_IDS or (isinstance(name, str) and name.strip().lower() == GATE_JOB_NAME):
             needs = job.get("needs")
             if isinstance(needs, str):
-                return job_id, {needs}
-            return job_id, {n for n in as_list(needs) if isinstance(n, str)}
-    return None, None
+                return _Gate(job_id, {needs})
+            return _Gate(job_id, {n for n in as_list(needs) if isinstance(n, str)})
+    return _Gate(None, None)
 
 
 def check_gen_021(repo_root: Path, default_branch: str = "main") -> list[Finding]:  # noqa: C901
@@ -296,8 +312,10 @@ def check_gen_021(repo_root: Path, default_branch: str = "main") -> list[Finding
         if "pull_request" not in on or not _push_reaches(on, default_branch):
             continue
         jobs = jobs_of(doc)
-        gate_id, required_set = _gate(jobs)
-        reuse_jobs, reuse_lines = _reuse_check_runs(repo_root, doc)
+        gate = _gate(doc)
+        gate_id, required_set = gate.job_id, gate.needs
+        reuse = _reuse_check_runs(repo_root, doc)
+        reuse_jobs, reuse_lines = reuse.jobs, reuse.lines
         has_decision = bool(reuse_jobs)
         bases = {job_id: _display_base(job_id, job) for job_id, job in jobs.items()}
         skipped_on_reuse: list[str] = []

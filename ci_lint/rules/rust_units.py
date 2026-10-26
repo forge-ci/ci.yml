@@ -34,7 +34,7 @@ def check_rust_012(ci: CiToml, crates: list[CargoCrate], repo_root: Path) -> lis
 
     all_expected: dict[str, str] = {}
     for c in crates:
-        all_expected.update(expected_target_names(c))
+        all_expected.update({t.name: t.kind for t in expected_target_names(c)})
 
     for name, kind in sorted(all_expected.items()):
         if name not in declared:

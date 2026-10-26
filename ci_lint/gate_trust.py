@@ -96,7 +96,7 @@ def parse_trust(raw: dict[str, TomlValue], *, path: str, source: str, findings: 
     return TrustConfig(
         mode=mode,
         skip=tuple(skip),
-        covered_by=tuple(CoveredBy(job, lanes) for job, lanes in covered.items()),
+        covered_by=tuple(CoveredBy(e.key, e.values) for e in covered.entries),
         surfaces=tuple(surfaces),
         full_labels=tuple(full_labels),
         audit_rate=rate,
