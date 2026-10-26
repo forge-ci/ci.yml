@@ -389,6 +389,39 @@ def _check_platform_runs_on(ci: CiToml) -> list[Finding]:
     return findings
 
 
+def _literal_matrix_runs_on(job: dict[str, YamlValue], label: str) -> list[str] | None:
+    """`${{ matrix.<k> }}`/`${{ matrix.<k>.<f> }}` resolved from the job's own
+    literal `strategy.matrix` (list values and `include` entries), or None."""
+    m = _MATRIX_EXPR_RE.match(label.strip())
+    return _literal_matrix_values(job, m.group(1)) if m else None
+
+
+def _check_literal_matrix_labels(
+    path: str, job_id: str, label: str, values: list[str]
+) -> list[Finding]:
+    """RUN-001 for a `runs-on` resolved from a literal matrix: each value is
+    validated against the fleet list exactly like a literal label."""
+    findings: list[Finding] = []
+    for value in sorted(set(values)):
+        if value in FLEET_RUNNERS:
+            continue
+        reason = (
+            "a '-latest' label (retires without notice)"
+            if value.endswith("-latest")
+            else "not in the fleet runner list"
+        )
+        findings.append(
+            Finding(
+                rule="RUN-001",
+                path=path,
+                message=f"jobs.{job_id}.runs-on '{label}' resolves (from the job's literal "
+                f"strategy.matrix) to '{value}', which is {reason}",
+                fix=f"use one of the fleet labels: {sorted(FLEET_RUNNERS)}",
+            )
+        )
+    return findings
+
+
 def check_run_001(ci: CiToml, workflows: list[ParsedYamlFile]) -> list[Finding]:  # noqa: C901
     findings: list[Finding] = []
     platform_runs_on_checked = False
@@ -409,6 +442,10 @@ def check_run_001(ci: CiToml, workflows: list[ParsedYamlFile]) -> list[Finding]:
                         if not platform_runs_on_checked:
                             findings.extend(_check_platform_runs_on(ci))
                             platform_runs_on_checked = True
+                        continue
+                    literal = _literal_matrix_runs_on(job, label)
+                    if literal is not None:
+                        findings.extend(_check_literal_matrix_labels(wf.path, job_id, label, literal))
                         continue
                     findings.append(
                         Finding(
@@ -618,6 +655,9 @@ _MATRIX_EXPR_RE = re.compile(r"^\$\{\{\s*matrix\.([A-Za-z0-9_.-]+)\s*\}\}$")
 class _Run003Labels:
     arm: tuple[str, ...]
     unresolved: tuple[str, ...]
+    # True when every arm label came from a platform-lanes matrix leg (plan
+    # output), so the plan's own flow/tag selection decides whether it runs.
+    plan_lanes_only: bool = False
 
 
 def _run_003_labels(ci: CiToml, job: dict[str, YamlValue]) -> _Run003Labels:
@@ -630,6 +670,7 @@ def _run_003_labels(ci: CiToml, job: dict[str, YamlValue]) -> _Run003Labels:
         labels = [x for x in runs_on if isinstance(x, str)]
     arm: list[str] = []
     unresolved: list[str] = []
+    literal_arm = False
     lane_key = _matrix_platform_lane_key(job)
     for label in labels:
         if "${{" not in label:
@@ -647,8 +688,45 @@ def _run_003_labels(ci: CiToml, job: dict[str, YamlValue]) -> _Run003Labels:
         if resolved is None:
             unresolved.append(label)
         else:
-            arm.extend(v for v in resolved if is_native_arm_linux_label(v))
-    return _Run003Labels(tuple(arm), tuple(unresolved))
+            hits = [v for v in resolved if is_native_arm_linux_label(v)]
+            literal_arm = literal_arm or bool(hits)
+            arm.extend(hits)
+    return _Run003Labels(
+        tuple(arm), tuple(unresolved), plan_lanes_only=bool(arm) and not literal_arm
+    )
+
+
+# RUN-003 events -> the planner event whose untagged flow they select.
+_RUN_003_PLAN_EVENTS: dict[str, str] = {
+    "pull_request": "pull_request",
+    "pull_request_target": "pull_request",
+    "push": "push",
+}
+
+
+def _untagged_plan_arm_lanes(ci: CiToml, events: tuple[str, ...]) -> list[str] | None:
+    """Native arm64 Linux platform-lanes legs the planner selects for an
+    UNTAGGED run of each PR/push event (`[flow.pr]`/`[flow.main]` with no
+    title tag). None when the plan cannot be computed (fail closed).
+
+    A platform-lanes matrix only ever enumerates what `ci-lint plan` selected,
+    so when no untagged PR/push plan selects an arm lane, the lane can reach a
+    PR only through an explicit title opt-in (`[ci-full]`, `[release]`, a
+    derived `[ci-<platform>]`/`[ci-<group>]`) and never reaches a push, which
+    carries no title tokens -- the tag-gated home RUN-003 accepts."""
+    from ci_lint.plan import PlanError, compute_plan
+
+    hits: list[str] = []
+    for ev in events:
+        try:
+            plan = compute_plan(ci, event_name=_RUN_003_PLAN_EVENTS[ev], ref="refs/heads/main")
+        except (PlanError, KeyError, ValueError):
+            return None
+        hits.extend(
+            f"{lane.id} ({ev})" for lane in plan.platform_lanes
+            if is_native_arm_linux_label(lane.runs_on)
+        )
+    return hits
 
 
 def _run_003_confined(cond: YamlValue) -> bool | None:
@@ -697,8 +775,9 @@ def check_run_003(ci: CiToml, workflows: list[ParsedYamlFile]) -> list[Finding]:
     reachable from `pull_request` or a default-branch `push`. Its job `if:`
     must confine it to `schedule`/`workflow_dispatch`/`release` (or a tag ref,
     or the `ci-full` tag). Platform-lanes matrix legs are resolved against
-    ci.toml's [platforms].*.runs-on, as RUN-001 does; other dynamic labels
-    and unprovable `if:` expressions are `needs_review`."""
+    ci.toml's [platforms].*.runs-on, as RUN-001 does, and pass when no
+    untagged PR/push plan selects an arm lane (tag opt-in only); other
+    dynamic labels and unprovable `if:` expressions are `needs_review`."""
     findings: list[Finding] = []
     for wf in workflows:
         if wf.status != LoadStatus.OK:
@@ -710,8 +789,15 @@ def check_run_003(ci: CiToml, workflows: list[ParsedYamlFile]) -> list[Finding]:
         for job_id, job in jobs_of(doc).items():
             labels = _run_003_labels(ci, job)
             cond = job.get("if")
-            if (labels.arm or labels.unresolved) and _run_003_confined(cond) is not True:
-                findings.append(_run_003_finding(wf.path, job_id, "/".join(events), labels, cond))
+            if not (labels.arm or labels.unresolved) or _run_003_confined(cond) is True:
+                continue
+            if (
+                labels.plan_lanes_only
+                and not labels.unresolved
+                and _untagged_plan_arm_lanes(ci, events) == []
+            ):
+                continue  # arm legs reachable only via a title opt-in tag
+            findings.append(_run_003_finding(wf.path, job_id, "/".join(events), labels, cond))
     return findings
 
 
