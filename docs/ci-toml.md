@@ -1557,6 +1557,14 @@ producing the two JSON files `perf compare` consumes:
 `perf compare` reports the `delta_pct` between the two medians and any
 gating `--threshold-pct` applies to that median delta only.
 
+**When to stop (CPU saturation, #148 lesson 5).** Once the critical
+path is CPU-bound test execution plus mandatory compiles, and an overlap
+experiment slows both overlapped phases by roughly the overlap amount
+(running-process#1245: pytest 33 -> 81 s, nextest 41 -> 57 s), further
+quick-gate tuning is out of scope. The remaining levers are structural:
+the private-crate feature layout (`RUST-011`), the Soldr PEP 517 backend
+(`PKG-004`), an xdist-safe test suite (`TEST-003`), or a larger runner.
+
 
 ### Qualified replay public outputs (candidate pilot, #362)
 
