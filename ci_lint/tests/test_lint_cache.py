@@ -111,3 +111,34 @@ class LintCacheTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def _cache_job(paths: str, extra_run: str = "") -> str:
+    return (
+        "on: [push]\njobs:\n  lint:\n    runs-on: ubuntu-24.04\n    steps:\n"
+        f"{extra_run}"
+        "      - uses: actions/cache@v4\n        with:\n          key: dylint-deps-v1-x\n"
+        f"          path: |\n{paths}"
+    )
+
+
+class LintCachePayloadTest(unittest.TestCase):
+    _check = LintCacheTest._check
+    @requires_yaml_tooling
+    def test_incremental_path_is_violation(self) -> None:
+        wf = _cache_job("            target/debug/incremental\n")
+        self.assertEqual(self._check(wf), [("RUST-022", "violation")])
+
+    @requires_yaml_tooling
+    def test_workspace_tree_without_freshness_needs_review(self) -> None:
+        self.assertEqual(self._check(_cache_job("            target\n")), [("RUST-022", "needs_review")])
+
+    @requires_yaml_tooling
+    def test_workspace_tree_with_freshness_is_clean(self) -> None:
+        run = "      - run: soldr dylint --all -- -Zchecksum-freshness\n"
+        self.assertEqual(self._check(_cache_job("            target/debug\n", run)), [])
+
+    @requires_yaml_tooling
+    def test_lint_library_trees_are_exempt(self) -> None:
+        wf = _cache_job("            target/dylint/libraries\n            target/dylint/target\n")
+        self.assertEqual(self._check(wf), [])
