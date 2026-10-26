@@ -108,8 +108,9 @@ def _truthy(value: object) -> bool:
 def check_cache_037(ci: CiToml, repo_root: Path) -> list[Finding]:
     del ci  # the static clauses read only workflow/composite-action steps
     findings: list[Finding] = []
-    for path, is_composite, doc in _loaded_files(repo_root):
-        for step in _iter_uses_with(doc, is_composite=is_composite):
+    for lf in _loaded_files(repo_root):
+        path = lf.path
+        for step in _iter_uses_with(lf.doc, is_composite=lf.is_composite):
             slug = step.uses.split("@", 1)[0]
             location = f"{path}#{step.loc}"
             if slug == "zackees/setup-soldr" and _truthy(step.with_.get("cargo-registry-cache")):
