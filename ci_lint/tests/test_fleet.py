@@ -232,5 +232,45 @@ class SyncIssuesTest(unittest.TestCase):
         self.assertEqual(cli.main(["sync-issues", "--replay", str(GREEN)]), 2)
 
 
+
+@unittest.skipUnless(yaml_tooling_available(), "needs PyYAML or yq to parse workflows")
+class FleetDailyTest(unittest.TestCase):
+    """`ci-lint fleet daily` (#38): the scheduler entry point."""
+
+    def _run(self, out: str, date: str, path) -> tuple[int, str]:
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            rc = cli.main(["fleet", "daily", "--repos", T, "--replay", str(path), "--out-dir", out, "--date", date])
+        return rc, buf.getvalue()
+
+    def test_first_scan_then_delta(self) -> None:
+        import tempfile
+        from pathlib import Path
+
+        from ci_lint.fleet_cli import previous_daily_scan
+
+        with tempfile.TemporaryDirectory() as tmp:
+            rc, text = self._run(tmp, "2026-10-01", GREEN)
+            self.assertEqual(rc, 0)
+            self.assertIn("first scan", text)
+            self.assertTrue((Path(tmp) / "fleet-scan-2026-10-01.json").is_file())
+            # Red next day: every RED violation is new -> exit 1.
+            rc, text = self._run(tmp, "2026-10-02", RED)
+            self.assertEqual(rc, 1)
+            self.assertIn("FLEET-001", text)
+            doc = json.loads((Path(tmp) / "fleet-scan-2026-10-02.json").read_text(encoding="utf-8"))
+            self.assertTrue(doc["scanned_at"].startswith("2026-10-02T"))
+            self.assertEqual(previous_daily_scan(Path(tmp), "2026-10-02").name, "fleet-scan-2026-10-01.json")
+            self.assertIsNone(previous_daily_scan(Path(tmp), "2026-10-01"))
+            # Rerunning a day replaces that day's file; the baseline stays the earlier day.
+            rc, _ = self._run(tmp, "2026-10-02", GREEN)
+            self.assertEqual(rc, 0)
+
+    def test_bad_date(self) -> None:
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(self._run(tmp, "26-10-01", GREEN)[0], 2)
+
 if __name__ == "__main__":
     unittest.main()
