@@ -23,6 +23,9 @@ Rules implemented:
   - GEN-006: `required_status_checks.strict` is true on the default branch
     with no merge queue configured (rulesets + classic branch protection;
     a 404 on either is treated as "none").
+  - GEN-022 (live half, #432): no active merge-queue ruleset covers the
+    default branch (violation), or a queue is active with no required
+    status check (needs_review). Reuses the GEN-006 payloads.
   - GEN-011: the default branch's required status checks don't include the
     gate check name (default "CI OK"); reported `needs_review` (a policy
     decision, not a code defect) when branch protection itself is absent.
@@ -436,6 +439,102 @@ def check_gen_006(
     ]
 
 
+def _contexts_of(checks: JsonValue) -> set[str]:
+    """`context` names from a `[{"context": ...}]` checks array."""
+
+    if not isinstance(checks, list):
+        return set()
+    return {str(c["context"]) for c in checks if isinstance(c, dict) and isinstance(c.get("context"), str)}
+
+
+def _ruleset_contexts(rs: dict[str, JsonValue]) -> set[str]:
+    rules = rs.get("rules")
+    if not isinstance(rules, list):
+        return set()
+    contexts: set[str] = set()
+    for rule in rules:
+        if isinstance(rule, dict) and rule.get("type") == "required_status_checks":
+            params = rule.get("parameters")
+            if isinstance(params, dict):
+                contexts |= _contexts_of(params.get("required_status_checks"))
+    return contexts
+
+
+def _required_contexts(
+    branch_protection: SettingsReply | None,
+    rulesets: list[dict[str, JsonValue]],
+    default_branch: str,
+) -> set[str]:
+    """Every required status-check context on the default branch, from
+    classic branch protection and every active ruleset covering it."""
+
+    contexts: set[str] = set()
+    if branch_protection is not None and branch_protection.status == 200 and branch_protection.body is not None:
+        rsc = branch_protection.body.get("required_status_checks")
+        if isinstance(rsc, dict):
+            raw = rsc.get("contexts")
+            if isinstance(raw, list):
+                contexts.update(c for c in raw if isinstance(c, str))
+            contexts |= _contexts_of(rsc.get("checks"))
+    for rs in rulesets:
+        if rs.get("enforcement") == "active" and _ruleset_covers_branch(rs, default_branch):
+            contexts |= _ruleset_contexts(rs)
+    return contexts
+
+
+def check_gen_022_live(
+    branch_protection: SettingsReply | None,
+    rulesets: SettingsReply | None,
+    default_branch: str,
+) -> list[Finding]:
+    """GEN-022 live half (#405/#432 step 3): the default branch's ruleset
+    enables a merge queue, and the queue has required checks to wait on.
+
+    Zero extra calls: reuses the rulesets/branch-protection payloads GEN-006
+    already fetched. No active queue ruleset covering the default branch is a
+    violation; a queue with no required status check anywhere (ruleset or
+    classic protection) is `needs_review` -- the queue would merge without
+    waiting on any `merge_group` run. Whether the required contexts are ones
+    a `merge_group` run actually reports is not decidable from settings alone
+    and stays the human step-4 evidence (a green queue run)."""
+
+    path = f"branch:{default_branch}"
+    if rulesets is None:
+        return [_network_finding("GEN-022", path, "rulesets")]
+    if rulesets.status == 403:
+        return [_forbidden_finding("GEN-022", path, "rulesets")]
+    if rulesets.status not in (200, 404):
+        return [_unexpected_status_finding("GEN-022", path, "rulesets", rulesets.status)]
+    rs_list = rulesets.body if rulesets.status == 200 else []
+    if not _has_active_merge_queue(rs_list, default_branch):
+        return [
+            Finding(
+                rule="GEN-022",
+                path=path,
+                message=f"no active ruleset with a 'merge_queue' rule covers '{default_branch}' -- "
+                "merges bypass the merge queue GEN-022 requires",
+                fix="follow docs/policy-general.md's GEN-022 transition steps: bump the planner pin, add "
+                "the merge_group trigger, then enable a 'main merge queue' ruleset whose required checks "
+                "are the contexts a merge_group run reports",
+            )
+        ]
+    if branch_protection is not None and branch_protection.status == 403:
+        return [_forbidden_finding("GEN-022", path, "branch protection")]
+    if not _required_contexts(branch_protection, rs_list, default_branch):
+        return [
+            Finding(
+                rule="GEN-022",
+                status=Status.NEEDS_REVIEW,
+                path=path,
+                message=f"a merge queue is active on '{default_branch}' but no required status check is "
+                "configured (ruleset or branch protection), so the queue merges without waiting on CI",
+                fix="add the exact contexts a merge_group run reports (the CI OK aggregator or gate names) "
+                "as required checks -- GEN-022 transition step 3",
+            )
+        ]
+    return []
+
+
 def check_gen_011(
     branch_protection: SettingsReply | None,
     default_branch: str,
@@ -605,6 +704,7 @@ def run_audit(
     rulesets = _fetch_rulesets(fetch_status, token, repo)
     findings.extend(check_gen_006(branch_protection, rulesets, default_branch))
     findings.extend(check_gen_011(branch_protection, default_branch, gate_check_name))
+    findings.extend(check_gen_022_live(branch_protection, rulesets, default_branch))
     protection_body = branch_protection.body if branch_protection is not None and branch_protection.status == 200 else None
     ruleset_list = rulesets.body if rulesets is not None and rulesets.status == 200 else None
     findings.extend(check_gate_012_required(protection_body, ruleset_list, default_branch))
@@ -632,7 +732,7 @@ def to_json_dict(report: AuditReport) -> dict[str, JsonValue]:
 
 def render_text(report: AuditReport) -> str:
     lines = [f"ci-lint audit: {report.repo} (default branch: {report.default_branch})"]
-    rules = ("SEC-005", "SEC-006", "SEC-007", "GEN-006", "GEN-010", "GEN-011", "GATE-012", "RUST-014")
+    rules = ("SEC-005", "SEC-006", "SEC-007", "GEN-006", "GEN-010", "GEN-011", "GEN-022", "GATE-012", "RUST-014")
     by_rule: dict[str, list[Finding]] = {r: [] for r in rules}
     for f in report.findings:
         by_rule.setdefault(f.rule, []).append(f)
