@@ -12,41 +12,39 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 
 from ci_lint.act_audit import audit as run_act_audit
-from ci_lint.hosted_attestations import verified_jobs, verified_merge_group_jobs
-from ci_lint.attestations import JobDecision
 from ci_lint.act_audit import render as render_act_audit_text
 from ci_lint.act_audit import to_json_dict as act_audit_to_json_dict
-from ci_lint.cache.audit import AuditError, run_audit
+from ci_lint.attest_cli import register as register_attest
+from ci_lint.attestations import JobDecision
+from ci_lint.cache.audit import AuditError, infer_default_branch, run_audit
 from ci_lint.cache.audit import render_text as render_cache_audit_text
 from ci_lint.cache.audit import to_json_dict as cache_audit_to_json_dict
 from ci_lint.cache.budget import run_budget as cache_run_budget
-from ci_lint.rules.cache_payload import (
-    PayloadManifestError,
-    check_cache_007_manifest,
-    load_manifest_paths,
-)
-from ci_lint.rules.cache_static import parse_size as cache_parse_size
 from ci_lint.cache.delta import (
     DeltaError,
     StaleBaseError,
-    apply as apply_delta,
     build_manifest,
     load_manifest,
     manifest_to_json,
+)
+from ci_lint.cache.delta import (
+    apply as apply_delta,
+)
+from ci_lint.cache.delta import (
     pack as pack_delta,
 )
+from ci_lint.cache.hit_rate import HitRateError, check_hit_rate
+from ci_lint.cache.hit_rate import render_text as render_hit_rate_text
+from ci_lint.cache.hit_rate import to_json_dict as hit_rate_to_json_dict
 from ci_lint.cache.keys import CacheKeyError, build_delta_key, build_family_key
 from ci_lint.cache.ops import heal as cache_heal
 from ci_lint.cache.ops import janitor as cache_janitor
 from ci_lint.cache.ops import preprune as cache_preprune
 from ci_lint.cache.ops import trim as cache_trim
-from ci_lint.cache.hit_rate import HitRateError, check_hit_rate
-from ci_lint.cache.hit_rate import render_text as render_hit_rate_text
-from ci_lint.cache.hit_rate import to_json_dict as hit_rate_to_json_dict
+from ci_lint.cache.rework import ReworkError, render_rework_text, run_rework
 from ci_lint.cache.save_evidence import SaveEvidenceError, run_save_check
 from ci_lint.cache.save_evidence import render_text as render_save_check_text
 from ci_lint.cache.save_evidence import to_json_dict as save_check_to_json_dict
-from ci_lint.cache.rework import ReworkError, render_rework_text, run_rework
 from ci_lint.cache.save_ok import SaveOkInputError, SaveOkRequest, evaluate_save_ok
 from ci_lint.cargo_messages import JsonValue, load_artifacts_file
 from ci_lint.cargo_scan import discover_workspace
@@ -59,37 +57,23 @@ from ci_lint.fbuild_coverage import to_json_dict as fbuild_coverage_to_json_dict
 from ci_lint.finding import Finding, Status
 from ci_lint.fleet_cli import register as register_fleet
 from ci_lint.gh_repo_cache import register as register_gh_cache
-from ci_lint.reuse_cli import register as register_reuse
-from ci_lint.attest_cli import register as register_attest
+from ci_lint.github_api import GitHubApiError, default_delete, default_fetch, default_fetch_status, default_graphql
+from ci_lint.hosted_attestations import verified_jobs, verified_merge_group_jobs
 from ci_lint.local_gate_cli import register as register_local_gate
-from ci_lint.py_lint import register as register_py
-from ci_lint.remote_only import register as register_remote_only
-from ci_lint.rules.complexity import register as register_complexity
-from ci_lint.github_api import default_delete, default_fetch, default_fetch_status, default_graphql
 from ci_lint.perf import (
     PERF_SCHEMA_VERSION,
     PerfCompareError,
     PerfCompareReport,
-    compare as perf_compare,
-    is_gating as perf_is_gating,
     load_benchmark_file,
+)
+from ci_lint.perf import (
+    compare as perf_compare,
+)
+from ci_lint.perf import (
+    is_gating as perf_is_gating,
 )
 from ci_lint.perf import render_text as render_perf_text
 from ci_lint.perf import to_json_dict as perf_to_json_dict
-from ci_lint.runtime.pr_timing import (
-    HistoryScan,
-    PrTimingError,
-    compute_pr_timing,
-    load_history_file,
-)
-from ci_lint.runtime.pr_timing import render_text as render_pr_timing_text
-from ci_lint.runtime.pr_timing import to_json_dict as pr_timing_to_json_dict
-from ci_lint.runtime.toolchain_build import (
-    ToolchainBuildCheckError,
-    compute_toolchain_build_report,
-)
-from ci_lint.runtime.toolchain_build import render_text as render_toolchain_build_text
-from ci_lint.runtime.toolchain_build import to_json_dict as toolchain_build_to_json_dict
 from ci_lint.plan import Plan, PlanError, build_act_event, compute_plan
 from ci_lint.precheck import (
     YAML_TOOLING_RULE,
@@ -99,6 +83,7 @@ from ci_lint.precheck import (
     run_precheck,
     write_step_summary,
 )
+from ci_lint.proc import run_captured
 from ci_lint.publish_oidc import (
     OidcCheckError,
     assert_claims,
@@ -107,6 +92,7 @@ from ci_lint.publish_oidc import (
 )
 from ci_lint.publish_oidc import render as render_oidc_check
 from ci_lint.publish_oidc import to_json_dict as oidc_check_to_json_dict
+from ci_lint.py_lint import register as register_py
 from ci_lint.release import (
     ReleaseVerifyError,
     verify_readback,
@@ -115,9 +101,18 @@ from ci_lint.release import (
     write_release_manifest,
 )
 from ci_lint.release import render_text as render_release_verify_text
-from ci_lint.release_resume import register as register_release_resume
 from ci_lint.release import to_json_dict as release_verify_to_json_dict
+from ci_lint.release_resume import register as register_release_resume
+from ci_lint.remote_only import register as register_remote_only
 from ci_lint.reuse import ReuseResult, compute_reuse, empty_result
+from ci_lint.reuse_cli import register as register_reuse
+from ci_lint.rules.cache_payload import (
+    PayloadManifestError,
+    check_cache_007_manifest,
+    load_manifest_paths,
+)
+from ci_lint.rules.cache_static import parse_size as cache_parse_size
+from ci_lint.rules.complexity import register as register_complexity
 from ci_lint.rules.contract import extract_bracket_tokens
 from ci_lint.runtime.dylint import DylintCoverageError, compute_dylint_coverage
 from ci_lint.runtime.dylint import render_text as render_dylint_coverage_text
@@ -125,18 +120,38 @@ from ci_lint.runtime.dylint import to_json_dict as dylint_coverage_to_json_dict
 from ci_lint.runtime.gate import QueueReuse, compute_gate
 from ci_lint.runtime.gate import render_text as render_gate_text
 from ci_lint.runtime.gate import to_json_dict as gate_to_json_dict
+from ci_lint.runtime.pr_timing import (
+    HistoryScan,
+    PrTimingError,
+    compute_pr_timing,
+    load_history_file,
+)
+from ci_lint.runtime.pr_timing import render_text as render_pr_timing_text
+from ci_lint.runtime.pr_timing import to_json_dict as pr_timing_to_json_dict
 from ci_lint.runtime.suite import SuiteCheckError, compute_suite_check
 from ci_lint.runtime.suite import render_text as render_suite_check_text
 from ci_lint.runtime.suite import to_json_dict as suite_check_to_json_dict
 from ci_lint.runtime.tests_size import compute_tests_size
 from ci_lint.runtime.tests_size import render_text as render_tests_size_text
 from ci_lint.runtime.tests_size import to_json_dict as tests_size_to_json_dict
+from ci_lint.runtime.toolchain_build import (
+    ToolchainBuildCheckError,
+    compute_toolchain_build_report,
+)
+from ci_lint.runtime.toolchain_build import render_text as render_toolchain_build_text
+from ci_lint.runtime.toolchain_build import to_json_dict as toolchain_build_to_json_dict
 from ci_lint.runtime.units import compute_units
 from ci_lint.runtime.units import render_text as render_units_text
 from ci_lint.runtime.units import to_json_dict as units_to_json_dict
-from ci_lint.runtime.wheel import check_installed, check_wheel, soldr_requires_floor
-from ci_lint.runtime.wheel import installed_check_to_json_dict, wheel_check_to_json_dict
-from ci_lint.runtime.wheel import render_installed_check, render_wheel_check
+from ci_lint.runtime.wheel import (
+    check_installed,
+    check_wheel,
+    installed_check_to_json_dict,
+    render_installed_check,
+    render_wheel_check,
+    soldr_requires_floor,
+    wheel_check_to_json_dict,
+)
 from ci_lint.schema import CiToml, load_ci_toml
 from ci_lint.selftest import run_selftest
 from ci_lint.settings_audit import DEFAULT_GATE_CHECK_NAME
@@ -741,6 +756,44 @@ def _cmd_selftest(_args: argparse.Namespace) -> int:
 # ── `ci-lint audit` (round-5: SEC-005/006/007, GEN-006/011) ────────────────
 
 
+def _branch_exists(branch: str, token: str, repo_slug: str, repo_root: Path) -> bool:
+    for ref in (f"refs/heads/{branch}", f"refs/remotes/origin/{branch}"):
+        if run_captured(["git", "-C", str(repo_root), "rev-parse", "--verify", "--quiet", ref]).ok:
+            return True
+    try:
+        return isinstance(default_fetch(f"https://api.github.com/repos/{repo_slug}/branches/{branch}", token), dict)
+    except GitHubApiError:
+        return False
+
+
+def _require_default_branch(
+    explicit: str | None, token: str, repo_slug: str, cmd: str, repo_root: Path
+) -> str | None:
+    """#491: infer the default branch (#425) instead of assuming `main`; a
+    repo on `master` would otherwise be judged against the wrong branch.
+    Unspecified and uninferable -> `main` if it exists, else `master`; an
+    explicit `main` that does not exist becomes `master`. Both warn."""
+
+    if explicit == "main" and not _branch_exists("main", token, repo_slug, repo_root):
+        if _branch_exists("master", token, repo_slug, repo_root):
+            print(f"ci-lint {cmd}: warning: --default-branch main does not exist; using master", file=sys.stderr)
+            return "master"
+    if explicit is not None:
+        return explicit
+    branch = infer_default_branch(default_fetch, token, repo_slug)
+    if branch is not None:
+        return branch
+    for candidate in ("main", "master"):
+        if _branch_exists(candidate, token, repo_slug, repo_root):
+            print(
+                f"ci-lint {cmd}: warning: could not infer the default branch; falling back to {candidate!r}",
+                file=sys.stderr,
+            )
+            return candidate
+    print(f"ci-lint {cmd}: cannot infer the default branch; pass --default-branch", file=sys.stderr)
+    return None
+
+
 def _cmd_audit(args: argparse.Namespace) -> int:
     repo_root = Path(args.repo).resolve()
     ci = _load_ci_or_die(repo_root, "audit")
@@ -750,12 +803,15 @@ def _cmd_audit(args: argparse.Namespace) -> int:
     if creds is None:
         return 1
     token, repo_slug = creds.token, creds.repo_slug
+    default_branch = _require_default_branch(args.default_branch, token, repo_slug, "audit", repo_root)
+    if default_branch is None:
+        return 1
     report = run_settings_audit(
         ci,
         fetch_status=default_fetch_status,
         token=token,
         repo=repo_slug,
-        default_branch=args.default_branch,
+        default_branch=default_branch,
         gate_check_name=args.gate_check_name,
         repo_root=repo_root,
     )
@@ -1172,9 +1228,12 @@ def _cmd_cache_budget(args: argparse.Namespace) -> int:
     event_name = args.event_name or os.environ.get("GITHUB_EVENT_NAME") or ""
     ref = args.ref or os.environ.get("GITHUB_REF") or ""
     pr_number = args.pr if args.pr is not None else _pr_number_from_event(event)
+    default_branch = _require_default_branch(args.default_branch, token, repo_slug, "cache budget", repo_root)
+    if default_branch is None:
+        return 1
     verdict = cache_run_budget(
         ci, fetch=default_fetch, token=token, repo=repo_slug, event_name=event_name, ref=ref,
-        pr_number=pr_number, default_branch=args.default_branch,
+        pr_number=pr_number, default_branch=default_branch,
     )
     print(json.dumps(verdict.to_json_dict(), indent=2) if args.json else verdict.render())
     return 1 if verdict.failed else 0
@@ -1589,7 +1648,7 @@ def build_parser() -> argparse.ArgumentParser:
         "hard fail on the default branch/schedule/dispatch when over budget"
     )
     p_cache_budget.add_argument("--repo", default=".")
-    p_cache_budget.add_argument("--default-branch", default="main")
+    p_cache_budget.add_argument("--default-branch", default=None, help="default: inferred (#425); unresolvable is an error (#491)")
     p_cache_budget.add_argument("--event-name", default=None, help="default: $GITHUB_EVENT_NAME")
     p_cache_budget.add_argument("--ref", default=None, help="default: $GITHUB_REF")
     p_cache_budget.add_argument("--event", default=None, help="event JSON (default: $GITHUB_EVENT_PATH)")
@@ -1651,7 +1710,7 @@ def build_parser() -> argparse.ArgumentParser:
         "audit", help="live settings audit: SEC-005/006/007, GEN-006/011 (distinct from 'cache audit')"
     )
     p_audit.add_argument("--repo", default=".")
-    p_audit.add_argument("--default-branch", default="main")
+    p_audit.add_argument("--default-branch", default=None, help="default: inferred (#425); unresolvable is an error (#491)")
     p_audit.add_argument(
         "--gate-check-name",
         default=DEFAULT_GATE_CHECK_NAME,
