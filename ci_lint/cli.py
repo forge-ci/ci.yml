@@ -111,6 +111,7 @@ from ci_lint.release import (
     write_release_manifest,
 )
 from ci_lint.release import render_text as render_release_verify_text
+from ci_lint.release_resume import register as register_release_resume
 from ci_lint.release import to_json_dict as release_verify_to_json_dict
 from ci_lint.reuse import ReuseResult, compute_reuse, empty_result
 from ci_lint.rules.contract import extract_bracket_tokens
@@ -830,7 +831,7 @@ def _cmd_release_verify(args: argparse.Namespace) -> int:
     if args.readback:
         extra_findings.extend(verify_readback(Path(args.dist), Path(args.readback), report.artifacts))
     if args.resume:
-        extra_findings.extend(verify_resume(Path(args.dist), Path(args.resume), report.artifacts))
+        extra_findings.extend(verify_resume(Path(args.dist), Path(args.resume), report.artifacts, candidate_sha=args.sha))
     if extra_findings:
         report = replace(report, findings=report.findings + tuple(extra_findings))
     manifest_path = write_release_manifest(report, Path(args.dist))
@@ -1624,7 +1625,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_publish_oidc.add_argument("--json", action="store_true")
     p_publish_oidc.set_defaults(func=_cmd_publish_oidc_check)
 
-    p_release = sub.add_parser("release", help="release-candidate checks: verify")
+    p_release = sub.add_parser("release", help="release-candidate checks: verify, resume-plan, verify-frozen")
     release_sub = p_release.add_subparsers(dest="release_command", required=True)
 
     p_release_verify = release_sub.add_parser(
@@ -1650,6 +1651,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_release_verify.add_argument("--json", action="store_true")
     p_release_verify.set_defaults(func=_cmd_release_verify)
+    register_release_resume(release_sub)
 
     p_perf = sub.add_parser("perf", help="perf checks: compare, pr-timing (PERF-001)")
     perf_sub = p_perf.add_subparsers(dest="perf_command", required=True)

@@ -499,7 +499,11 @@ def verify_readback(dist_dir: Path, readback_dir: Path, artifacts: tuple[Artifac
 
 
 def verify_resume(
-    dist_dir: Path, prior_manifest_path: Path, artifacts: tuple[ArtifactRecord, ...]
+    dist_dir: Path,
+    prior_manifest_path: Path,
+    artifacts: tuple[ArtifactRecord, ...],
+    *,
+    candidate_sha: str | None = None,
 ) -> list[Finding]:
     """REL-004 (zackees/ci.yml#8/#74): a resume must reuse the exact frozen
     artifact bytes a prior `release verify` hashed into release-manifest.json,
@@ -543,6 +547,30 @@ def verify_resume(
             prior_by_path[entry["path"]] = entry["sha256"]
 
     current_by_path: dict[str, str] = {a.path: a.sha256 for a in artifacts}
+
+    # #109: tested == published also means nothing NEW rides along with a
+    # resume, and the frozen manifest must be for the same candidate.
+    frozen_sha = prior_raw.get("candidate_sha") if isinstance(prior_raw, dict) else None
+    current_sha_all = {a.path for a in artifacts}
+    if candidate_sha is not None and frozen_sha != candidate_sha.lower():
+        findings.append(
+            Finding(
+                rule="REL-004",
+                path=str(prior_manifest_path),
+                message=f"frozen manifest is for candidate {frozen_sha!r}, this resume is for {candidate_sha.lower()!r}",
+                fix="resume only from a prior run that verified this exact commit",
+            )
+        )
+    for path in sorted(current_sha_all - set(prior_by_path)):
+        findings.append(
+            Finding(
+                rule="REL-004",
+                path=path,
+                message=f"'{path}' is staged but absent from the frozen {prior_manifest_path.name} -- a resume "
+                "must publish only the frozen set",
+                fix="drop the extra artifact, or rebuild and verify a new candidate instead of resuming",
+            )
+        )
 
     for path, frozen_sha in prior_by_path.items():
         current_sha = current_by_path.get(path)
