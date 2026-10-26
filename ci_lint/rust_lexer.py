@@ -62,7 +62,13 @@ def _char_literal_len(source: str, i: int) -> int | None:
     return None
 
 
-def _raw_string_prefix_len(source: str, i: int) -> tuple[int, int] | None:
+@dataclass(frozen=True)
+class _RawPrefix:
+    prefix_len: int
+    hashes: int
+
+
+def _raw_string_prefix_len(source: str, i: int) -> _RawPrefix | None:
     """If a raw (byte) string literal starts at `i` (`r"`, `r#"`, `br##"`,
     ...), return `(prefix_len, hash_count)` where `prefix_len` covers
     everything up to and including the opening quote; else None."""
@@ -80,7 +86,7 @@ def _raw_string_prefix_len(source: str, i: int) -> tuple[int, int] | None:
         j += 1
     if j >= n or source[j] != '"':
         return None
-    return (j + 1 - i, hashes)
+    return _RawPrefix(j + 1 - i, hashes)
 
 
 def strip_comments_and_strings(source: str) -> str:  # noqa: C901
@@ -120,7 +126,7 @@ def strip_comments_and_strings(source: str) -> str:  # noqa: C901
         # raw / raw-byte strings: (b)?r(#*)"..."(#*)
         raw = _raw_string_prefix_len(source, i)
         if raw is not None:
-            prefix_len, hashes = raw
+            prefix_len, hashes = raw.prefix_len, raw.hashes
             out.append(" " * prefix_len)
             body_start = i + prefix_len
             closer = '"' + "#" * hashes

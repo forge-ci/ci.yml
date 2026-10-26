@@ -39,6 +39,7 @@ import shutil
 import subprocess
 import time
 import tomllib
+from collections import Counter
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -602,6 +603,13 @@ class LaneSimulation:
         return self.reusable / self.commits if self.commits else 0.0
 
 
+@dataclass
+class _Triggers:
+    """Per-lane changed-path bucket -> hit count (a flat scalar map)."""
+
+    counts: Counter[str] = field(default_factory=Counter)
+
+
 def simulate(
     repo: Path, lanes: tuple[LaneConfig, ...], gate_run: tuple[str, ...], gate_source: str, *, commits: int
 ) -> list[LaneSimulation]:
@@ -614,7 +622,7 @@ def simulate(
     shas = _git(repo, "rev-list", "--first-parent", f"--max-count={commits}", "HEAD").split()
     paths = {e.path for e in tree_entries(repo, "HEAD")}
     reusable = {lane.id: 0 for lane in lanes}
-    triggers: dict[str, dict[str, int]] = {lane.id: {} for lane in lanes}
+    triggers = {lane.id: _Triggers() for lane in lanes}
     counted = 0
     for sha in shas:
         try:
@@ -631,10 +639,10 @@ def simulate(
             for p in hits:
                 top = p.split("/", 2)
                 bucket = "/".join(top[:2]) if len(top) > 2 else p
-                triggers[lane.id][bucket] = triggers[lane.id].get(bucket, 0) + 1
+                triggers[lane.id].counts[bucket] += 1
     out: list[LaneSimulation] = []
     for lane in lanes:
-        ranked = sorted(triggers[lane.id].items(), key=lambda kv: -kv[1])[:5]
+        ranked = sorted(triggers[lane.id].counts.items(), key=lambda kv: -kv[1])[:5]
         out.append(LaneSimulation(lane.id, counted, reusable[lane.id], tuple(f"{p} ({n})" for p, n in ranked)))
     return out
 

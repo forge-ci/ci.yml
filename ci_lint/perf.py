@@ -19,6 +19,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
+from ci_lint.cargo_messages import JsonValue
 from ci_lint.schema import CiToml
 
 PERF_SCHEMA_VERSION = 1
@@ -157,7 +158,7 @@ class PerfCompareReport:
     threshold_pct: float | None
 
 
-def to_json_dict(report: PerfCompareReport) -> dict[str, object]:
+def to_json_dict(report: PerfCompareReport) -> dict[str, JsonValue]:
     return {
         "schema_version": report.schema_version,
         "gating": report.gating,

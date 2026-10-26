@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from ci_lint.cargo_messages import JsonValue
 from ci_lint.cache.payload_classify import is_cmake_build_tree
 from ci_lint.rules.cache_static import parse_size
 from ci_lint.schema import CiToml
@@ -55,7 +56,7 @@ class SaveOkResult:
             return "save: yes"
         return f"save: no (rule {self.rule}: {self.reason})"
 
-    def to_json_dict(self) -> dict[str, object]:
+    def to_json_dict(self) -> dict[str, JsonValue]:
         return {"save": self.save, "rule": self.rule, "reason": self.reason}
 
 

@@ -17,6 +17,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from ci_lint.cargo_messages import JsonValue
 from ci_lint.finding import Finding, Status
 
 _ANSI_RE = re.compile(r"(?:\x1b\[|\^\[\[)[0-9;]*[A-Za-z]")
@@ -131,7 +132,7 @@ def compute_toolchain_build_report(log_paths: list[Path]) -> ToolchainBuildRepor
     return ToolchainBuildReport(sources=tuple(str(p) for p in log_paths), findings=tuple(findings))
 
 
-def to_json_dict(report: ToolchainBuildReport) -> dict[str, object]:
+def to_json_dict(report: ToolchainBuildReport) -> dict[str, JsonValue]:
     return {
         "sources": list(report.sources),
         "findings": [
