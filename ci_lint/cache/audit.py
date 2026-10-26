@@ -1041,7 +1041,7 @@ def infer_default_branch(fetch: FetchFn | None, token: str, repo: str) -> str | 
                     return branch
     if fetch is not None and token and repo:
         try:
-            answer = fetch(f"/repos/{repo}", token)
+            answer = fetch(f"https://api.github.com/repos/{repo}", token)
         except GitHubApiError:
             return None
         if isinstance(answer, dict):

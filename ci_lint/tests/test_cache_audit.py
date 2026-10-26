@@ -1009,7 +1009,7 @@ class DefaultBranchInferenceTest(unittest.TestCase):
     @staticmethod
     def _repo_fetch(branch: str):
         def fetch(url: str, token: str):
-            if url.startswith("/repos/"):
+            if url == f"https://api.github.com/repos/{REPO_SLUG}":
                 return {"default_branch": branch}
             if "actions/runs" in url:  # RUST-004's probe, answered with "no runs"
                 return {"workflow_runs": []}
