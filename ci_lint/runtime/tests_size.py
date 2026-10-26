@@ -13,7 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from ci_lint.cargo_messages import CompilerArtifact
+from ci_lint.cargo_messages import CompilerArtifact, JsonValue
 from ci_lint.finding import Finding, Status
 from ci_lint.rules.cache_static import parse_size
 from ci_lint.schema import CiToml
@@ -127,7 +127,7 @@ def compute_tests_size(ci: CiToml, artifacts: list[CompilerArtifact]) -> TestsSi
     )
 
 
-def to_json_dict(report: TestsSizeReport) -> dict[str, object]:
+def to_json_dict(report: TestsSizeReport) -> dict[str, JsonValue]:
     return {
         "binaries": [{"name": b.name, "bytes": b.bytes, "executable": b.executable} for b in report.binaries],
         "total_bytes": report.total_bytes,

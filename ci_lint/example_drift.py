@@ -37,6 +37,8 @@ import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
+from ci_lint.cargo_messages import JsonValue
+
 TomlScalar = None | bool | int | float | str
 TomlValue = TomlScalar | list["TomlValue"] | dict[str, "TomlValue"]
 
@@ -150,7 +152,7 @@ def compute_example_drift(example_path: Path, repo_ci_toml: Path) -> tuple[Drift
     return tuple(out)
 
 
-def to_json_dict(entries: tuple[DriftEntry, ...]) -> dict[str, object]:
+def to_json_dict(entries: tuple[DriftEntry, ...]) -> dict[str, JsonValue]:
     return {
         "entries": [
             {

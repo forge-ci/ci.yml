@@ -2,25 +2,13 @@
   "_comment": "PY-002 ratchet (owner directives 2026-10-01 and 2026-10-02): pre-existing record-shaped tuple/dict annotations per module -- returns and dataclass fields (any dict/heterogeneous tuple), plus parameters and annotated variables (nested or untyped maps, heterogeneous tuples). Counts may only go down; a module not listed must stay at 0. Lower an entry (or delete it at 0) when you convert one to a dataclass. Burn-down: zackees/ci.yml#193.",
   "counts": {
     "ci_lint/cache/audit.py": 0,
-    "ci_lint/cache/budget.py": 1,
     "ci_lint/cache/github_cache.py": 0,
     "ci_lint/cache/ops.py": 0,
-    "ci_lint/cache/payload_classify.py": 1,
-    "ci_lint/cache/save_ok.py": 1,
-    "ci_lint/cargo_messages.py": 1,
     "ci_lint/cli.py": 0,
-    "ci_lint/example_drift.py": 1,
-    "ci_lint/exceptions.py": 1,
     "ci_lint/fleet.py": 0,
-    "ci_lint/lane_cache.py": 1,
-    "ci_lint/perf.py": 1,
-    "ci_lint/precheck.py": 1,
     "ci_lint/rules/setup_soldr_freshness.py": 0,
     "ci_lint/rules/tools.py": 0,
-    "ci_lint/runtime/tests_size.py": 1,
-    "ci_lint/runtime/toolchain_build.py": 1,
     "ci_lint/runtime/wheel.py": 0,
-    "ci_lint/rust_lexer.py": 1,
     "ci_lint/schema.py": 0
   }
 }

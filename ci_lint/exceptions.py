@@ -24,6 +24,12 @@ UNWAIVABLE_RULES: frozenset[str] = frozenset({"CACHE-025"})
 
 
 @dataclass(frozen=True)
+class _ExceptionKey:
+    rule: str
+    path: str
+
+
+@dataclass(frozen=True)
 class ExceptionOutcome:
     findings: list[Finding]
     matched: list[ExceptionEntry]
@@ -82,12 +88,12 @@ def apply_exceptions(
 
     # CT-005: an expired exception is itself a violation, reported once per
     # exception entry (not once per finding it would have covered).
-    seen_expired: set[tuple[str, str]] = set()
+    seen_expired: set[_ExceptionKey] = set()
     for entry in ci.exceptions:
         expired = _is_expired(entry, today)
         if not expired:
             continue
-        key = (entry.rule, entry.path)
+        key = _ExceptionKey(entry.rule, entry.path)
         if key in seen_expired:
             continue
         seen_expired.add(key)

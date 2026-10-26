@@ -76,15 +76,21 @@ from ci_lint.schema import CiToml, load_ci_toml
 # not leave CACHE-005/006/008's absence unexplained -- it reports each one
 # explicitly as skipped, with `needs_review` (never `passed`), so a local
 # run is never mistaken for having covered live cache state.
-LOCAL_SKIPPED_CHECKS: tuple[tuple[str, str], ...] = (
-    ("CACHE-005", "live cache poisoned/superseded-entry audit (GitHub Actions cache API)"),
-    ("CACHE-006", "live cache usage-near-budget audit (GitHub Actions cache API)"),
-    (
+@dataclass(frozen=True)
+class SkippedCheck:
+    rule: str
+    desc: str
+
+
+LOCAL_SKIPPED_CHECKS: tuple[SkippedCheck, ...] = (
+    SkippedCheck("CACHE-005", "live cache poisoned/superseded-entry audit (GitHub Actions cache API)"),
+    SkippedCheck("CACHE-006", "live cache usage-near-budget audit (GitHub Actions cache API)"),
+    SkippedCheck(
         "CACHE-008",
         "PR cache save/trim policy audit against live cache entries "
         "(GitHub Actions cache API + GraphQL PR state)",
     ),
-    (
+    SkippedCheck(
         "ACT-001",
         "local act cache-store audit against the remote cache policy -- implemented as a "
         "distinct command, 'ci-lint act audit --store-dir <dir>' (round M2-20), not folded into "
@@ -102,17 +108,17 @@ LIVE_COVERED_RULES: frozenset[str] = frozenset({"CACHE-005", "CACHE-006", "CACHE
 def _local_skip_findings(*, live: bool = False) -> list[Finding]:
     checks = LOCAL_SKIPPED_CHECKS
     if live:
-        checks = tuple((rule, desc) for rule, desc in checks if rule not in LIVE_COVERED_RULES)
+        checks = tuple(c for c in checks if c.rule not in LIVE_COVERED_RULES)
     return [
         Finding(
-            rule=rule,
+            rule=c.rule,
             status=Status.NEEDS_REVIEW,
-            message=f"skipped (local): {desc}",
+            message=f"skipped (local): {c.desc}",
             fix="run 'ci-lint precheck' without --local (in CI, where the GitHub API is reachable, "
             "or under bosn -> act's remote-equivalent lane) to cover this check; it is never treated "
             "as passing in a --local/ACT=true run",
         )
-        for rule, desc in checks
+        for c in checks
     ]
 
 
