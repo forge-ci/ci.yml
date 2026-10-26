@@ -4,7 +4,7 @@
     "ci_lint/act_audit.py": 5,
     "ci_lint/cache/audit.py": 0,
     "ci_lint/cache/budget.py": 1,
-    "ci_lint/cache/github_cache.py": 1,
+    "ci_lint/cache/github_cache.py": 0,
     "ci_lint/cache/ops.py": 0,
     "ci_lint/cache/payload_classify.py": 1,
     "ci_lint/cache/save_evidence.py": 3,

@@ -49,13 +49,10 @@ class BenchmarkFile:
     benchmarks: tuple[BenchmarkRecord, ...]
 
 
-def _require_record(path: Path, index: int, item: object) -> JsonRecord:
+def _to_record(path: Path, index: int, item: object) -> BenchmarkRecord:
     if not isinstance(item, dict):
         raise PerfCompareError(f"{path}: benchmarks[{index}] is not a JSON object")
-    return item  # type: ignore[return-value]  # narrowed by the field checks in _to_record
-
-
-def _to_record(path: Path, index: int, raw: JsonRecord) -> BenchmarkRecord:
+    raw: JsonRecord = item  # narrowed by the field checks below
     name = raw.get("name")
     unit = raw.get("unit")
     samples_raw = raw.get("samples")
@@ -91,7 +88,7 @@ def load_benchmark_file(path: Path) -> BenchmarkFile:
     if not isinstance(raw_benchmarks, list):
         raise PerfCompareError(f"{path}: missing 'benchmarks' array")
     records = tuple(
-        _to_record(path, i, _require_record(path, i, item)) for i, item in enumerate(raw_benchmarks)
+        _to_record(path, i, item) for i, item in enumerate(raw_benchmarks)
     )
     seen: set[str] = set()
     for r in records:
