@@ -421,6 +421,46 @@ class JobStatus:
     reused_from_run: int | None = None
     reused_from_pr: int | None = None
     locally_attested: bool = False
+    queue_reused_from_pr: int | None = None  # #419 clause 5: merge_group skip proven by a PR-head attestation
+    queue_tree: str | None = None
+
+
+@dataclass(frozen=True)
+class QueueReuse:
+    """#419 clause 5: the aggregator's own re-derivation of the merge-queue
+    trust decision (`ci_lint.merge_queue_trust`) for a `merge_group` run.
+
+    `jobs` are the skip decisions it re-derived (only `skip=True` entries
+    credit a skip); `unverifiable` is set when the GET-only re-derivation
+    could not read GitHub, which makes every skipped required job
+    `needs_review` instead of a pass. A re-derived decision that does not
+    trust the entry leaves `jobs` empty, so a skip is the TEST-001 failure."""
+
+    jobs: tuple[JobDecision, ...]
+    pr: int | None = None
+    tree: str | None = None
+    unverifiable: str | None = None
+
+
+def _queue_skip(job_id: str, result: str, queue: QueueReuse) -> _SkipOutcome | None:
+    if any(item.job == job_id and item.skip for item in queue.jobs):
+        return _SkipOutcome(JobStatus(job_id, result, True, queue_reused_from_pr=queue.pr,
+                                      queue_tree=queue.tree), ())
+    if queue.unverifiable is None:
+        return None
+    return _SkipOutcome(
+        JobStatus(job_id, result, False),
+        (Finding(
+            rule="TEST-001",
+            status=Status.NEEDS_REVIEW,
+            path=job_id,
+            message=f"required job '{job_id}' is skipped on a merge_group run, but the queue trust "
+            f"decision could not be re-derived ({queue.unverifiable}) -- treated as needs_review, "
+            "never a silent pass",
+            fix="run 'ci-lint gate' where GITHUB_TOKEN can read the repository and the PR head commit "
+            "is fetched, or re-run the queue entry so the job is not skipped",
+        ),),
+    )
 
 
 @dataclass(frozen=True)
@@ -558,6 +598,7 @@ def compute_gate(
     push_sha: str | None = None,
     attested_jobs: tuple[JobDecision, ...] = (),
     workflow_jobs: WorkflowJobNames | None = None,
+    queue_reuse: QueueReuse | None = None,
 ) -> GateReport:
     """`reuse`/`head_sha`/`fetch`/`token`/`repo` are all optional and all
     default to "no reuse information available" -- a call with none of
@@ -601,6 +642,11 @@ def compute_gate(
         if result_str == "skipped":
             if any(item.job == job_id and item.skip for item in attested_jobs):
                 statuses.append(JobStatus(job_id, result_str, True, locally_attested=True))
+                continue
+            queued = _queue_skip(job_id, result_str, queue_reuse) if queue_reuse is not None else None
+            if queued is not None:
+                statuses.append(queued.status)
+                findings.extend(queued.findings)
                 continue
             outcome = _handle_skipped(
                 job_id,
@@ -653,7 +699,8 @@ def to_json_dict(report: GateReport) -> dict[str, object]:
         "required_jobs": list(report.required_jobs),
         "statuses": [
             {"job_id": s.job_id, "result": s.result, "ok": s.ok, "reused_from_run": s.reused_from_run, "reused_from_pr": s.reused_from_pr,
-             "locally_attested": s.locally_attested}
+             "locally_attested": s.locally_attested,
+             "queue_reused_from_pr": s.queue_reused_from_pr, "queue_tree": s.queue_tree}
             for s in report.statuses
         ],
         "findings": [
@@ -670,6 +717,8 @@ def render_text(report: GateReport) -> str:
     lines = ["ci-lint gate:", f"{'job':<30} {'result':<12} {'ok':<5} note"]
     for s in report.statuses:
         note = "verified local attestation" if s.locally_attested else ""
+        if s.queue_reused_from_pr is not None:
+            note = f"reused from PR #{s.queue_reused_from_pr} (attestation) tree {s.queue_tree}"
         if s.reused_from_run is not None:
             note = (
                 f"reused from PR #{s.reused_from_pr} run {s.reused_from_run}"

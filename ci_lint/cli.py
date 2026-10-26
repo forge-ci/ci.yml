@@ -12,7 +12,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from ci_lint.act_audit import audit as run_act_audit
-from ci_lint.hosted_attestations import verified_jobs
+from ci_lint.hosted_attestations import verified_jobs, verified_merge_group_jobs
 from ci_lint.attestations import JobDecision
 from ci_lint.act_audit import render as render_act_audit_text
 from ci_lint.act_audit import to_json_dict as act_audit_to_json_dict
@@ -116,7 +116,7 @@ from ci_lint.rules.contract import extract_bracket_tokens
 from ci_lint.runtime.dylint import DylintCoverageError, compute_dylint_coverage
 from ci_lint.runtime.dylint import render_text as render_dylint_coverage_text
 from ci_lint.runtime.dylint import to_json_dict as dylint_coverage_to_json_dict
-from ci_lint.runtime.gate import compute_gate
+from ci_lint.runtime.gate import QueueReuse, compute_gate
 from ci_lint.runtime.gate import render_text as render_gate_text
 from ci_lint.runtime.gate import to_json_dict as gate_to_json_dict
 from ci_lint.runtime.suite import SuiteCheckError, compute_suite_check
@@ -591,6 +591,24 @@ def _attested_gate_jobs(args: argparse.Namespace, payload: dict[str, JsonValue],
         return ()
 
 
+def _queue_gate_jobs(args: argparse.Namespace, payload: dict[str, JsonValue],
+                     needs: dict[str, JsonValue]) -> QueueReuse | None:
+    """#419 clause 5: merge_group skips need the aggregator's own GET-only re-derivation."""
+    if not getattr(args, "attested_workflow", None):
+        return None
+    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN") or ""
+    try:
+        return verified_merge_group_jobs(
+            Path(args.repo).resolve(), args.attested_workflow, payload,
+            event=os.environ.get("GITHUB_EVENT_NAME", ""), needs=needs,
+            fetch=default_fetch_status if token else None, token=token,
+            repo_slug=os.environ.get("GITHUB_REPOSITORY"),
+            local_replay=os.environ.get("ACT", "").strip().lower() == "true",
+        )
+    except (OSError, ValueError) as exc:
+        return QueueReuse((), unverifiable=f"queue attestation unavailable: {exc}")
+
+
 def _gate_plan(args: argparse.Namespace, needs: dict[str, JsonValue]) -> dict[str, JsonValue]:
     if args.workflow_plan:
         from ci_lint.workflow_gate import build_plan
@@ -664,6 +682,7 @@ def _cmd_gate(args: argparse.Namespace) -> int:
         default_branch_reuse=db_reuse,
         push_sha=push_sha,
         attested_jobs=_attested_gate_jobs(args, event, needs),
+        queue_reuse=_queue_gate_jobs(args, event, needs),
         workflow_jobs=_native_gate_jobs(args, needs),
     )
     print(json.dumps(gate_to_json_dict(report), indent=2) if args.json else render_gate_text(report))
