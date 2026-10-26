@@ -44,6 +44,7 @@ class ReplayConfig:
     qualified: bool = False
     provider_query: tuple[str, ...] = ()
     execution_pins: ExecutionPins | None = None
+    repository_aliases: tuple[str, ...] = ()
 
 
 def _bad(findings: list[Finding], source: str, path: str, message: str) -> None:
@@ -159,11 +160,23 @@ def _provider_query(cursor: Cursor, raw: dict[str, TomlValue], findings: list[Fi
     return query
 
 
+def _check_aliases(aliases: tuple[str, ...], repository: str | None, findings: list[Finding],
+                   source: str, path: str) -> None:
+    """#471: former owner/name spellings of a transferred repository."""
+    lowered = [name.lower() for name in aliases]
+    if (any(re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", name) is None for name in aliases)
+            or len(set(lowered)) != len(lowered)
+            or (repository is not None and repository.lower() in lowered)):
+        _bad(findings, source, path,
+             "repository-aliases must be distinct owner/name former names other than repository")
+
+
 def parse_replay(raw: dict[str, TomlValue], *, source: str, path: str,
                  findings: list[Finding]) -> ReplayConfig | None:
     start = len(findings)
     cursor = Cursor(raw, path, findings, source)
     repository = cursor.str_("repository")
+    aliases = tuple(cursor.list_str("repository-aliases", required=False))
     workflow = cursor.str_("workflow")
     mode = cursor.str_("mode")
     report_source = cursor.str_("report-source", required=False, default="file")
@@ -174,6 +187,7 @@ def parse_replay(raw: dict[str, TomlValue], *, source: str, path: str,
     cursor.finish()
     if repository is None or re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository) is None:
         _bad(findings, source, path, "repository must be owner/name")
+    _check_aliases(aliases, repository, findings, source, path)
     if workflow is None or re.fullmatch(WORKFLOW, workflow) is None:
         _bad(findings, source, path, "workflow must be a workflow basename")
     if mode not in ("minimal", "full"):
@@ -194,4 +208,4 @@ def parse_replay(raw: dict[str, TomlValue], *, source: str, path: str,
     if len(findings) != start or repository is None or workflow is None or mode is None or report_source is None:
         return None
     return ReplayConfig(repository, f".github/workflows/{workflow}", mode, tuple(jobs), tuple(selections), report_source,
-                        qualified, provider_query)
+                        qualified, provider_query, repository_aliases=aliases)

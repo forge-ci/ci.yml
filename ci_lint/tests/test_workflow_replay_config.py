@@ -32,6 +32,21 @@ class ReplayDeclarationTest(unittest.TestCase):
                                   path="gate.replay", findings=findings)
             self.assertEqual(config is not None, valid, findings)
 
+    def test_repository_aliases_are_distinct_former_names(self) -> None:
+        for value, valid in (('["old/repo"]', True), ('["old/repo", "older/repo"]', True),
+                             ('["owner/repo"]', False), ('["OWNER/repo"]', False),
+                             ('["old/repo", "Old/Repo"]', False), ('["not-a-repo"]', False), ('"old/repo"', False)):
+            document = DECLARATION.replace('mode = "minimal"', f'mode = "minimal"\nrepository-aliases = {value}')
+            findings: list[Finding] = []
+            config = parse_replay(tomllib.loads(document), source="local-gate.toml",
+                                  path="gate.replay", findings=findings)
+            self.assertEqual(config is not None, valid, (value, findings))
+        findings = []
+        config = parse_replay(tomllib.loads(DECLARATION), source="local-gate.toml", path="gate.replay",
+                              findings=findings)
+        assert config is not None
+        self.assertEqual(config.repository_aliases, ())
+
     def test_qualified_omitted_steps_derive_checks_from_source(self) -> None:
         document = DECLARATION.replace('mode = "minimal"', 'mode = "minimal"\nqualified = true')
         document = document.replace('steps = ["Run tests"]\n', '')

@@ -57,6 +57,7 @@ class ReplayExpectation:
     event: str = "pull_request"
     inputs: tuple[ReplayInput, ...] = ()
     execution_pins: ExecutionPins | None = None
+    repository_aliases: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -86,13 +87,18 @@ def _metadata(raw: dict[str, JsonValue], expected: ReplayExpectation) -> None:
         if raw.get("act_version") != expected.execution_pins.act_version:
             raise ValueError("workflow replay act version differs from execution provider pins")
     scalars: dict[str, str | int | None] = {
-        "schema_version": 1, "provider": "github", "repository": expected.repository, "engine": "act",
+        "schema_version": 1, "provider": "github", "engine": "act",
         "sha": expected.sha, "git_tree": expected.git_tree, "dirty": None,
         "workflow": expected.workflow, "job": expected.selected_job,
         "trigger": expected.trigger, "event": expected.event, "mode": expected.mode, "state": "done",
         "conclusion": "success", "exit_code": 0, "act_exit_code": 0,
         "cleanup": "removed",
     }
+    recorded = raw.get("repository")
+    # #471: a transferred repository's checkouts may record its declared former
+    # name; anything not declared in ci.toml fails closed.
+    if not isinstance(recorded, str) or recorded not in (expected.repository, *expected.repository_aliases):
+        raise ValueError("workflow replay metadata mismatch: repository")
     for key, value in scalars.items():
         if key not in raw or type(raw[key]) is not type(value) or raw[key] != value:
             raise ValueError(f"workflow replay metadata mismatch: {key}")
