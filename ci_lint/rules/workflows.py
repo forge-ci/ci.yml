@@ -921,23 +921,27 @@ def check_group2(ci: CiToml, repo_root: Path) -> list[Finding]:
     return findings
 
 
-# WF-004: a job that `needs:` a conditionally-skipped job needs `always()`.
+# WF-004: a job that `needs:` a conditionally-skipped job needs a status
+# function in its `if:`.
 #
-# GitHub Actions: when job B declares `needs: [A]` and A is SKIPPED, B is
-# SKIPPED too -- regardless of B's own `if:`. A bare
-# `if: !cancelled() && !failure() && ...` does NOT override that; only
-# `always()` does. So putting an event-restricted job in another job's `needs:`
-# silently disables the dependent on every other event.
+# GitHub Actions: a job's `if:` is implicitly wrapped in `success()` unless it
+# calls a status-check function. When job B declares `needs: [A]` and A is
+# SKIPPED, that implicit `success()` is false, so B is SKIPPED too. Any status
+# function -- `always()`, `!cancelled()`, `cancelled()`, `failure()` -- replaces
+# the implicit gate, so B's own condition is evaluated. An explicit `success()`
+# does not: it is the same gate. So an event-restricted job in the `needs:` of
+# a job without a status function silently disables it on every other event.
+#
+# Corrected 2026-10-26: this rule first claimed only `always()` overrides the
+# cascade. zackees/template-python-rust-cmd run 40285095554 (a PR run) shows
+# `fast` (`if: !cancelled() && !failure() && ...`) SUCCEEDED while its
+# `needs:` `reuse-decision` and `cache-maint` were both skipped.
 #
 # Measured 2026-10-05 across the fleet:
 #   zackees/clud#1805     `cache-maint` (push-to-main only) in the `needs:` of
 #                         `dylint` and `build-linux-x64` -> both skipped on
 #                         every PR, so `CI OK` reported "a minimal lane did not
 #                         run to success" across a 20-job replay.
-#   template-python-rust-cmd#67  `reuse-decision` + `cache-maint` in the
-#                         `needs:` of `fast` -- the PR QUICK GATE, skipped on
-#                         every pull_request, in the canonical template other
-#                         repositories copy.
 #   zackees/mimalloc-pprof  `memory-gate-decide` (PR-only) -> `memory-gate`,
 #                         which therefore dies on every push to main instead.
 #
@@ -976,6 +980,19 @@ def _is_conditionally_skipped(job: dict[str, YamlValue]) -> bool:
     return isinstance(condition, str) and _EVENT_RESTRICTED.search(condition) is not None
 
 
+_STATUS_FUNCTION = re.compile(r"\b(?:always|cancelled|failure)\s*\(\s*\)")
+
+
+def _overrides_implicit_success(condition: YamlValue) -> bool:
+    """True when `if:` calls a status function other than `success()`.
+
+    GitHub only adds the implicit `success()` when the expression contains no
+    status-check function; `success()` itself keeps the skip cascade.
+    """
+
+    return isinstance(condition, str) and _STATUS_FUNCTION.search(condition) is not None
+
+
 def check_wf_004(workflows: list[ParsedYamlFile]) -> list[Finding]:
     findings: list[Finding] = []
     for wf in workflows:
@@ -989,9 +1006,7 @@ def check_wf_004(workflows: list[ParsedYamlFile]) -> list[Finding]:
             blocking = [n for n in _needs_of(job) if n in restricted]
             if not blocking:
                 continue
-            condition = job.get("if")
-            has_always = isinstance(condition, str) and "always()" in condition
-            if has_always:
+            if _overrides_implicit_success(job.get("if")):
                 continue
             findings.append(
                 Finding(
@@ -1002,11 +1017,12 @@ def check_wf_004(workflows: list[ParsedYamlFile]) -> list[Finding]:
                         f"job '{jid}' needs {', '.join(repr(b) for b in blocking)}, which "
                         "is gated on the event, so it is SKIPPED on other events -- and a "
                         "skipped `needs:` skips this job too, whatever this job's own `if:` "
-                        "says. Only `always()` overrides that cascade."
+                        "says, unless that `if:` calls a status function (`always()`, "
+                        "`!cancelled()`, `cancelled()` or `failure()`); this one has none."
                     ),
                     fix=(
                         "if this job must still run when the dependency is skipped, use "
-                        "`if: always() && !cancelled() && <existing condition>`. If skipping "
+                        "`if: !cancelled() && !failure() && <existing condition>`. If skipping "
                         "is intended, say so in a comment -- a skipped required check reads "
                         "as green-adjacent to anything that inspects only conclusions"
                     ),

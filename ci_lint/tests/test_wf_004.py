@@ -1,4 +1,4 @@
-"""WF-004: a skipped `needs:` skips its dependents unless the dependent says `always()`."""
+"""WF-004: a skipped `needs:` skips its dependents unless the dependent calls a status function."""
 
 from __future__ import annotations
 
@@ -19,11 +19,11 @@ def _wf(jobs: dict[str, dict]) -> ParsedYamlFile:
 
 
 class Wf004Test(unittest.TestCase):
-    def test_event_restricted_need_without_always_is_flagged(self) -> None:
+    def test_event_restricted_need_without_status_function_is_flagged(self) -> None:
         wf = _wf(
             {
                 "decide": {"if": "github.event_name == 'push'"},
-                "gate": {"needs": ["decide"], "if": "!cancelled() && !failure()"},
+                "gate": {"needs": ["decide"], "if": "github.event.action != 'closed'"},
             }
         )
         findings = check_wf_004([wf])
@@ -40,6 +40,46 @@ class Wf004Test(unittest.TestCase):
             }
         )
         self.assertEqual(check_wf_004([wf]), [])
+
+    def test_any_status_function_overrides_the_cascade(self) -> None:
+        """template-python-rust-cmd run 40285095554: `fast` with `!cancelled()`
+        succeeded while its `needs:` reuse-decision and cache-maint skipped."""
+
+        for cond in (
+            "${{ !cancelled() && !failure() && needs.x.outputs.reuse != 'true' }}",
+            "!cancelled()",
+            "cancelled()",
+            "failure()",
+            "always()",
+        ):
+            with self.subTest(cond=cond):
+                wf = _wf(
+                    {
+                        "decide": {"if": "github.event_name == 'push'"},
+                        "gate": {"needs": ["decide"], "if": cond},
+                    }
+                )
+                self.assertEqual(check_wf_004([wf]), [])
+
+    def test_bare_success_is_still_flagged(self) -> None:
+        for cond in ("success()", "success() && github.event.action != 'closed'"):
+            with self.subTest(cond=cond):
+                wf = _wf(
+                    {
+                        "decide": {"if": "github.event_name == 'push'"},
+                        "gate": {"needs": ["decide"], "if": cond},
+                    }
+                )
+                self.assertEqual([f.rule for f in check_wf_004([wf])], ["WF-004"])
+
+    def test_status_function_name_inside_identifier_does_not_count(self) -> None:
+        wf = _wf(
+            {
+                "decide": {"if": "github.event_name == 'push'"},
+                "gate": {"needs": ["decide"], "if": "needs.x.outputs.no_failure() == 'y'"},
+            }
+        )
+        self.assertEqual([f.rule for f in check_wf_004([wf])], ["WF-004"])
 
     def test_no_event_restriction_is_clean(self) -> None:
         """A mode/output gate is a skip too, but it is the repository's own
