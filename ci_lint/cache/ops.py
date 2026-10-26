@@ -10,6 +10,7 @@ by cache id (or, for `heal`, by literal key -- no id lookup needed).
 
 from __future__ import annotations
 
+import re
 import time
 from dataclasses import dataclass
 from datetime import datetime
@@ -104,6 +105,12 @@ class _FamilyRow:
 class _ShapeKey:
     family_id: str
     shape: str
+
+
+@dataclass(frozen=True)
+class ProtectedIds:
+    ids: frozenset[int]  # every entry the janitor never deletes (bar poison)
+    variants: frozenset[int]  # the subset kept as newest of an lru key variant
 
 
 @dataclass(frozen=True)
@@ -221,25 +228,63 @@ def _before_after_table(before: list[ClassifiedEntry], deleted_ids: set[int]) ->
     return "\n".join(lines)
 
 
-def _protected_ids(ci: CiToml, classified: list[ClassifiedEntry]) -> set[int]:
+_HASH_SEGMENT_RE = re.compile(r"-[0-9a-f]{8,}(?=-|$)")
+
+
+def _key_variant(key: str) -> str:
+    """A key with every hash-like `-<hex8+>` segment removed: the scope a
+    required job restores (`...-linux-x64-<toolchain>-integration-<lock>`
+    and `...-test-<lock>` are two variants of one family, ci.yml jan026)."""
+
+    return _HASH_SEGMENT_RE.sub("", key) or key
+
+
+def _protected_ids(
+    ci: CiToml,
+    classified: list[ClassifiedEntry],
+    fresh_after: float | None = None,
+    poisoned: frozenset[int] = frozenset(),
+) -> ProtectedIds:
     """#23 section 4.3: never delete the newest entry a required job
     restores -- the newest (by last_accessed_at) base entry of each declared
-    family and key shape (not a PR entry, delta, or retired family); for an
-    `evict = "lru"` family, only its single newest entry."""
+    family and key shape (not a PR entry, delta, or retired family). For an
+    `evict = "lru"` family the scope is the family AND each key variant
+    (hash segments stripped): protecting only the family's single newest
+    entry let the LRU pass evict zccache's only `integration` build cache
+    because a `test` entry was newer. A variant whose newest entry was last
+    accessed before `fresh_after` is abandoned and loses that protection;
+    the family's overall newest entry is always kept."""
 
     newest: dict[_ShapeKey, ClassifiedEntry] = {}
     for c in classified:
-        if c.family_id is None or c.is_delta or c.is_retired or c.pr is not None:
+        if c.family_id is None or c.is_delta or c.is_retired or c.pr is not None or c.entry.id in poisoned:
             continue
         fam = ci.cache.family.get(c.family_id)
-        k = _ShapeKey(c.family_id, "" if fam is not None and fam.evict == "lru" else _shape(c.entry.key))
-        cur = newest.get(k)
-        if cur is None or c.entry.last_accessed_at > cur.entry.last_accessed_at:
-            newest[k] = c
-    return {c.entry.id for c in newest.values()}
+        lru = fam is not None and fam.evict == "lru"
+        keys = [_ShapeKey(c.family_id, "")] if lru else [_ShapeKey(c.family_id, _shape(c.entry.key))]
+        if lru:
+            keys.append(_ShapeKey(c.family_id, "variant:" + _key_variant(c.entry.key)))
+        for k in keys:
+            cur = newest.get(k)
+            if cur is None or c.entry.last_accessed_at > cur.entry.last_accessed_at:
+                newest[k] = c
+    kept = {k: c for k, c in newest.items() if _still_fresh(k, c, fresh_after)}
+    return ProtectedIds(
+        ids=frozenset(c.entry.id for c in kept.values()),
+        variants=frozenset(c.entry.id for k, c in kept.items() if k.shape.startswith("variant:")),
+    )
 
 
-def _lru_evictions(ci: CiToml, classified: list[ClassifiedEntry]) -> tuple[LruEviction, ...]:
+def _still_fresh(k: _ShapeKey, c: ClassifiedEntry, fresh_after: float | None) -> bool:
+    if fresh_after is None or not k.shape.startswith("variant:"):
+        return True
+    ts = _parse_iso8601(c.entry.last_accessed_at)
+    return ts is None or ts >= fresh_after
+
+
+def _lru_evictions(
+    ci: CiToml, classified: list[ClassifiedEntry], protected: frozenset[int] = frozenset()
+) -> tuple[LruEviction, ...]:
     """#23 section 4.2: an `evict = "lru"` family keeps its most recently
     used entries up to its declared footprint (max x cardinality) and
     evicts the rest, least recently used first."""
@@ -262,8 +307,13 @@ def _lru_evictions(ci: CiToml, classified: list[ClassifiedEntry]) -> tuple[LruEv
             key=lambda c: c.entry.last_accessed_at,
             reverse=True,
         )
-        used = 0
+        # Protected entries (the newest of each restored variant) are kept
+        # no matter what, so they are charged against the footprint first
+        # and only the unprotected rest competes for what remains.
+        used = sum(c.entry.size_in_bytes for c in members if c.entry.id in protected)
         for c in members:
+            if c.entry.id in protected:
+                continue
             used += c.entry.size_in_bytes
             if used > budget:
                 out.append(LruEviction(c.entry.id, f"lru: family '{fam_id}' over its {budget}B footprint (evict = \"lru\")"))
@@ -312,9 +362,13 @@ def janitor(  # noqa: C901
                 reason=f"closed PR: #{c.pr} is closed or merged",
             )
 
-    lru = {e.cache_id: e.reason for e in _lru_evictions(ci, list(classified))}
     now_ts = now if now is not None else time.time()
     cutoff = now_ts - stale_days * 86400
+    # A poisoned entry (CACHE-005/009) is deleted regardless, so it must not
+    # take the "newest" slot from the healthy entry a job actually restores.
+    poisoned = frozenset(i for i, p in plan.items() if p.reason.startswith(("CACHE-005", "CACHE-009")))
+    protected = _protected_ids(ci, list(classified), fresh_after=cutoff, poisoned=poisoned)
+    lru = {e.cache_id: e.reason for e in _lru_evictions(ci, list(classified), protected.ids)}
     for c in classified:
         if c.entry.id in plan:
             continue
@@ -333,19 +387,18 @@ def janitor(  # noqa: C901
             )
 
     # Safety (#23 section 4.3), applied last so no reason can bypass it.
-    protected = _protected_ids(ci, list(classified))
     grace_cutoff = now_ts - grace_seconds
     for cache_id, entry in list(plan.items()):
         c = by_id[cache_id]
         created = _parse_iso8601(c.entry.created_at)
         if created is not None and created > grace_cutoff:
             del plan[cache_id]  # too young: may race its producer and consumers
-        elif entry.id in protected and not entry.reason.startswith(("CACHE-005", "CACHE-009", "closed PR")):
+        elif entry.id in protected.ids and not entry.reason.startswith(("CACHE-005", "CACHE-009", "closed PR")):
             del plan[cache_id]  # the newest entry a required job restores
 
     budget = BudgetEvictions((), None)
     if enforce_budget:
-        budget = _budget_evictions(ci, list(classified), plan, grace_cutoff)
+        budget = _budget_evictions(ci, list(classified), plan, grace_cutoff, protected.variants)
         for cache_id in budget.ids:
             c = by_id[cache_id]
             plan[cache_id] = DeletePlanEntry(
@@ -396,7 +449,11 @@ class BudgetEvictions:
 
 
 def _budget_evictions(
-    ci: CiToml, classified: list[ClassifiedEntry], plan: dict[int, DeletePlanEntry], grace_cutoff: float
+    ci: CiToml,
+    classified: list[ClassifiedEntry],
+    plan: dict[int, DeletePlanEntry],
+    grace_cutoff: float,
+    protected: frozenset[int] = frozenset(),
 ) -> BudgetEvictions:
     """zackees/ci.yml#405: evict least recently accessed entries until the
     repository total is within [cache].budget, so GitHub's own eviction never
@@ -409,7 +466,7 @@ def _budget_evictions(
     remaining = sum(c.entry.size_in_bytes for c in classified if c.entry.id not in plan)
     if remaining <= budget:
         return BudgetEvictions((), None)
-    keep = _family_newest_ids(classified)
+    keep = _family_newest_ids(classified) | protected
     candidates = []
     for c in classified:
         created = _parse_iso8601(c.entry.created_at)
