@@ -1,0 +1,171 @@
+{
+ "api": {
+  "https://api.github.com/repos/forge-ci/bosn/branches/main/protection": [
+   200,
+   {
+    "allow_deletions": {
+     "enabled": false
+    },
+    "allow_force_pushes": {
+     "enabled": false
+    },
+    "allow_fork_syncing": {
+     "enabled": false
+    },
+    "block_creations": {
+     "enabled": false
+    },
+    "enforce_admins": {
+     "enabled": false,
+     "url": "https://api.github.com/repos/forge-ci/bosn/branches/main/protection/enforce_admins"
+    },
+    "lock_branch": {
+     "enabled": false
+    },
+    "required_conversation_resolution": {
+     "enabled": false
+    },
+    "required_linear_history": {
+     "enabled": false
+    },
+    "required_signatures": {
+     "enabled": false,
+     "url": "https://api.github.com/repos/forge-ci/bosn/branches/main/protection/required_signatures"
+    },
+    "required_status_checks": {
+     "checks": [
+      {
+       "app_id": 15368,
+       "context": "Linux (lint + unit + docker)"
+      },
+      {
+       "app_id": 15368,
+       "context": "CI policy (no hosted macOS runners)"
+      },
+      {
+       "app_id": 15368,
+       "context": "Rust workspace (locked tests)"
+      },
+      {
+       "app_id": 15368,
+       "context": "Native wheel (ubuntu-latest)"
+      },
+      {
+       "app_id": 15368,
+       "context": "Native wheel (windows-latest)"
+      },
+      {
+       "app_id": 15368,
+       "context": "Darwin wheel (x86_64-apple-darwin, Linux-hosted Soldr)"
+      },
+      {
+       "app_id": 15368,
+       "context": "Darwin wheel (aarch64-apple-darwin, Linux-hosted Soldr)"
+      },
+      {
+       "app_id": 15368,
+       "context": "Full CI coverage (exact candidate SHA)"
+      },
+      {
+       "app_id": 15368,
+       "context": "Desktop widget (Linux, WebKitGTK)"
+      }
+     ],
+     "contexts": [
+      "Linux (lint + unit + docker)",
+      "CI policy (no hosted macOS runners)",
+      "Rust workspace (locked tests)",
+      "Native wheel (ubuntu-latest)",
+      "Native wheel (windows-latest)",
+      "Darwin wheel (x86_64-apple-darwin, Linux-hosted Soldr)",
+      "Darwin wheel (aarch64-apple-darwin, Linux-hosted Soldr)",
+      "Full CI coverage (exact candidate SHA)",
+      "Desktop widget (Linux, WebKitGTK)"
+     ],
+     "contexts_url": "https://api.github.com/repos/forge-ci/bosn/branches/main/protection/required_status_checks/contexts",
+     "strict": false,
+     "url": "https://api.github.com/repos/forge-ci/bosn/branches/main/protection/required_status_checks"
+    },
+    "url": "https://api.github.com/repos/forge-ci/bosn/branches/main/protection"
+   }
+  ],
+  "https://api.github.com/repos/forge-ci/bosn/rulesets": [
+   200,
+   [
+    {
+     "_links": {
+      "html": {
+       "href": "https://github.com/forge-ci/bosn/rules/25782586"
+      },
+      "self": {
+       "href": "https://api.github.com/repos/forge-ci/bosn/rulesets/25782586"
+      }
+     },
+     "created_at": "2026-10-24T06:13:31.696-07:00",
+     "enforcement": "active",
+     "id": 25782586,
+     "name": "main merge queue",
+     "node_id": "RRS_lACqUmVwb3NpdG9yec5PfI07zgGJaTo",
+     "source": "forge-ci/bosn",
+     "source_type": "Repository",
+     "target": "branch",
+     "updated_at": "2026-10-24T06:13:31.736-07:00"
+    }
+   ]
+  ],
+  "https://api.github.com/repos/forge-ci/bosn/rulesets/25782586": [
+   200,
+   {
+    "_links": {
+     "html": {
+      "href": "https://github.com/forge-ci/bosn/rules/25782586"
+     },
+     "self": {
+      "href": "https://api.github.com/repos/forge-ci/bosn/rulesets/25782586"
+     }
+    },
+    "bypass_actors": [
+     {
+      "actor_id": 5,
+      "actor_type": "RepositoryRole",
+      "bypass_mode": "always"
+     }
+    ],
+    "conditions": {
+     "ref_name": {
+      "exclude": [],
+      "include": [
+       "~DEFAULT_BRANCH"
+      ]
+     }
+    },
+    "created_at": "2026-10-24T06:13:31.696-07:00",
+    "current_user_can_bypass": "always",
+    "enforcement": "active",
+    "id": 25782586,
+    "name": "main merge queue",
+    "node_id": "RRS_lACqUmVwb3NpdG9yec5PfI07zgGJaTo",
+    "rules": [
+     {
+      "parameters": {
+       "check_response_timeout_minutes": 60,
+       "grouping_strategy": "ALLGREEN",
+       "max_entries_to_build": 5,
+       "max_entries_to_merge": 5,
+       "merge_method": "MERGE",
+       "min_entries_to_merge": 1,
+       "min_entries_to_merge_wait_minutes": 1
+      },
+      "type": "merge_queue"
+     }
+    ],
+    "source": "forge-ci/bosn",
+    "source_type": "Repository",
+    "target": "branch",
+    "updated_at": "2026-10-24T06:13:31.736-07:00"
+   }
+  ]
+ },
+ "recorded": "2026-10-26",
+ "repo": "forge-ci/bosn"
+}
