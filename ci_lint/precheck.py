@@ -43,6 +43,7 @@ from ci_lint.rules.py_benchmark import check_group14
 from ci_lint.rules.doc_claims import check_gen_010_static
 from ci_lint.rules.ghapi_reread import check_ghapi_001
 from ci_lint.rules.host_sweeps import check_gen_030
+from ci_lint.rules.status_badges import check_gen_026
 from ci_lint.rules.release_gate import check_group11
 from ci_lint.rules.rust_dylint_target import check_rust_016
 from ci_lint.rules.cpp_ctest import check_cpp_001
@@ -215,6 +216,7 @@ def run_precheck(repo_root: Path, *, title: str = "", local: bool = False, live:
         all_findings.extend(check_ghapi_001(repo_root))
         all_findings.extend(check_gen_023(repo_root))
         all_findings.extend(check_gen_030(repo_root))
+        all_findings.extend(check_gen_026(repo_root))
         gate_cfg = ci.local.gate
         gate_runs = () if gate_cfg is None else (gate_cfg.run, *(lane.run for lane in gate_cfg.lanes))
         all_findings.extend(check_act_002(repo_root, gate_runs))
