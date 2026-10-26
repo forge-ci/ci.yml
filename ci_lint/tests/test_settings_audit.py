@@ -60,6 +60,19 @@ def _load_recorded(name: str):
     return doc["repo"], fetch_status
 
 
+def _wrap_unknown(fetch):
+    """A recorded replay answers only its own URLs; every other check run_audit
+    makes gets a 404 so the GEN-022 assertion is isolated."""
+
+    def fetch_status(url: str, token: str):
+        try:
+            return fetch(url, token)
+        except AssertionError:
+            return (404, {"message": "Not Found"})
+
+    return fetch_status
+
+
 def _clean_table(*, default_branch: str = "main", gate_check_name: str = DEFAULT_GATE_CHECK_NAME) -> dict[str, tuple[int, object]]:
     """Every endpoint returning a "nothing to report" answer -- individual
     tests override one entry at a time to exercise one rule."""
@@ -77,6 +90,7 @@ def _clean_table(*, default_branch: str = "main", gate_check_name: str = DEFAULT
             {"required_status_checks": {"strict": False, "contexts": [gate_check_name]}},
         ),
         f"{API}/repos/{REPO_SLUG}/rulesets": (200, []),
+        f"{API}/repos/{REPO_SLUG}": (200, {"owner": {"login": "org", "type": "Organization"}}),
     }
 
 
@@ -599,6 +613,32 @@ class Gen022LiveTest(unittest.TestCase):
         findings = self._replay("live-red")
         self.assertEqual(["GEN-022"], [f.rule for f in findings])
         self.assertEqual(Status.VIOLATION, findings[0].status)
+
+    def test_recorded_user_owned_repo_without_queue_is_needs_review(self) -> None:
+        # zackees/template-python-rust-cmd is user-owned: GitHub rejects a
+        # merge_queue ruleset rule there (422), so the gap needs an org transfer.
+        repo, fetch = _load_recorded("live-user")
+        report = run_audit(load_ci_toml(REPO).ci, fetch_status=_wrap_unknown(fetch), token=TOKEN, repo=repo)
+        f = next(f for f in report.findings if f.rule == "GEN-022")
+        self.assertEqual(Status.NEEDS_REVIEW, f.status)
+        self.assertIn("organization", f.message)
+
+    def test_user_owner_type_softens_only_the_missing_queue(self) -> None:
+        repo, fetch = _load_recorded("live-user")
+        bp = _fetch_branch_protection(fetch, TOKEN, repo, "main")
+        rs = _fetch_rulesets(fetch, TOKEN, repo)
+        self.assertEqual(Status.VIOLATION, check_gen_022_live(bp, rs, "main", "Organization")[0].status)
+        self.assertEqual(Status.VIOLATION, check_gen_022_live(bp, rs, "main")[0].status)
+        self.assertEqual(Status.NEEDS_REVIEW, check_gen_022_live(bp, rs, "main", "User")[0].status)
+
+    def test_unreadable_owner_type_keeps_violation(self) -> None:
+        table = _clean_table()
+        table[f"{API}/repos/{REPO_SLUG}"] = (403, {"message": "Forbidden"})
+        report = run_audit(
+            load_ci_toml(REPO).ci, fetch_status=_fetch_status_from(table), token=TOKEN, repo=REPO_SLUG
+        )
+        f = next(f for f in report.findings if f.rule == "GEN-022")
+        self.assertEqual(Status.VIOLATION, f.status)
 
     def test_queue_without_any_required_check_is_needs_review(self) -> None:
         table = _queued_table()

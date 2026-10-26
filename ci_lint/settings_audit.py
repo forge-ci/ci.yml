@@ -25,7 +25,10 @@ Rules implemented:
     a 404 on either is treated as "none").
   - GEN-022 (live half, #432): no active merge-queue ruleset covers the
     default branch (violation), or a queue is active with no required
-    status check (needs_review). Reuses the GEN-006 payloads.
+    status check (needs_review). Reuses the GEN-006 payloads; a missing
+    queue costs one GET of the repository payload, and a user-owned
+    repository (GitHub offers queues to organizations only) is
+    needs_review, not a violation.
   - GEN-011: the default branch's required status checks don't include the
     gate check name (default "CI OK"); reported `needs_review` (a policy
     decision, not a code defect) when branch protection itself is absent.
@@ -486,17 +489,25 @@ def check_gen_022_live(
     branch_protection: SettingsReply | None,
     rulesets: SettingsReply | None,
     default_branch: str,
+    owner_type: str | None = None,
 ) -> list[Finding]:
     """GEN-022 live half (#405/#432 step 3): the default branch's ruleset
     enables a merge queue, and the queue has required checks to wait on.
 
-    Zero extra calls: reuses the rulesets/branch-protection payloads GEN-006
+    Pure: reuses the rulesets/branch-protection payloads GEN-006
     already fetched. No active queue ruleset covering the default branch is a
     violation; a queue with no required status check anywhere (ruleset or
     classic protection) is `needs_review` -- the queue would merge without
     waiting on any `merge_group` run. Whether the required contexts are ones
     a `merge_group` run actually reports is not decidable from settings alone
-    and stays the human step-4 evidence (a green queue run)."""
+    and stays the human step-4 evidence (a green queue run).
+
+    `owner_type` is the repository payload's `owner.type`. GitHub rejects a
+    `merge_queue` ruleset rule on a user-owned repository (422 "Invalid rule
+    'merge_queue'", zackees/template-python-rust-cmd, 2026-10-26), so a
+    missing queue there is `needs_review` (transfer to an organization), not
+    a violation the repository could fix in place. `None` (unknown) keeps
+    the violation."""
 
     path = f"branch:{default_branch}"
     if rulesets is None:
@@ -507,6 +518,19 @@ def check_gen_022_live(
         return [_unexpected_status_finding("GEN-022", path, "rulesets", rulesets.status)]
     rs_list = rulesets.body if rulesets.status == 200 else []
     if not _has_active_merge_queue(rs_list, default_branch):
+        if owner_type == "User":
+            return [
+                Finding(
+                    rule="GEN-022",
+                    status=Status.NEEDS_REVIEW,
+                    path=path,
+                    message=f"no merge queue covers '{default_branch}', and this repository is owned by a "
+                    "user account -- GitHub only offers merge queues to organization-owned repositories "
+                    "(a 'merge_queue' ruleset rule is rejected with 422)",
+                    fix="transfer the repository to an organization (e.g. forge-ci) to enable the queue; "
+                    "a merge_group trigger already in the workflow is harmless until then",
+                )
+            ]
         return [
             Finding(
                 rule="GEN-022",
@@ -533,6 +557,39 @@ def check_gen_022_live(
             )
         ]
     return []
+
+
+def _fetch_owner_type(fetch_status: FetchStatusFn, token: str, repo: str) -> str | None:
+    """`owner.type` of the repository payload ("User"/"Organization"), or
+    None when unreadable -- the caller then keeps the stricter verdict."""
+
+    result = _get(fetch_status, token, f"{API_ROOT}/repos/{repo}")
+    if result is None or result.status != 200 or not isinstance(result.body, dict):
+        return None
+    owner = result.body.get("owner")
+    if not isinstance(owner, dict):
+        return None
+    kind = owner.get("type")
+    return kind if isinstance(kind, str) else None
+
+
+def _gen_022_findings(
+    fetch_status: FetchStatusFn,
+    token: str,
+    repo: str,
+    branch_protection: SettingsReply | None,
+    rulesets: SettingsReply | None,
+    default_branch: str,
+) -> list[Finding]:
+    """GEN-022 with the owner type looked up lazily: one extra GET, and only
+    when the check would otherwise report a missing queue (a violation)."""
+
+    findings = check_gen_022_live(branch_protection, rulesets, default_branch)
+    if any(f.status == Status.VIOLATION for f in findings) and rulesets is not None and rulesets.status in (200, 404):
+        owner_type = _fetch_owner_type(fetch_status, token, repo)
+        if owner_type is not None:
+            findings = check_gen_022_live(branch_protection, rulesets, default_branch, owner_type)
+    return findings
 
 
 def check_gen_011(
@@ -704,7 +761,7 @@ def run_audit(
     rulesets = _fetch_rulesets(fetch_status, token, repo)
     findings.extend(check_gen_006(branch_protection, rulesets, default_branch))
     findings.extend(check_gen_011(branch_protection, default_branch, gate_check_name))
-    findings.extend(check_gen_022_live(branch_protection, rulesets, default_branch))
+    findings.extend(_gen_022_findings(fetch_status, token, repo, branch_protection, rulesets, default_branch))
     protection_body = branch_protection.body if branch_protection is not None and branch_protection.status == 200 else None
     ruleset_list = rulesets.body if rulesets is not None and rulesets.status == 200 else None
     findings.extend(check_gate_012_required(protection_body, ruleset_list, default_branch))
