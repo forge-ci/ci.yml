@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import json
 import os
@@ -766,20 +767,17 @@ def _branch_exists(branch: str, token: str, repo_slug: str, repo_root: Path) -> 
         return False
 
 
-def _require_default_branch(
-    explicit: str | None, token: str, repo_slug: str, cmd: str, repo_root: Path
-) -> str | None:
-    """#491: infer the default branch (#425) instead of assuming `main`; a
-    repo on `master` would otherwise be judged against the wrong branch.
-    Unspecified and uninferable -> `main` if it exists, else `master`; an
-    explicit `main` that does not exist becomes `master`. Both warn."""
+def _branch_memo_path(repo_slug: str) -> Path | None:
+    """Per-job memo under $RUNNER_TEMP so several ci-lint steps in one job
+    resolve the default branch once; None outside Actions (no memo)."""
 
-    if explicit == "main" and not _branch_exists("main", token, repo_slug, repo_root):
-        if _branch_exists("master", token, repo_slug, repo_root):
-            print(f"ci-lint {cmd}: warning: --default-branch main does not exist; using master", file=sys.stderr)
-            return "master"
-    if explicit is not None:
-        return explicit
+    runner_temp = os.environ.get("RUNNER_TEMP")
+    if not runner_temp or not repo_slug:
+        return None
+    return Path(runner_temp) / f"ci-lint-default-branch-{repo_slug.replace('/', '__')}"
+
+
+def _resolve_unspecified_branch(token: str, repo_slug: str, cmd: str, repo_root: Path) -> str | None:
     branch = infer_default_branch(default_fetch, token, repo_slug)
     if branch is not None:
         return branch
@@ -790,8 +788,38 @@ def _require_default_branch(
                 file=sys.stderr,
             )
             return candidate
-    print(f"ci-lint {cmd}: cannot infer the default branch; pass --default-branch", file=sys.stderr)
     return None
+
+
+def _require_default_branch(
+    explicit: str | None, token: str, repo_slug: str, cmd: str, repo_root: Path
+) -> str | None:
+    """#491: infer the default branch (#425) instead of assuming `main`; a
+    repo on `master` would otherwise be judged against the wrong branch.
+    Unspecified and uninferable -> `main` if it exists, else `master`; an
+    explicit `main` that does not exist becomes `master`. Both warn. An
+    unspecified branch is memoised per job (see _branch_memo_path)."""
+
+    if explicit == "main" and not _branch_exists("main", token, repo_slug, repo_root):
+        if _branch_exists("master", token, repo_slug, repo_root):
+            print(f"ci-lint {cmd}: warning: --default-branch main does not exist; using master", file=sys.stderr)
+            return "master"
+    if explicit is not None:
+        return explicit
+    memo = _branch_memo_path(repo_slug)
+    if memo is not None:
+        with contextlib.suppress(OSError, UnicodeDecodeError):
+            cached = memo.read_text(encoding="utf-8").strip()
+            if cached:
+                return cached
+    branch = _resolve_unspecified_branch(token, repo_slug, cmd, repo_root)
+    if branch is None:
+        print(f"ci-lint {cmd}: cannot infer the default branch; pass --default-branch", file=sys.stderr)
+        return None
+    if memo is not None:
+        with contextlib.suppress(OSError):
+            memo.write_text(branch, encoding="utf-8")
+    return branch
 
 
 def _cmd_audit(args: argparse.Namespace) -> int:
