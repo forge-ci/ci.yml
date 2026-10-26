@@ -1,0 +1,13 @@
+name: build
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+jobs:
+  build:
+    if: contains(github.event.pull_request.labels.*.name, 'ci-full')
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo build

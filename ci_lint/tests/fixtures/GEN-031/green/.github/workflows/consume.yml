@@ -1,0 +1,13 @@
+name: consume-ci-full
+on:
+  pull_request:
+    types: [labeled]
+jobs:
+  consume:
+    if: github.event.label.name == 'ci-full'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: consume-${{ github.ref }}
+      cancel-in-progress: true
+    steps:
+      - run: gh pr edit "${{ github.event.pull_request.number }}" --remove-label ci-full
