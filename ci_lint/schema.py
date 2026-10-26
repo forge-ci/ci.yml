@@ -21,7 +21,7 @@ from pathlib import Path
 from ci_lint.cache.families import ALLOWED_VIA_VALUES
 from ci_lint.finding import Finding
 from ci_lint.local_gate import GateConfig, parse_gate_table
-from ci_lint.toml_cursor import Cursor, TomlValue
+from ci_lint.toml_cursor import Cursor, StrMap, StrTupleMap, TomlValue
 
 LINTER_RE = re.compile(r"^zackees/ci\.yml@([0-9a-fA-F]{40})$")
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -251,70 +251,6 @@ CacheFamilyIndex = dict[str, CacheFamily]
 
 
 @dataclass(frozen=True)
-class StrEntry:
-    """One `key = "value"` pair of a string -> string table."""
-
-    key: str
-    value: str
-
-
-@dataclass(frozen=True)
-class StrMap:
-    """A string -> string table (`[allow].setup-*.require`), kept as typed
-    entries in declaration order rather than a dict field (PY-002, #193)."""
-
-    entries: tuple[StrEntry, ...] = ()
-
-    @classmethod
-    def of(cls, table: Mapping[str, str]) -> StrMap:
-        return cls(tuple(StrEntry(k, v) for k, v in table.items()))
-
-    def get(self, key: str) -> str | None:
-        return next((e.value for e in self.entries if e.key == key), None)
-
-    def __contains__(self, key: object) -> bool:
-        return any(e.key == key for e in self.entries)
-
-    def __iter__(self) -> Iterator[str]:
-        return (e.key for e in self.entries)
-
-    def __len__(self) -> int:
-        return len(self.entries)
-
-
-@dataclass(frozen=True)
-class StrTupleEntry:
-    """One `key = ["a", "b"]` pair of a string -> string-array table."""
-
-    key: str
-    values: tuple[str, ...]
-
-
-@dataclass(frozen=True)
-class StrTupleMap:
-    """A string -> string-array table (`[allow].workflows`,
-    `[allow].permissions`), as typed entries (PY-002, #193)."""
-
-    entries: tuple[StrTupleEntry, ...] = ()
-
-    @classmethod
-    def of(cls, table: Mapping[str, tuple[str, ...]]) -> StrTupleMap:
-        return cls(tuple(StrTupleEntry(k, tuple(v)) for k, v in table.items()))
-
-    def get(self, key: str) -> tuple[str, ...] | None:
-        return next((e.values for e in self.entries if e.key == key), None)
-
-    def __contains__(self, key: object) -> bool:
-        return any(e.key == key for e in self.entries)
-
-    def __iter__(self) -> Iterator[str]:
-        return (e.key for e in self.entries)
-
-    def __len__(self) -> int:
-        return len(self.entries)
-
-
-@dataclass(frozen=True)
 class CachePromote:
     """`[cache.promote]` -- how a pull request's cache entry becomes the
     default branch's, rather than the default branch rewriting it on every
@@ -522,7 +458,8 @@ class CiToml:
 
 def _parse_platforms(root: Cursor) -> PlatformIndex:
     out: PlatformIndex = {}
-    for pid, raw in root.raw_table_of_tables("platforms", required=True).items():
+    for _named in root.raw_table_of_tables("platforms", required=True):
+        pid, raw = _named.key, _named.table
         sub = Cursor(raw, f"platforms.{pid}", root.findings, root.source)
         target = sub.str_("target")
         runs_on = sub.str_("runs-on")
@@ -606,7 +543,8 @@ def _parse_lint_dylint(root: Cursor) -> DylintConfig | None:
 
 def _parse_suites(root: Cursor) -> SuiteIndex:
     out: SuiteIndex = {}
-    for sid, raw in root.raw_table_of_tables("suites", required=True).items():
+    for _named in root.raw_table_of_tables("suites", required=True):
+        sid, raw = _named.key, _named.table
         sub = Cursor(raw, f"suites.{sid}", root.findings, root.source)
         run = sub.str_("run") or ""
         required = sub.bool_("required", required=False, default=False)
@@ -622,7 +560,8 @@ def _parse_suites(root: Cursor) -> SuiteIndex:
 
 def _parse_flows(root: Cursor) -> FlowIndex:
     out: FlowIndex = {}
-    for fid, raw in root.raw_table_of_tables("flow", required=True).items():
+    for _named in root.raw_table_of_tables("flow", required=True):
+        fid, raw = _named.key, _named.table
         sub = Cursor(raw, f"flow.{fid}", root.findings, root.source)
         extends = sub.str_("extends", required=False)
         platforms = sub.str_or_list("platforms", required=False)
@@ -661,7 +600,8 @@ def _parse_flows(root: Cursor) -> FlowIndex:
 
 def _parse_tags(root: Cursor) -> TagRuleIndex:
     out: TagRuleIndex = {}
-    for tid, raw in root.raw_table_of_tables("tags", required=True).items():
+    for _named in root.raw_table_of_tables("tags", required=True):
+        tid, raw = _named.key, _named.table
         sub = Cursor(raw, f"tags.{tid}", root.findings, root.source)
         add_raw = sub.table_("add", required=False)
         add = None
@@ -822,7 +762,8 @@ def _parse_cache(root: Cursor) -> CacheConfig:
             measured_largest_delta=measured_largest_delta,
         )
     family: CacheFamilyIndex = {}
-    for fam_id, fam_raw in sub.raw_table_of_tables("family", required=True).items():
+    for _named in sub.raw_table_of_tables("family", required=True):
+        fam_id, fam_raw = _named.key, _named.table
         fsub = Cursor(fam_raw, f"cache.family.{fam_id}", root.findings, root.source)
         # `via` is optional: a family may name the literal prefix its own
         # producer writes instead (zackees/ci.yml#347).
@@ -951,7 +892,8 @@ def _parse_cache_share(
     for a family that does not exist describes nothing."""
 
     out: list[CacheShare] = []
-    for fid, table in sub.raw_table_of_tables("share", required=False).items():
+    for _named in sub.raw_table_of_tables("share", required=False):
+        fid, table = _named.key, _named.table
         ssub = Cursor(table, f"cache.share.{fid}", root.findings, root.source)
         scope = ssub.str_("scope", required=False, default="branch") or "branch"
         ssub.finish()
@@ -1036,7 +978,7 @@ def _parse_allow(root: Cursor) -> AllowConfig:
     if ss_raw is not None:
         ssub = Cursor(ss_raw, "allow.setup-soldr", root.findings, root.source)
         only_in = ssub.str_("only-in") or ""
-        require = StrMap.of(ssub.dict_str_str("require", required=False))
+        require = ssub.dict_str_str("require", required=False)
         ssub.finish()
         setup_soldr = SetupSoldrAllow(only_in=only_in, require=require)
     tools = sub.list_str("tools")
@@ -1048,13 +990,13 @@ def _parse_allow(root: Cursor) -> AllowConfig:
     # round still loads unchanged (an absent table means "nothing extra
     # allowed" for permissions/setup-uv, and the documented default
     # wrapper directory for cache-actions).
-    permissions = StrTupleMap.of(sub.dict_str_list_str("permissions", required=False))
+    permissions = sub.dict_str_list_str("permissions", required=False)
 
     setup_uv_raw = sub.table_("setup-uv", required=False)
     setup_uv = SetupUvAllow(require=StrMap())
     if setup_uv_raw is not None:
         uvsub = Cursor(setup_uv_raw, "allow.setup-uv", root.findings, root.source)
-        uv_require = StrMap.of(uvsub.dict_str_str("require", required=False))
+        uv_require = uvsub.dict_str_str("require", required=False)
         uvsub.finish()
         setup_uv = SetupUvAllow(require=uv_require)
 

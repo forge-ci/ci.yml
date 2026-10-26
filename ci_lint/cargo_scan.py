@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import re
 import tomllib
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -41,6 +42,53 @@ class CargoTestTarget:
 
 
 @dataclass(frozen=True)
+class CargoFeature:
+    name: str
+    enables: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class CargoFeatures(Mapping[str, tuple[str, ...]]):
+    """Read-only `[features]` name -> enabled list, backed by `CargoFeature` records."""
+
+    entries: tuple[CargoFeature, ...] = ()
+
+    @classmethod
+    def of(cls, features: Mapping[str, tuple[str, ...]]) -> CargoFeatures:
+        return cls(tuple(CargoFeature(name, tuple(enables)) for name, enables in features.items()))
+
+    def __getitem__(self, name: str) -> tuple[str, ...]:
+        for entry in self.entries:
+            if entry.name == name:
+                return entry.enables
+        raise KeyError(name)
+
+    def __iter__(self) -> Iterator[str]:
+        return (entry.name for entry in self.entries)
+
+    def __len__(self) -> int:
+        return len(self.entries)
+
+
+@dataclass(frozen=True)
+class LibTarget:
+    has_lib: bool
+    lib_test: bool
+
+
+@dataclass(frozen=True)
+class FeaturesAndDeps:
+    features: CargoFeatures
+    optional_dep_names: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class ExpectedTarget:
+    name: str  # e.g. "<crate>:lib", "<crate>:bin:<name>", "<crate>:test:<name>"
+    kind: str  # "lib" | "bin" | "test"
+
+
+@dataclass(frozen=True)
 class CargoCrate:
     name: str
     dir: str  # repo-relative
@@ -50,7 +98,7 @@ class CargoCrate:
     lib_test: bool
     bin_targets: tuple[CargoBinTarget, ...]
     test_targets: tuple[CargoTestTarget, ...]
-    features: dict[str, tuple[str, ...]]
+    features: CargoFeatures
     optional_dep_names: tuple[str, ...]
 
 
@@ -83,15 +131,15 @@ def _resolve_publish(pkg: dict[str, TomlValue]) -> bool:
     return True
 
 
-def _resolve_lib(crate_dir: Path, manifest: dict[str, TomlValue]) -> tuple[bool, bool]:
+def _resolve_lib(crate_dir: Path, manifest: dict[str, TomlValue]) -> LibTarget:
     lib_section = manifest.get("lib")
     default_path = crate_dir / "src" / "lib.rs"
     if isinstance(lib_section, dict):
         rel_path = lib_section.get("path", "src/lib.rs")
         has_lib = "path" in lib_section or (crate_dir / str(rel_path)).is_file()
         test_val = lib_section.get("test", True)
-        return has_lib, bool(test_val) if isinstance(test_val, bool) else True
-    return default_path.is_file(), True
+        return LibTarget(has_lib, bool(test_val) if isinstance(test_val, bool) else True)
+    return LibTarget(default_path.is_file(), True)
 
 
 def _resolve_bins(  # noqa: C901
@@ -154,7 +202,7 @@ def _resolve_tests(
 
 def _resolve_features_and_deps(
     manifest: dict[str, TomlValue],
-) -> tuple[dict[str, tuple[str, ...]], tuple[str, ...]]:
+) -> FeaturesAndDeps:
     features_raw = manifest.get("features")
     features: dict[str, tuple[str, ...]] = {}
     if isinstance(features_raw, dict):
@@ -168,7 +216,7 @@ def _resolve_features_and_deps(
             for dep_name, dep_val in deps.items():
                 if isinstance(dep_val, dict) and dep_val.get("optional") is True:
                     optional_deps.append(dep_name)
-    return features, tuple(optional_deps)
+    return FeaturesAndDeps(CargoFeatures.of(features), tuple(optional_deps))
 
 
 def discover_workspace(repo_root: Path) -> list[CargoCrate]:
@@ -202,41 +250,40 @@ def discover_workspace(repo_root: Path) -> list[CargoCrate]:
         if not isinstance(pkg, dict) or not isinstance(pkg.get("name"), str):
             continue
         name = pkg["name"]
-        has_lib, lib_test = _resolve_lib(crate_dir, manifest)
+        lib = _resolve_lib(crate_dir, manifest)
         bins = _resolve_bins(crate_dir, manifest, pkg, name)
         tests = _resolve_tests(crate_dir, manifest, pkg)
-        features, optional_deps = _resolve_features_and_deps(manifest)
+        feats = _resolve_features_and_deps(manifest)
         crates.append(
             CargoCrate(
                 name=name,
                 dir=crate_dir.relative_to(repo_root).as_posix() if crate_dir != repo_root else ".",
                 manifest_path=manifest_path.relative_to(repo_root).as_posix(),
                 publish=_resolve_publish(pkg),
-                has_lib=has_lib,
-                lib_test=lib_test,
+                has_lib=lib.has_lib,
+                lib_test=lib.lib_test,
                 bin_targets=bins,
                 test_targets=tests,
-                features=features,
-                optional_dep_names=optional_deps,
+                features=feats.features,
+                optional_dep_names=feats.optional_dep_names,
             )
         )
     return crates
 
 
-def expected_target_names(crate: CargoCrate) -> dict[str, str]:
-    """name -> kind ("lib" | "bin" | "test"), for targets that get a
-    harness by default (lib/bin with test != false; every integration
-    test target)."""
+def expected_target_names(crate: CargoCrate) -> tuple[ExpectedTarget, ...]:
+    """Targets that get a harness by default (lib/bin with test != false;
+    every integration test target)."""
 
-    out: dict[str, str] = {}
+    out: list[ExpectedTarget] = []
     if crate.has_lib and crate.lib_test:
-        out[f"{crate.name}:lib"] = "lib"
+        out.append(ExpectedTarget(f"{crate.name}:lib", "lib"))
     for b in crate.bin_targets:
         if b.test:
-            out[f"{crate.name}:bin:{b.name}"] = "bin"
+            out.append(ExpectedTarget(f"{crate.name}:bin:{b.name}", "bin"))
     for t in crate.test_targets:
-        out[f"{crate.name}:test:{t.name}"] = "test"
-    return out
+        out.append(ExpectedTarget(f"{crate.name}:test:{t.name}", "test"))
+    return tuple(out)
 
 
 def has_any_rust_test_attr(crate_src_dir: Path) -> bool:
@@ -278,7 +325,7 @@ def has_cfg_feature(repo_root: Path, crate_dir_rel: str) -> bool:
 
 
 def effective_features(
-    features: tuple[str, ...] | list[str], declared: dict[str, tuple[str, ...]]
+    features: tuple[str, ...] | list[str], declared: Mapping[str, tuple[str, ...]]
 ) -> frozenset[str]:
     """zackees/ci.yml#89: `default` names no graph of its own -- it is
     exactly its members. Replace it with the feature names it lists (an

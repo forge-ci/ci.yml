@@ -38,7 +38,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ci_lint.finding import Finding, Status
-from ci_lint.rules.rust_dylint_target import _env_of  # shared env resolver (PY-002 baseline)
+from ci_lint.rules.rust_dylint_target import merge_env  # shared env resolver
 from ci_lint.rules.test_invocations import (
     allowed,
     is_cargo_token,
@@ -163,13 +163,15 @@ def _uses_pyo3(repo_root: Path) -> bool:
 
 def _job_calls(repo_root: Path, wf_path: str, job_id: str, job: dict[str, YamlValue], base_env: dict[str, str], raw: list[str]) -> list[BuildCall]:  # noqa: C901
     out: list[BuildCall] = []
-    job_env = {**base_env, **_env_of(job)}
+    job_env = dict(base_env)
+    merge_env(job_env, job)
     job_wd = as_dict(as_dict(job.get("defaults")).get("run")).get("working-directory")
     for i, step in enumerate(steps_of(job)):
         run_text = step.get("run")
         if not isinstance(run_text, str):
             continue
-        env = {**job_env, **_env_of(step)}
+        env = dict(job_env)
+        merge_env(env, step)
         wd = step.get("working-directory", job_wd)
         cwd = posixpath.normpath(wd) if isinstance(wd, str) else "."
         loc = f"jobs.{job_id}.steps[{i}]"
@@ -225,7 +227,8 @@ def check_cache_039(repo_root: Path) -> list[Finding]:
             continue
         doc = as_dict(wf.document)
         raw = raw_lines_of(repo_root / wf.path)
-        wf_env = _env_of(doc)
+        wf_env: dict[str, str] = {}
+        merge_env(wf_env, doc)
         for job_id, job in jobs_of(doc).items():
             first_by_key: dict[str, BuildCall] = {}
             reported: set[str] = set()

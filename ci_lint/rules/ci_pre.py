@@ -27,6 +27,7 @@ first job of `ci.yml`). Nothing is called "precheck" any more:
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from pathlib import Path
 
 from ci_lint.finding import Finding
@@ -50,14 +51,36 @@ JANITOR_GROUP = "cache-janitor"
 INSTALL_ACTIONS: frozenset[str] = frozenset({"astral-sh/setup-uv", "actions/setup-python"})
 INSTALL_RUN_RE = re.compile(r"(?:^|[\s;&|(])(?:uv|uvx|pip|pip3|pipx)(?=\s|$)|-m\s+pip\b")
 
-# (action slug, input carrying the key, inputs any one of which disables saving when "false").
+@dataclass(frozen=True)
+class PrKeyInput:
+    """A cache action, the input carrying its key, and the inputs any one of
+    which disables saving when "false"."""
+
+    action: str
+    key_input: str
+    save_inputs: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class _Step:
+    loc: str
+    step: dict[str, YamlValue]
+
+
+@dataclass(frozen=True)
+class _ScanFile:
+    path: str
+    is_composite: bool
+    doc: dict[str, YamlValue]
+
+
 # setup-uv: `enable-cache: false` disables the cache outright; `save-cache: false`
 # keeps restore but never saves -- either way nothing PR-scoped is written.
-PR_KEY_INPUTS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
-    ("zackees/setup-soldr", "cache-key-suffix", ("save-cache",)),
-    ("astral-sh/setup-uv", "cache-suffix", ("enable-cache", "save-cache")),
-    ("actions/cache", "key", ()),
-    ("actions/cache/save", "key", ()),
+PR_KEY_INPUTS: tuple[PrKeyInput, ...] = (
+    PrKeyInput("zackees/setup-soldr", "cache-key-suffix", ("save-cache",)),
+    PrKeyInput("astral-sh/setup-uv", "cache-suffix", ("enable-cache", "save-cache")),
+    PrKeyInput("actions/cache", "key", ()),
+    PrKeyInput("actions/cache/save", "key", ()),
 )
 PR_NUMBER_REFS: tuple[str, ...] = ("github.event.pull_request.number", "outputs.cache_key_pr")
 
@@ -195,13 +218,13 @@ def _is_pr_reachable(doc: dict[str, YamlValue]) -> bool:
     return "pull_request" in on or "workflow_call" in on or "pull_request_target" in on
 
 
-def _iter_steps(doc: dict[str, YamlValue], is_composite: bool) -> list[tuple[str, dict[str, YamlValue]]]:
+def _iter_steps(doc: dict[str, YamlValue], is_composite: bool) -> list[_Step]:
     if is_composite:
         runs = as_dict(doc.get("runs"))
-        return [(f"runs.steps[{i}]", s) for i, s in enumerate(as_list(runs.get("steps"))) if isinstance(s, dict)]
-    out: list[tuple[str, dict[str, YamlValue]]] = []
+        return [_Step(f"runs.steps[{i}]", s) for i, s in enumerate(as_list(runs.get("steps"))) if isinstance(s, dict)]
+    out: list[_Step] = []
     for job_id, job in jobs_of(doc).items():
-        out.extend((f"jobs.{job_id}.steps[{i}]", s) for i, s in enumerate(steps_of(job)))
+        out.extend(_Step(f"jobs.{job_id}.steps[{i}]", s) for i, s in enumerate(steps_of(job)))
     return out
 
 
@@ -215,22 +238,25 @@ def carries_pr_number(value: YamlValue, *, is_composite: bool) -> bool:
 
 def check_cache_010(ci: CiToml, repo_root: Path) -> list[Finding]:  # noqa: C901
     del ci  # the rule is ci.toml-independent; kept for the group-function signature
-    files: list[tuple[str, bool, dict[str, YamlValue]]] = []
+    files: list[_ScanFile] = []
     for wf in load_workflows(repo_root):
         if wf.status == LoadStatus.OK and _is_pr_reachable(as_dict(wf.document)):
-            files.append((wf.path, False, as_dict(wf.document)))
+            files.append(_ScanFile(wf.path, False, as_dict(wf.document)))
     for act in load_composite_actions(repo_root):
         if act.status == LoadStatus.OK:
-            files.append((act.path, True, as_dict(act.document)))
+            files.append(_ScanFile(act.path, True, as_dict(act.document)))
 
     findings: list[Finding] = []
-    for path, is_composite, doc in files:
-        for loc, step in _iter_steps(doc, is_composite):
+    for scan in files:
+        path, is_composite = scan.path, scan.is_composite
+        for item in _iter_steps(scan.doc, is_composite):
+            loc, step = item.loc, item.step
             uses = step.get("uses")
             if not isinstance(uses, str):
                 continue
             slug = _slug(uses)
-            for action, key_input, save_inputs in PR_KEY_INPUTS:
+            for pr_key in PR_KEY_INPUTS:
+                action, key_input, save_inputs = pr_key.action, pr_key.key_input, pr_key.save_inputs
                 if slug != action:
                     continue
                 with_ = as_dict(step.get("with"))

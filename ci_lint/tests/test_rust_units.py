@@ -94,7 +94,7 @@ class CargoScanUnitTest(unittest.TestCase):
         repo = fixture("RUST-012", "green")
         crates = discover_workspace(repo)
         names = expected_target_names(crates[0])
-        self.assertEqual({"demo-core:lib": "lib"}, names)
+        self.assertEqual({"demo-core:lib": "lib"}, {t.name: t.kind for t in names})
 
 
 def _write(root: Path, rel: str, content: str) -> None:

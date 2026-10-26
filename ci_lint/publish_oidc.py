@@ -19,6 +19,7 @@ import base64
 import json
 from dataclasses import dataclass
 
+from ci_lint.cargo_messages import JsonValue
 from ci_lint.github_api import FetchFn, GitHubApiError
 
 DEFAULT_WORKFLOW_PATH = ".github/workflows/ci.yml"
@@ -57,7 +58,7 @@ def _b64url_decode(segment: str) -> bytes:
     return base64.urlsafe_b64decode(segment + padding)
 
 
-def decode_payload(token: str) -> dict[str, object]:
+def decode_payload(token: str) -> dict[str, JsonValue]:
     """Decodes ONLY the JWT payload (the middle `.`-separated segment).
     The header and signature segments are never touched -- this function
     does not (and cannot, without the issuer's public key) verify the
@@ -98,7 +99,7 @@ def request_oidc_token(fetch: FetchFn, *, request_url: str, request_token: str, 
 
 
 def assert_claims(
-    payload: dict[str, object],
+    payload: dict[str, JsonValue],
     *,
     repository: str,
     expect_ref: str,
@@ -127,7 +128,7 @@ def assert_claims(
     return OidcCheckResult(assertions=tuple(assertions), ok=all(a.ok for a in assertions))
 
 
-def to_json_dict(result: OidcCheckResult) -> dict[str, object]:
+def to_json_dict(result: OidcCheckResult) -> dict[str, JsonValue]:
     """Never includes the raw token, `jti`, or signature -- only the
     (non-secret) claim names/expected/actual values this module already
     decided are safe to surface, per PRINTABLE_CLAIMS."""
