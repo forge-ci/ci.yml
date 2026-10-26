@@ -188,6 +188,8 @@ class AttrSpan:
 
     line: int
     text: str
+    start: int = 0
+    end: int = 0
 
 
 _ATTR_START_RE = re.compile(r"#!?\[")
@@ -239,7 +241,14 @@ def _iter_bracket_spans(
         if close_index is None:
             continue
         raw = code[m.start() : close_index + 1]
-        spans.append(AttrSpan(line=_line_at(code, m.start()), text=_normalize_whitespace(raw)))
+        spans.append(
+            AttrSpan(
+                line=_line_at(code, m.start()),
+                text=_normalize_whitespace(raw),
+                start=m.start(),
+                end=close_index + 1,
+            )
+        )
     return spans
 
 
