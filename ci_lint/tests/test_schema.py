@@ -8,7 +8,12 @@ import unittest
 
 from ci_lint.exceptions import apply_exceptions
 from ci_lint.rules.contract import check_ct_006, check_tag_001, check_tag_002
-from ci_lint.schema import load_ci_toml
+from ci_lint.schema import (
+    KNOWN_PROFILES,
+    load_ci_toml,
+    profile_excludes_rule,
+    profile_requires_cargo,
+)
 from ci_lint.tests.helpers import fixture
 
 
@@ -97,6 +102,37 @@ class SchemaFixtureTest(unittest.TestCase):
         ci = load_ci_toml(fixture("CT-006", "green")).ci
         findings = check_ct_006(ci, fixture("CT-006", "green").parent.parent)  # no Cargo.toml here
         self.assertIn("CT-006", rule_ids(findings))
+
+    def test_ct_006_skips_non_rust_profiles(self) -> None:
+        # cpp (zackees/llvm-ld) and github-action (forge-ci/setup-soldr) have
+        # no root Cargo.toml; CT-006 must not demand one.
+        for profile in ("cpp", "github-action"):
+            repo = fixture("CT-006", f"non-rust-{profile}")
+            self.assertFalse((repo / "Cargo.toml").exists())
+            loaded = load_ci_toml(repo)
+            self.assertEqual([], rule_ids(loaded.findings), profile)
+            self.assertNotIn("CT-006", rule_ids(check_ct_006(loaded.ci, repo)), profile)
+
+    def test_profile_registry(self) -> None:
+        self.assertIn("github-action", KNOWN_PROFILES)
+        self.assertTrue(profile_requires_cargo("rust-pypi-app"))
+        self.assertTrue(profile_requires_cargo("cpp-rust-library"))
+        self.assertTrue(profile_requires_cargo("some-unlisted-profile"))  # unknown: unchanged
+        self.assertFalse(profile_requires_cargo("github-action"))
+        self.assertFalse(profile_requires_cargo("cpp"))
+        for rule in ("RUST-001", "PKG-002", "BIN-001", "CPP-001"):
+            self.assertTrue(profile_excludes_rule("github-action", rule), rule)
+        for rule in ("GEN-001", "SEC-004", "CACHE-001", "TOOL-001", "CT-006"):
+            self.assertFalse(profile_excludes_rule("github-action", rule), rule)
+        self.assertFalse(profile_excludes_rule("rust-pypi-app", "RUST-001"))
+        self.assertFalse(profile_excludes_rule("cpp", "RUST-001"))
+
+    def test_precheck_drops_github_action_excluded_families(self) -> None:
+        from ci_lint.precheck import run_precheck
+
+        result = run_precheck(fixture("CT-006", "non-rust-github-action"), local=True)
+        families = {f.rule.split("-", 1)[0] for f in result.findings}
+        self.assertFalse(families & {"RUST", "PKG", "BIN", "CPP"}, families)
 
     def test_tag_001_unknown_reserved_tag(self) -> None:
         ci = load_ci_toml(fixture("TAG-001", "red")).ci

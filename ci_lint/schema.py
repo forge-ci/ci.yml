@@ -336,6 +336,34 @@ class FleetConfig:
 
 _REUSE_MODES: tuple[str, ...] = ("off", "shadow", "enforce")
 RUST_PUBLIC_ROLES: tuple[str, ...] = ("amalgam", "library")
+
+# -- Profiles (CT-006 / profile rule families, forge-ci/ci.yml CT-006 scope) --
+# `profile` stays an open string: profiles not listed here load unchanged and
+# keep every rule (so an unknown profile is never silently weakened). Listed
+# profiles decide two things: whether the repository builds Rust (CT-006's
+# Cargo.toml cross-check), and which rule families never apply to it.
+RUST_PROFILES: frozenset[str] = frozenset(
+    {"rust-pypi-app", "rust-library", "rust-bin-app", "rust-cli", "cpp-rust-library"}
+)
+NON_RUST_PROFILES: frozenset[str] = frozenset({"cpp", "github-action"})
+KNOWN_PROFILES: frozenset[str] = RUST_PROFILES | NON_RUST_PROFILES
+# A GitHub Action (TypeScript/JavaScript, e.g. forge-ci/setup-soldr) ships no
+# crate, no PyPI/npm package, no native binary and no CMake tree.
+PROFILE_EXCLUDED_FAMILIES: dict[str, frozenset[str]] = {
+    "github-action": frozenset({"RUST", "PKG", "BIN", "CPP"}),
+}
+
+
+def profile_requires_cargo(profile: str) -> bool:
+    """CT-006 applies unless the profile is a known non-Rust one."""
+
+    return profile not in NON_RUST_PROFILES
+
+
+def profile_excludes_rule(profile: str, rule: str) -> bool:
+    family = rule.split("-", 1)[0]
+    return family in PROFILE_EXCLUDED_FAMILIES.get(profile, frozenset())
+
 _MAX_AGE_HOURS_MAX = 168.0
 
 

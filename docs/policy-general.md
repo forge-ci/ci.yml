@@ -778,7 +778,7 @@ The **Status** column below reflects what `ci_lint` actually checks today, verif
 | `CT-003` | `ci.toml`'s `schema` is not `3`. | Enforced by ci-lint (static precheck) |
 | `CT-004` | The workflow's checkout of `zackees/ci.yml` does not use the exact SHA in `ci.toml`'s `linter` field (or no such checkout exists). | Enforced by ci-lint (static precheck) |
 | `CT-005` | A declared `[[exceptions]]` entry is past its `expires` date. | Enforced by ci-lint (static precheck) |
-| `CT-006` | `[platforms].*.target` does not match `Cargo.toml`'s `[workspace.metadata.soldr].targets`. | Enforced by ci-lint (static precheck) |
+| `CT-006` | `[platforms].*.target` does not match `Cargo.toml`'s `[workspace.metadata.soldr].targets`. Rust profiles only: the `cpp` and `github-action` profiles have no Cargo workspace and are exempt (docs/ci-toml.md#profiles). | Enforced by ci-lint (static precheck) |
 | `TAG-001` | A PR-title bracket token looks reserved (`ci-`, `no-test`, `release` prefix) but is not a known tag. | Enforced by ci-lint (static precheck) |
 | `TAG-002` | `[release]` combined with any `[no-test*]` tag. | Enforced by ci-lint (static precheck) |
 | `TAG-003` | `on.pull_request.types` omits `edited`. | Enforced by ci-lint (static precheck) |
