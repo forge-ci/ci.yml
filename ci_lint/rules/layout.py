@@ -33,10 +33,40 @@ RUST_SELECTORS: tuple[str, ...] = (
     "target_endian",
     "target_pointer_width",
 )
+# Guest-target predicates (#95): selecting the wasm guest build is not host
+# OS selection. A cfg span whose every selector predicate is one of these,
+# with no bare `windows`/`unix`, is not a LAYOUT-001 subject -- the same set
+# kernal-api's own platform-boundary Dylint treats as guest-only.
+GUEST_PREDICATES: frozenset[str] = frozenset(
+    {
+        'target_family="wasm"',
+        'target_arch="wasm32"',
+        'target_arch="wasm64"',
+        'target_os="wasi"',
+        'target_os="unknown"',
+    }
+)
+_SELECTOR_PAIR_RE = re.compile(r'\b(target_[a-z_]+)\s*=\s*"([^"]*)"')
+_BARE_HOST_RE = re.compile(r"\b(windows|unix)\b")
 RUST_HOST_PATHS: tuple[str, ...] = ("std::os::", "libc::", "windows_sys::")
 PY_SELECTORS: tuple[str, ...] = ("sys.platform", "platform.system(", "os.name")
 EXCLUDED_PREFIXES: tuple[str, ...] = ("dylints/", "ci_lint/")
 PY_SCAN_PREFIXES: tuple[str, ...] = ("src/", "tests/", "ci/")
+
+
+def _is_guest_only(stripped: str, raw: str) -> bool:
+    """True when every selector predicate in the span is a guest-target one
+    (`GUEST_PREDICATES`). Values come from *raw* (strings intact); bare
+    `windows`/`unix` come from *stripped* so a string cannot hide one."""
+
+    if _BARE_HOST_RE.search(stripped):
+        return False
+    pairs = [f'{k}="{v}"' for k, v in _SELECTOR_PAIR_RE.findall(raw)]
+    if not pairs:
+        return False
+    if len(pairs) != sum(stripped.count(sel) for sel in RUST_SELECTORS if sel.startswith("target_")):
+        return False
+    return all(p in GUEST_PREDICATES for p in pairs)
 
 
 def _check_rust_file(repo_root: Path, rel: str) -> list[Finding]:
@@ -58,6 +88,8 @@ def _check_rust_file(repo_root: Path, rel: str) -> list[Finding]:
 
     for span in find_attribute_and_macro_spans(code):
         if RUST_CFG_RE.search(span.text) and any(sel in span.text for sel in RUST_SELECTORS):
+            if _is_guest_only(span.text, text[span.start : span.end]):
+                continue
             findings.append(
                 Finding(
                     rule="LAYOUT-001",

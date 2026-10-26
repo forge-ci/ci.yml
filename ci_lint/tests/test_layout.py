@@ -174,3 +174,38 @@ class LayoutMultilineAttributeTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LayoutGuestPredicateTest(unittest.TestCase):
+    """#95: selecting the wasm guest build (`target_family = "wasm"`,
+    `target_arch = "wasm32"`, `target_os = "wasi"`) is not host OS
+    selection -- kernal-api's `src/guest.rs` false positive."""
+
+    _findings = LayoutMultilineAttributeTest._findings
+
+    def test_wasm_guest_cfg_select_is_not_a_host_selector(self) -> None:
+        findings = self._findings(
+            "std::cfg_select! {\n"
+            '    all(target_family = "wasm", feature = "x") => {\n'
+            '        #[path = "guest_x.rs"]\n'
+            "        mod x;\n"
+            "    }\n"
+            "    _ => { use bindings::X; }\n"
+            "}\n"
+        )
+        self.assertEqual([], findings)
+
+    def test_wasm32_and_wasi_attrs_are_not_host_selectors(self) -> None:
+        findings = self._findings(
+            '#[cfg(target_arch = "wasm32")]\nfn a() {}\n#[cfg(target_os = "wasi")]\nfn b() {}\n'
+        )
+        self.assertEqual([], findings)
+
+    def test_wasm_mixed_with_host_selector_still_flagged(self) -> None:
+        for snippet in (
+            '#[cfg(any(target_family = "wasm", windows))]\nfn a() {}\n',
+            '#[cfg(all(target_arch = "wasm32", target_os = "linux"))]\nfn a() {}\n',
+            '#[cfg(target_family = "unix")]\nfn a() {}\n',
+        ):
+            with self.subTest(snippet=snippet):
+                self.assertIn("LAYOUT-001", self._findings(snippet))
