@@ -68,6 +68,8 @@ from ci_lint.rules.shell import check_group3
 from ci_lint.rules.tools import check_group4
 from ci_lint.rules.workflows import check_group2
 from ci_lint.schema import CiToml, load_ci_toml
+from ci_lint.workflow_scan import discover_composite_actions, discover_workflow_files
+from ci_lint.yaml_io import yaml_tooling_available
 
 # Checks issue #6 §9 documents as needing live GitHub Actions API/cache
 # state ("cache (live)": CACHE-005/006/008, plus the local `act`-store
@@ -123,6 +125,51 @@ def _local_skip_findings(*, live: bool = False) -> list[Finding]:
             "as passing in a --local/ACT=true run",
         )
         for c in checks
+    ]
+
+
+# Rules whose evidence is a parsed workflow/composite-action document. With
+# no YAML parser (PyYAML not importable, yq not on PATH) every one of these
+# loads `document=None` and most return nothing, so precheck would report a
+# clean pass it never earned. `ci_lint.mini_yaml` is NOT a fallback: it
+# rejects block scalars (`run: |`) and mappings inside block sequences
+# (`steps: - uses: ...`), which every real workflow uses.
+YAML_DEPENDENT_RULES: tuple[str, ...] = (
+    "GEN-001", "GEN-002", "GEN-003", "GEN-004", "GEN-005", "GEN-007", "GEN-008",
+    "GEN-012", "GEN-013", "GEN-014", "GEN-015", "GEN-016", "GEN-017", "GEN-018",
+    "GEN-019", "GEN-021", "GEN-022", "GEN-023", "GEN-024", "GEN-025", "GEN-026",
+    "GEN-031", "TAG-003", "SEC-001", "SEC-002", "SEC-003", "SEC-004", "RUN-001",
+    "RUN-002", "RUN-003", "WF-001", "WF-002", "WF-003", "WF-004", "CT-004",
+    "TOOL-001", "TOOL-002", "TOOL-003", "RUST-001", "RUST-002", "RUST-008",
+    "RUST-010", "RUST-015", "RUST-016", "RUST-017", "RUST-023", "RUST-024",
+    "RUST-025", "RUST-027", "CACHE-001", "CACHE-002", "CACHE-007", "CACHE-009",
+    "CACHE-010", "CACHE-013", "CACHE-018", "CACHE-024", "CACHE-025", "CACHE-033",
+    "CACHE-037", "CACHE-038", "CACHE-039", "GATE-001", "GATE-002", "GATE-012",
+    "ACT-002", "ACT-003", "REL-006", "TEST-003", "CPP-001", "GHAPI-001",
+)
+YAML_TOOLING_RULE = "PRECHECK-YAML"
+
+
+def yaml_unavailable_findings(repo_root: Path, *, tooling_available: bool | None = None) -> list[Finding]:
+    """One explicit needs_review finding when workflow files exist but
+    nothing can parse them -- never a silent pass (fail closed)."""
+
+    available = yaml_tooling_available() if tooling_available is None else tooling_available
+    if available:
+        return []
+    if not discover_workflow_files(repo_root) and not discover_composite_actions(repo_root):
+        return []
+    return [
+        Finding(
+            rule=YAML_TOOLING_RULE,
+            status=Status.NEEDS_REVIEW,
+            message="no YAML parser available (PyYAML not importable, yq not on PATH): workflow-parsing "
+            "rules were NOT evaluated and their silence is not a pass -- skipped: "
+            + ", ".join(YAML_DEPENDENT_RULES),
+            fix="re-run with PyYAML importable (e.g. 'uv run --no-project --with pyyaml python3 -m ci_lint "
+            "precheck' or 'uvx --from git+https://github.com/zackees/ci.yml ci-lint precheck') or put "
+            "'yq' on PATH",
+        )
     ]
 
 
@@ -247,6 +294,9 @@ def run_precheck(repo_root: Path, *, title: str = "", local: bool = False, live:
 
         outcome = apply_exceptions(ci, all_findings)
         all_findings = outcome.findings
+
+        # Administrative, like the local-skip notice: not waivable.
+        all_findings.extend(yaml_unavailable_findings(repo_root))
 
         if local_run:
             # Never run through apply_exceptions: these are an explicit,

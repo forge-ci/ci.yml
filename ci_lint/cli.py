@@ -92,6 +92,7 @@ from ci_lint.runtime.toolchain_build import render_text as render_toolchain_buil
 from ci_lint.runtime.toolchain_build import to_json_dict as toolchain_build_to_json_dict
 from ci_lint.plan import Plan, PlanError, build_act_event, compute_plan
 from ci_lint.precheck import (
+    YAML_TOOLING_RULE,
     has_violations,
     render_json,
     render_text,
@@ -378,6 +379,15 @@ def _live_cache_findings(ci: CiToml | None, *, default_branch: str | None) -> li
     return out
 
 
+def _warn_yaml_skipped(findings: tuple[Finding, ...]) -> None:
+    if any(f.rule == YAML_TOOLING_RULE for f in findings):
+        print(
+            "ci-lint precheck: WARNING: no YAML parser (PyYAML/yq); workflow-parsing rules were skipped, "
+            "not passed -- see the PRECHECK-YAML finding",
+            file=sys.stderr,
+        )
+
+
 def _cmd_precheck(args: argparse.Namespace) -> int:
     repo_root = Path(args.repo).resolve()
     event = _load_event(args.event)
@@ -387,6 +397,8 @@ def _cmd_precheck(args: argparse.Namespace) -> int:
     if args.live:
         extra = _live_cache_findings(result.ci, default_branch=args.default_branch)
         result = replace(result, findings=result.findings + tuple(extra))
+
+    _warn_yaml_skipped(result.findings)
 
     if args.json:
         print(render_json(result))
