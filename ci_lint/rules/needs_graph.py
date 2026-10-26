@@ -15,6 +15,17 @@ PR critical path. Static signals, per (job, needed job) edge:
   nothing (pure ordering -- or a cache/side-effect dependency ci-lint cannot
   see).
 
+Exempt legitimate ordering-only edges, identified by the commands the jobs
+run (a `run:` line, or one level into a referenced `ci/*.py` script), never
+by job name:
+
+- (a) cache maintenance: the needed job runs `ci-lint cache
+  preprune`/`janitor`/`trim` and the dependent job uses a cache (it is a
+  writer, so its save must land after the prune).
+- (b) the GEN-022 end-of-queue janitor: the dependent job itself runs
+  `ci-lint cache janitor`, which GEN-022 requires to wait on every job
+  (see ci_lint/rules/merge_queue.py).
+
 Not a finding: any other `needs.<X>.` use (`result`, other outputs), a
 non-Linux or dynamic `runs-on`, or a job that downloads an artifact.
 
@@ -45,6 +56,9 @@ _NEEDS_REF = re.compile(r"needs\.([A-Za-z0-9_-]+)\.([A-Za-z0-9_.-]+)")
 _DETERMINISTIC = re.compile(r"outputs\.(mode|sha|ref)$")
 _AGG_NEEDS = re.compile(r"needs\.[A-Za-z0-9_*-]+\.result|toJSON\(\s*needs\s*\)|contains\(\s*needs\b", re.I)
 _GATE_CMD = re.compile(r"ci[-_]lint\s+gate\b")
+_CACHE_MAINT = re.compile(r"\bcache[\"',\s]+(?:preprune|janitor|trim)\b")
+_JANITOR = re.compile(r"\bcache[\"',\s]+janitor\b")
+_CI_SCRIPT = re.compile(r"(?<![\w/.-])(?:\./)?(ci/[A-Za-z0-9_./-]+\.py)\b")
 _ARM = re.compile(r"arm|aarch64", re.I)
 
 
@@ -81,14 +95,58 @@ def _restores_cache(job: dict[str, YamlValue]) -> bool:
     )
 
 
-def check_gen_024(workflows: list[ParsedYamlFile]) -> list[Finding]:
+def _uses_cache(job: dict[str, YamlValue], repo_root: Path | None) -> bool:
+    """A cache restore/save step, including setup-uv and a local composite action wrapping one."""
+    if _restores_cache(job):
+        return True
+    for uses in (_uses(s) for s in steps_of(job)):
+        if uses.startswith("astral-sh/setup-uv"):
+            return True
+        if uses.startswith("./") and repo_root is not None and ".." not in uses:
+            for name in ("action.yml", "action.yaml"):
+                path = repo_root / uses[2:] / name
+                if path.is_file() and re.search(
+                    r"actions/cache|setup-soldr|setup-uv", path.read_text(encoding="utf-8", errors="replace")
+                ):
+                    return True
+    return False
+
+
+def _command_text(job: dict[str, YamlValue], repo_root: Path | None) -> str:
+    """The job's `run:` text plus, one level deep, each referenced `ci/*.py` script."""
+    runs = [s["run"] for s in steps_of(job) if isinstance(s.get("run"), str)]
+    parts = list(runs)
+    if repo_root is not None:
+        for script in sorted({m.group(1) for r in runs for m in _CI_SCRIPT.finditer(r)}):
+            path = repo_root / script
+            if ".." not in script and path.is_file():
+                parts.append(path.read_text(encoding="utf-8", errors="replace"))
+    return "\n".join(parts)
+
+
+def _exempt_job(job: dict[str, YamlValue], repo_root: Path | None) -> bool:
+    """Not Linux, downloads an artifact, or shape (b): GEN-022's end-of-queue janitor needs every job."""
+    if not _is_linux(job) or _downloads_artifact(job):
+        return True
+    return _JANITOR.search(_command_text(job, repo_root)) is not None
+
+
+def _prune_ordered(job: dict[str, YamlValue], upstream: dict[str, YamlValue] | None, repo_root: Path | None) -> bool:
+    """Shape (a): a cache-using job needs a job that runs `cache preprune`/`janitor`/`trim`."""
+    if upstream is None or not _uses_cache(job, repo_root):
+        return False
+    return _CACHE_MAINT.search(_command_text(upstream, repo_root)) is not None
+
+
+def check_gen_024(workflows: list[ParsedYamlFile], repo_root: Path | None = None) -> list[Finding]:
     findings: list[Finding] = []
     for wf in workflows:
         if wf.status != LoadStatus.OK:
             continue
-        for jid, job in jobs_of(as_dict(wf.document)).items():
+        jobs = jobs_of(as_dict(wf.document))
+        for jid, job in jobs.items():
             needs = _needs(job)
-            if not needs or not _is_linux(job) or _downloads_artifact(job):
+            if not needs or _exempt_job(job, repo_root):
                 continue
             text = json.dumps(job)
             cache = _restores_cache(job)
@@ -96,6 +154,8 @@ def check_gen_024(workflows: list[ParsedYamlFile]) -> list[Finding]:
                 refs = [m.group(2) for m in _NEEDS_REF.finditer(text) if m.group(1) == need]
                 if any(not _DETERMINISTIC.search(r) for r in refs):
                     continue
+                if _prune_ordered(job, jobs.get(need), repo_root):
+                    continue  # (a) a cache writer saves after the prune it needs
                 if refs and not cache:
                     status = Status.VIOLATION
                     why = (
@@ -170,4 +230,4 @@ def check_gen_025(workflows: list[ParsedYamlFile]) -> list[Finding]:
 
 def check_needs_graph(repo_root: Path) -> list[Finding]:
     workflows = load_workflows(repo_root)
-    return [*check_gen_024(workflows), *check_gen_025(workflows)]
+    return [*check_gen_024(workflows, repo_root), *check_gen_025(workflows)]
