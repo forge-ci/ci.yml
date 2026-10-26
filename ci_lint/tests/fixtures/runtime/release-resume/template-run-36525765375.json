@@ -1,0 +1,196 @@
+{
+ "https://api.github.com/repos/zackees/template-python-rust-cmd/actions/runs/36525765375": [
+  200,
+  {
+   "conclusion": "success",
+   "event": "pull_request",
+   "head_repository": {
+    "full_name": "zackees/template-python-rust-cmd"
+   },
+   "head_sha": "cc3245f9a3b5c07a47c39a4eb64b5164ef95d2ff",
+   "html_url": "https://github.com/zackees/template-python-rust-cmd/actions/runs/36525765375",
+   "id": 36525765375,
+   "repository": {
+    "full_name": "zackees/template-python-rust-cmd"
+   },
+   "status": "completed"
+  }
+ ],
+ "https://api.github.com/repos/zackees/template-python-rust-cmd/actions/runs/36525765375/artifacts?per_page=100&name=release-dist-verified": [
+  200,
+  {
+   "artifacts": [],
+   "total_count": 0
+  }
+ ],
+ "https://api.github.com/repos/zackees/template-python-rust-cmd/actions/runs/36525765375/jobs?per_page=100&filter=latest&page=1": [
+  200,
+  {
+   "jobs": [
+    {
+     "conclusion": "success",
+     "id": 109268354916,
+     "name": "precheck / precheck",
+     "status": "completed"
+    },
+    {
+     "conclusion": "success",
+     "id": 109268355040,
+     "name": "precheck / cache-budget",
+     "status": "completed"
+    },
+    {
+     "conclusion": "skipped",
+     "id": 109268355984,
+     "name": "precheck / cache-janitor",
+     "status": "completed"
+    },
+    {
+     "conclusion": "success",
+     "id": 109268823575,
+     "name": "fast [35bbb8e76f26]",
+     "status": "completed"
+    },
+    {
+     "conclusion": "success",
+     "id": 109268823619,
+     "name": "perf",
+     "status": "completed"
+    },
+    {
+     "conclusion": "success",
+     "id": 109268823631,
+     "name": "platform-build (windows-x64) (on ubuntu-24.04, soldr) [d02e7637c456]",
+     "status": "completed"
+    },
+    {
+     "conclusion": "success",
+     "id": 109268823661,
+     "name": "platform-build (macos-x64) (on ubuntu-24.04, soldr) [1b5041c3ce40]",
+     "status": "completed"
+    },
+    {
+     "conclusion": "success",
+     "id": 109268823676,
+     "name": "platform-build (macos-arm64) (on ubuntu-24.04, soldr) [c23604b33bb6]",
+     "status": "completed"
+    },
+    {
+     "conclusion": "success",
+     "id": 109268823706,
+     "name": "init",
+     "status": "completed"
+    },
+    {
+     "conclusion": "success",
+     "id": 109268823721,
+     "name": "release-guard",
+     "status": "completed"
+    },
+    {
+     "conclusion": "success",
+     "id": 109268823763,
+     "name": "platform-build (windows-arm64) (on ubuntu-24.04, soldr) [51d1e1f89f16]",
+     "status": "completed"
+    },
+    {
+     "conclusion": "success",
+     "id": 109268823792,
+     "name": "platform-build (linux-arm64) (on ubuntu-24.04, soldr) [064f438f9f0b]",
+     "status": "completed"
+    },
+    {
+     "conclusion": "success",
+     "id": 109268823819,
+     "name": "dylint [07af76fbee86]",
+     "status": "completed"
+    },
+    {
+     "conclusion": "skipped",
+     "id": 109268824804,
+     "name": "cache-maint",
+     "status": "completed"
+    },
+    {
+     "conclusion": "success",
+     "id": 109269820175,
+     "name": "release-linux-x64",
+     "status": "completed"
+    },
+    {
+     "conclusion": "success",
+     "id": 109269820194,
+     "name": "release-musl-build (linux-x64-musl)",
+     "status": "completed"
+    },
+    {
+     "conclusion": "success",
+     "id": 109269820314,
+     "name": "release-musl-build (linux-arm64-musl)",
+     "status": "completed"
+    },
+    {
+     "conclusion": "success",
+     "id": 109270360284,
+     "name": "platform-run (windows-arm64) (native, prebuilt) [51d1e1f89f16]",
+     "status": "completed"
+    },
+    {
+     "conclusion": "success",
+     "id": 109270360321,
+     "name": "platform-run (windows-x64) (native, prebuilt) [d02e7637c456]",
+     "status": "completed"
+    },
+    {
+     "conclusion": "success",
+     "id": 109270360394,
+     "name": "platform-run (macos-x64) (native, prebuilt) [1b5041c3ce40]",
+     "status": "completed"
+    },
+    {
+     "conclusion": "success",
+     "id": 109270360398,
+     "name": "platform-run (macos-arm64) (native, prebuilt) [c23604b33bb6]",
+     "status": "completed"
+    },
+    {
+     "conclusion": "success",
+     "id": 109270360542,
+     "name": "platform-run (linux-arm64) (native, prebuilt) [064f438f9f0b]",
+     "status": "completed"
+    },
+    {
+     "conclusion": "success",
+     "id": 109270428206,
+     "name": "release-musl-smoke (linux-arm64-musl)",
+     "status": "completed"
+    },
+    {
+     "conclusion": "success",
+     "id": 109270428237,
+     "name": "release-musl-smoke (linux-x64-musl)",
+     "status": "completed"
+    },
+    {
+     "conclusion": "success",
+     "id": 109270748738,
+     "name": "release-verify",
+     "status": "completed"
+    },
+    {
+     "conclusion": "success",
+     "id": 109270799621,
+     "name": "CI OK",
+     "status": "completed"
+    },
+    {
+     "conclusion": "skipped",
+     "id": 109270800704,
+     "name": "publish",
+     "status": "completed"
+    }
+   ],
+   "total_count": 27
+  }
+ ]
+}

@@ -155,7 +155,7 @@ The `lint` phase (RUST-032) stays **one Linux job, multi-target** by default. It
 3. every shard runs the same lint set (the same Dylint libraries and the same clippy/check pass);
 4. there are no more than 3 shards, grouped by OS family (for example linux / apple / windows) rather than one job per triple;
 5. the repository records, in `ci.toml` or a linked run list, at least 3 recent successful runs in which each shard's median per-target pass step is at least 60 s and at least the median fixed per-job cost (`F`);
-6. the shards' combined cache entries fit `[cache].budget`. This clause is the cache half of #112's `GEN-020` candidate, and #112 does not separately decide `GEN-020`.
+6. the shards' combined cache entries fit `[cache].budget`. This clause absorbed #112's `GEN-020` candidate, which was rejected as a separate rule (see policy-general.md); the footprint is measured by `CACHE-004` and the `cache budget` verdict.
 
 A shard is a split of one lint phase, not a duplicate of it. Running the same targets or lint set in two jobs, or running any shard on a native non-Linux runner, is still a `RUST-002` violation. A repository whose evidence drops below the 60 s bar goes back to one job. Sequential per-target passes in one job remain strictly worse than one multi-target pass (+23-37 % measured) and are kept only as a debug fallback.
 
@@ -325,10 +325,64 @@ The measured cost these directives target is duplicated logic that drifts apart.
 | `REL-001` | A `ci/**/*.py`/root `*.py` script parses `gh ... --json`/`-q` output without passing a stripped `env=` (dropping `CLICOLOR_FORCE`/`FORCE_COLOR`/`GH_FORCE_TTY`), so a step running after `setup-soldr` (which exports those through `GITHUB_ENV` to every later step) gets ANSI-coloured pretty JSON instead of plain JSON and `json.loads`/ndjson parsing breaks. | Enforced by ci-lint (static precheck) -- see [issue #8](https://github.com/zackees/ci.yml/issues/8), mimalloc-pprof#560 |
 | `REL-002` | A Rust repo using `zackees/setup-soldr` does not `.gitignore` the cook-cache side files it restores beside `target/` (`target.soldr-{base,delta}.tar.zst`, `target.soldr-base-manifest.pb`) -- a bare `target` entry matches only a path named exactly `target`, not a sibling file starting with `target.`, so a release-candidate "checkout must be clean" assertion fails on a clean release. | Enforced by ci-lint (static precheck) -- see [issue #8](https://github.com/zackees/ci.yml/issues/8), mimalloc-pprof#561 |
 | `REL-003` | A publisher's non-publishing dry run never exercises its destination *read*/verify path (e.g. `GET .../releases/tags/{tag}` 404s for a draft release; only the paged list endpoint includes drafts), so a read-path bug first appears on the real publish. | Enforced by ci-lint (runtime, `ci-lint release verify --readback <dir>`) -- see [issue #8](https://github.com/zackees/ci.yml/issues/8)/[#74](https://github.com/zackees/ci.yml/issues/74), mimalloc-pprof#562; mechanical proof is per-artifact: `--readback` must hold a `<artifact>.json` record with `"read_back": true` and a `sha256` matching the staged artifact, written from an actual read of the mock publisher's own staged destination, not a copy of the local file. `ci_lint` cannot itself drive a real dry run to create that draft-and-read-back evidence -- the release graph's dry-run job must do that and hand ci-lint the resulting directory |
-| `REL-004` | A documented release "resume" rebuilds artifacts instead of reusing the exact frozen bytes the freeze record hashed, and the build is not byte-reproducible, so the resume can never pass its own `frozen info_sha256` check. | Enforced by ci-lint (runtime, `ci-lint release verify --resume <release-manifest.json>`) -- see [issue #8](https://github.com/zackees/ci.yml/issues/8)/[#74](https://github.com/zackees/ci.yml/issues/74), mimalloc-pprof#564/#565; compares every artifact's current staged sha256 against the sha256 frozen in the prior `release-manifest.json` by path -- a mismatch or a missing path is a violation. Where the frozen bytes are restored FROM (a retained `release-preflight-<sha>` artifact) is still a runbook convention, not mechanically checked |
+| `REL-004` | A documented release "resume" rebuilds artifacts instead of reusing the exact frozen bytes the freeze record hashed, and the build is not byte-reproducible, so the resume can never pass its own `frozen info_sha256` check. | Enforced by ci-lint (runtime, `ci-lint release verify --resume <release-manifest.json>`) -- see [issue #8](https://github.com/zackees/ci.yml/issues/8)/[#74](https://github.com/zackees/ci.yml/issues/74), mimalloc-pprof#564/#565; compares every artifact's current staged sha256 against the sha256 frozen in the prior `release-manifest.json` by path -- a mismatch or a missing path is a violation, and (#109) so is a frozen manifest for a different candidate SHA or a staged artifact absent from the frozen set. **Reuse half: enforced, partial** ([#109](https://github.com/zackees/ci.yml/issues/109)): `ci-lint release resume-plan --from-run <id> --repo <o/n> --sha <sha> --required-job <name>... --dist <downloaded dir> --github-output` (runtime, GET-only, fail closed, `ci_lint.release_resume`) decides whether a resume may skip every build job and publish the prior run's `release-dist-verified` artifact -- `resume=true` only when the run is a completed same-repo run on the same `head_sha`, exactly one unexpired artifact with a `sha256:` digest exists for that SHA, every named proving job is `success`, and the downloaded bytes match their schema-1 manifest with no unlisted wheel/sdist; `ci-lint release verify-frozen --dist <dir> --sha <sha>` re-verifies those bytes in the publish job. Not mechanically checked: that a release workflow actually wires these (no static rule yet -- see the wiring below), and the artifact's retention window (`retention-days: 1` makes most resumes `artifact-missing`, and the safe outcome is a rebuild that the refusal half then rejects) |
 | `REL-005` | Release-tooling bug fixes are landed and validated by re-running the full exact-SHA release matrix against a NEW candidate SHA, instead of running release scripts from the workflow ref (`main`) against the already-validated candidate's build/test outputs -- costing a full platform matrix (~1h wall-clock) per fix iteration. | Enforced by ci-lint (static precheck, `ci_lint.rules.release_gate.check_rel_005`) -- see [issue #8](https://github.com/zackees/ci.yml/issues/8)/[#74](https://github.com/zackees/ci.yml/issues/74); flags a `ci/*release*publish*.py` script that invokes a Rust/Python build tool (`cargo build`, `uv build`, `maturin`, `soldr wheel`/`cargo`, `pip install`, ...) instead of `gh run download`/an `actions/download-artifact` step keyed by run id. A per-file text/AST heuristic, not full dataflow; a workflow-only `actions/download-artifact` step is out of this Python-scan's scope but satisfies the rule's intent |
 | `BIN-001` | A distributed native Linux app lacks its required musl artifact or feasible glibc 2.17 variant, or lacks compatibility evidence/approved exception. | Enforced by ci-lint (static precheck, `ci_lint.rules.bin_artifacts.check_bin_001`, only when `[python].cli.native = true`: at least one `group = "linux"` platform's `target` must end with `-unknown-linux-musl`, or a recorded `[[exceptions]]` entry) |
 | `BIN-002` | A required Windows architecture/ABI artifact is missing, or a different GNU/MSVC or x64/ARM64 case is counted in its place. | Enforced by ci-lint (static precheck, `ci_lint.rules.bin_artifacts.check_bin_002`, only when `[python].cli.native = true`: every `group = "windows"` platform must use the MSVC ABI (never `-gnu`), its target's architecture must match the arch implied by its platform id, and both x64 and arm64 must be covered) |
+
+### Resuming a release from frozen bytes (REL-004, [#109](https://github.com/zackees/ci.yml/issues/109))
+
+A resume must publish exactly what a prior run tested. The wiring below is documentation, not a workflow file to add verbatim: adapt the job names to the repository's release graph. `resume-plan` exits 0 for every decision; anything it cannot prove is `resume=false` and the workflow rebuilds as before (and `release verify --resume` still refuses rebuilt bytes). Keep `release-dist-verified` long enough to resume (`retention-days` of at least the realistic retry window, e.g. 7); with `retention-days: 1` a resume the next day gets `reason=artifact-missing`.
+
+```yaml
+  resume-plan:
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-24.04
+    permissions: { contents: read, actions: read }
+    outputs:
+      resume: ${{ steps.plan.outputs.resume || 'false' }}
+      run_id: ${{ steps.plan.outputs.run_id }}
+    steps:
+      - uses: actions/checkout@<sha> # ci-lint, pinned
+        with: { repository: zackees/ci.yml, ref: <linter sha>, path: .ci-lint, persist-credentials: false }
+      - name: Download the frozen artifact (absent is fine -- resume-plan then says no)
+        if: ${{ inputs.resume_from_run != '' }}
+        continue-on-error: true
+        uses: actions/download-artifact@<sha>
+        with:
+          name: release-dist-verified
+          path: frozen
+          run-id: ${{ inputs.resume_from_run }}
+          github-token: ${{ github.token }}
+      - id: plan
+        env: { PYTHONPATH: .ci-lint, GH_TOKEN: "${{ github.token }}" }
+        run: >-
+          python3 -m ci_lint release resume-plan --repo "${{ github.repository }}"
+          --from-run "${{ inputs.resume_from_run }}" --sha "${{ inputs.sha }}"
+          --required-job release-verify --required-job "release-musl-smoke (linux-x64-musl)"
+          --dist frozen --github-output
+
+  platform-build:            # and every other build/test/verify job of the release graph
+    needs: [resume-plan]
+    if: ${{ !cancelled() && needs.resume-plan.outputs.resume != 'true' }}
+
+  publish:
+    needs: [resume-plan, release-verify]
+    if: ${{ !cancelled() && !failure() && (needs.release-verify.result == 'success' || needs.resume-plan.outputs.resume == 'true') }}
+    steps:
+      - uses: actions/download-artifact@<sha>
+        with:
+          name: release-dist-verified
+          path: dist
+          run-id: ${{ needs.resume-plan.outputs.resume == 'true' && needs.resume-plan.outputs.run_id || github.run_id }}
+          github-token: ${{ github.token }}
+      - name: Re-verify the exact bytes being published (REL-004)
+        env: { PYTHONPATH: .ci-lint }
+        run: python3 -m ci_lint release verify-frozen --dist dist --sha "${{ inputs.sha }}"
+      # ... publish dist/ ...
+```
+
+`--required-job` names are exact display names in the prior run (a matrix leg includes its suffix). Name the jobs whose success *is* the test evidence -- `release-verify` at minimum, plus any smoke/platform-run legs not already folded into it; `release verify --smoke` already requires a passing smoke result per wheel before the artifact is uploaded. The `CI OK` aggregator must treat skipped build jobs as success only when `resume == 'true'`.
 
 The failure cases and cache details are tracked in [issue #1](https://github.com/zackees/ci.yml/issues/1). The `running-process` preflight describes a circular dependency with Soldr; evaluate that as a scoped exception while preserving its lint coverage and timing evidence.
 

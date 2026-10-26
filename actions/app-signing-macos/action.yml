@@ -1,0 +1,83 @@
+name: macOS app signing and notarization
+description: >-
+  Developer ID signing (inside-out, hardened runtime, secure timestamp) and
+  notarization of a macOS app bundle and its DMG/zip, in a temporary keychain
+  that is always deleted. Release jobs only (REL-006, zackees/ci.yml#462).
+inputs:
+  app-path:
+    description: Path to the .app bundle to sign.
+    required: true
+  artifact-path:
+    description: >-
+      Optional .dmg or .zip that ships the app. A DMG is signed, notarized and
+      stapled; a zip is notarized and re-created from the stapled app. When
+      empty, the app is zipped with ditto only for notarization and the app is
+      stapled in place.
+    required: false
+    default: ""
+  entitlements:
+    description: Optional entitlements plist for the outer app bundle.
+    required: false
+    default: ""
+  identity:
+    description: "Signing identity, e.g. 'Developer ID Application: Name (TEAMID)'."
+    required: true
+  certificate-p12-base64:
+    description: Base64 of the Developer ID Application .p12.
+    required: true
+  certificate-password:
+    description: Password of the .p12.
+    required: true
+  notary-api-key-base64:
+    description: Base64 of the App Store Connect API key (AuthKey_<id>.p8). Preferred notary auth.
+    required: false
+    default: ""
+  notary-api-key-id:
+    description: App Store Connect API key id.
+    required: false
+    default: ""
+  notary-api-issuer-id:
+    description: App Store Connect issuer id.
+    required: false
+    default: ""
+  notary-apple-id:
+    description: Fallback notary auth, Apple ID (with notary-password and notary-team-id).
+    required: false
+    default: ""
+  notary-password:
+    description: Fallback notary auth, app-specific password.
+    required: false
+    default: ""
+  notary-team-id:
+    description: Fallback notary auth, team id. Defaults to the identity's (TEAMID).
+    required: false
+    default: ""
+  notarize:
+    description: "'true' (default) notarizes and staples; 'false' only signs and verifies."
+    required: false
+    default: "true"
+outputs:
+  submission-id:
+    description: The notarytool submission id (empty when notarize is false).
+    value: ${{ steps.sign.outputs.submission-id }}
+runs:
+  using: composite
+  steps:
+    - name: Sign and notarize
+      id: sign
+      shell: bash
+      env:
+        SIGN_APP_PATH: ${{ inputs.app-path }}
+        SIGN_ARTIFACT_PATH: ${{ inputs.artifact-path }}
+        SIGN_ENTITLEMENTS: ${{ inputs.entitlements }}
+        SIGN_IDENTITY: ${{ inputs.identity }}
+        SIGN_CERT_P12_B64: ${{ inputs.certificate-p12-base64 }}
+        SIGN_CERT_PASSWORD: ${{ inputs.certificate-password }}
+        NOTARY_API_KEY_B64: ${{ inputs.notary-api-key-base64 }}
+        NOTARY_API_KEY_ID: ${{ inputs.notary-api-key-id }}
+        NOTARY_API_ISSUER_ID: ${{ inputs.notary-api-issuer-id }}
+        NOTARY_APPLE_ID: ${{ inputs.notary-apple-id }}
+        NOTARY_PASSWORD: ${{ inputs.notary-password }}
+        NOTARY_TEAM_ID: ${{ inputs.notary-team-id }}
+        SIGN_NOTARIZE: ${{ inputs.notarize }}
+      run: python3 "${GITHUB_ACTION_PATH}/sign_notarize.py"
