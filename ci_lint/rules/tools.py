@@ -439,7 +439,8 @@ def check_cache_009(ci: CiToml, repo_root: Path) -> list[Finding]:  # noqa: C901
                 )
                 continue
 
-            for key, expected in ci.allow.setup_soldr.require.items():
+            for entry in ci.allow.setup_soldr.require.entries:
+                key, expected = entry.key, entry.value
                 actual = with_.get(key)
                 if actual is None:
                     findings.append(

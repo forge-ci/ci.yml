@@ -220,7 +220,8 @@ def check_cache_003_setup_uv(ci: CiToml, repo_root: Path) -> list[Finding]:
             with_ = use_step.with_
             if uses.split("@", 1)[0] != "astral-sh/setup-uv":
                 continue
-            for key, expected in require.items():
+            for entry in require.entries:
+                key, expected = entry.key, entry.value
                 actual = with_.get(key)
                 if expected == "plan":
                     reason = _setup_uv_save_cache_violation(actual)
