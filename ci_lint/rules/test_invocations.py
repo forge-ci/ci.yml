@@ -275,9 +275,33 @@ def with_yaml_comment(line: str, raw_lines: list[str]) -> str:
     if not needle:
         return line
     for raw in raw_lines:
-        if needle in raw and "#" in raw.split(needle, 1)[1]:
-            return raw
+        comment = _trailing_comment(raw, needle)
+        if comment is not None:
+            return f"{line.rstrip()}  {comment}"
     return line
+
+
+# A raw YAML line's content before the command: an optional `- ` list marker
+# and an optional `run:` key (a block scalar's body lines carry neither).
+_YAML_RUN_PREFIX_RE = re.compile(r"^(?:-\s+)?(?:run:\s*)?")
+
+
+def _trailing_comment(raw: str, needle: str) -> str | None:
+    """The `# ...` comment of `raw` when `raw` holds exactly the command
+    `needle` followed by that comment, else None. A plain substring match is
+    wrong: `fi` matches inside `fingerprint-bin`, so a short command on one
+    step used to borrow -- and get re-scanned as -- another step's whole
+    line (zccache test-action.yml: one `cargo test` line reported 16 extra
+    times against steps holding only `fi`/`exit 1`)."""
+
+    body = _YAML_RUN_PREFIX_RE.sub("", raw.strip(), count=1)
+    if not body.startswith(needle):
+        return None
+    rest = body[len(needle) :]
+    if not rest or not rest[0].isspace():
+        return None
+    rest = rest.lstrip()
+    return rest if rest.startswith("#") else None
 
 
 def iter_run_lines(repo_root: Path) -> list[RunLine]:  # noqa: C901
