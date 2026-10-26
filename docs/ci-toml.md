@@ -1482,6 +1482,23 @@ from a filename or a build log). Exits 1 if any finding is `violation`
 (any rule, not just `PKG-006`), else 0; exits 2 on bad input (`--dist` not
 a directory, `--sha` not a 40-hex commit SHA).
 
+
+### Release resume plan (REL-004 reuse half, #109)
+
+`ci-lint release resume-plan --repo <o/n> --from-run <id> --sha <sha>
+--required-job <exact name>... --dist <dir> [--github-output] [--json]
+[--record f|--replay f]` -- `ci_lint.release_resume`. GET-only, fail closed:
+`resume=true` only when the prior run is a completed same-repository run on
+`--sha`, exactly one unexpired `release-dist-verified` artifact with a
+`sha256:` digest was uploaded for `--sha`, every `--required-job` is
+`success`, and `--dist` (that artifact, downloaded) holds a schema-1
+`release-manifest.json` for `--sha` whose every artifact is present with its
+frozen sha256 and no unlisted wheel/sdist. `--github-output` appends
+`resume`, `reason`, `run_id`, `artifact_id`, `artifact_digest`. Exit 0 for
+every decision, 2 for a usage error. `ci-lint release verify-frozen --dist
+<dir> --sha <sha>` repeats the local check in the publish job (exit 1 on a
+REL-004 violation). Wiring: docs/policy-rust.md, "Resuming a release from
+frozen bytes".
 ## Perf compare (round-5)
 
 `ci-lint perf compare --repo . --baseline <b.json> --current <c.json>
