@@ -1,0 +1,13 @@
+schema = 3
+profile = "library"
+[platforms]
+linux-x64 = { target = "x86_64-unknown-linux-gnu", runs-on = "ubuntu-24.04", group = "linux" }
+[suites]
+unit = { run = "pytest", required = true }
+[cache]
+budget = "9GB"
+write-on = ["main"]
+[cache.family]
+small = { via = "setup-uv", max = "5MB", per = "none" }
+[allow]
+workflows = { "ci.yml" = ["push:main"] }

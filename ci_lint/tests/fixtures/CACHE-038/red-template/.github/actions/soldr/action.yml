@@ -1,0 +1,24 @@
+# Shape of zackees/template-python-rust-cmd's .github/actions/soldr/action.yml:
+# the suffix is a compound expression that appends the planner's PR key
+# component only on a saving PR run.
+name: soldr setup
+inputs:
+  cross-target:
+    required: false
+    default: ""
+  cache-key-suffix:
+    required: false
+    default: ""
+  cache-key-pr:
+    required: false
+    default: ""
+  save-cache:
+    required: true
+runs:
+  using: composite
+  steps:
+    - uses: zackees/setup-soldr@v0
+      with:
+        save-cache: ${{ inputs.save-cache }}
+        cross-targets: ${{ inputs.cross-target }}
+        cache-key-suffix: ${{ inputs.save-cache == 'true' && inputs.cache-key-pr != '' && (inputs.cache-key-suffix != '' && format('{0}-{1}', inputs.cache-key-suffix, inputs.cache-key-pr) || inputs.cache-key-pr) || inputs.cache-key-suffix }}
