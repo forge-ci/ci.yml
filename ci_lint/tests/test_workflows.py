@@ -153,6 +153,36 @@ class WorkflowFixtureTest(unittest.TestCase):
         self.assertEqual([], [f for f in findings if f.status == Status.NEEDS_REVIEW])
         self.assertEqual([], [f for f in findings if f.path == "ci.toml"])
 
+    def test_run_001_literal_matrix_is_resolved_not_needs_review(self) -> None:
+        """template-python-rust-cmd's musl jobs: `runs-on: ${{ matrix.lane.runs_on }}`
+        over the job's own literal `strategy.matrix` validates each value
+        against the fleet list; a bare `${{ matrix.os }}` list and `include`
+        entries resolve the same way."""
+        repo = fixture("RUN-001", "green")
+        ci = load_ci_toml(repo).ci
+        wfs = load_workflows(repo)
+        doc = as_dict(wfs[0].document)
+        doc["jobs"]["musl"] = {
+            "runs-on": "${{ matrix.lane.runs_on }}",
+            "strategy": {"matrix": {"lane": [
+                {"id": "x64", "runs_on": "ubuntu-24.04"},
+                {"id": "arm", "runs_on": "ubuntu-24.04-arm"},
+            ]}},
+        }
+        doc["jobs"]["os"] = {
+            "runs-on": "${{ matrix.os }}",
+            "strategy": {"matrix": {"include": [{"os": "macos-15"}, {"os": "windows-2025"}]}},
+        }
+        self.assertEqual([], check_run_001(ci, wfs))
+        doc["jobs"]["os"]["strategy"]["matrix"]["include"].append({"os": "ubuntu-latest"})
+        findings = check_run_001(ci, wfs)
+        self.assertEqual([Status.VIOLATION], [f.status for f in findings])
+        self.assertIn("ubuntu-latest", findings[0].message)
+        # One dynamic matrix value keeps the whole label needs_review.
+        doc["jobs"]["os"]["strategy"]["matrix"]["include"][-1] = {"os": "${{ vars.R }}"}
+        findings = check_run_001(ci, wfs)
+        self.assertEqual([Status.NEEDS_REVIEW], [f.status for f in findings])
+
     def test_run_001_unresolvable_expression_stays_needs_review(self) -> None:
         """An expression that is NOT sourced from a precheck plan
         platform-lanes output can't be statically resolved and must stay

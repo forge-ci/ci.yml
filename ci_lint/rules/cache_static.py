@@ -42,6 +42,7 @@ from ci_lint.schema import CacheFamily, CiToml
 from ci_lint.workflow_scan import as_dict, jobs_of, load_composite_actions, load_workflows, steps_of
 from ci_lint.yaml_io import LoadStatus, YamlValue
 from ci_lint.rules.tools import _iter_uses_with, _is_plan_expr
+from ci_lint.rules import soldr_key_expr
 
 SIZE_RE = re.compile(r"^(\d+(?:\.\d+)?)\s*(B|KB|MB|GB)$", re.IGNORECASE)
 SIZE_UNITS: dict[str, int] = {"B": 1, "KB": 1024, "MB": 1024**2, "GB": 1024**3}
@@ -1028,16 +1029,16 @@ class _SoldrWriter:
     job: str
     loc: str
     runs_on: str | None  # None = dynamic, not statically known
-    suffix: str | None  # None = dynamic; "" = absent
+    suffixes: frozenset[str] | None  # every value the suffix can take; None = unbounded
+    targets: frozenset[str] | None  # cross-target identity; a per-leg matrix target is unique to its job
     save: str
 
+    @property
+    def suffix_shown(self) -> str:
+        return sorted(self.suffixes or {""})[0]
 
-@dataclass(frozen=True)
-class _InputDefault:
-    """One composite-action input's declared default."""
 
-    name: str
-    value: str
+_InputDefault = soldr_key_expr.InputDefault
 
 
 @dataclass(frozen=True)
@@ -1111,21 +1112,52 @@ def _runs_on_key(value: YamlValue) -> str | None:
     return None
 
 
+def _cross_targets(
+    raw: YamlValue, ctx: soldr_key_expr.Context, leg_token: str
+) -> frozenset[str] | None:
+    """setup-soldr folds the cross target into the key's toolchain digest.
+
+    `mergeToolchainTargets` (zackees/setup-soldr src/lib/blessed-cross-prepare.ts,
+    called from resolve-setup.ts) adds `cross-targets` to `toolchain.targets`,
+    which is hashed into `<toolchain>` -- so two legs with different targets
+    compute different keys. A target taken from the matrix differs per leg.
+    """
+
+    text = _as_text(raw)
+    if text is not None and re.search(r"\bmatrix\.", text):
+        return frozenset({leg_token})
+    values = soldr_key_expr.possible_values(raw, ctx)
+    return None if values is None else frozenset(v.lower() for v in values)
+
+
 def _writer_from_with(
-    wf: str, job: str, loc: str, runs_on: str | None, with_: dict[str, YamlValue]
+    wf: str,
+    job: str,
+    loc: str,
+    runs_on: str | None,
+    with_: dict[str, YamlValue],
+    raw: dict[str, YamlValue],
+    ctx: soldr_key_expr.Context,
 ) -> _SoldrWriter | None:
+    """`with_` is the input-resolved step; `raw` the step as written, evaluated under `ctx`."""
+
     save = _as_text(with_.get("save-cache"))
     save_text = "auto" if save is None else save.strip()
     if save_text.lower() in _NO_SAVE_VALUES:
         return None
-    raw_suffix = _as_text(with_.get("cache-key-suffix"))
-    if raw_suffix is None:
-        suffix: str | None = ""
-    elif "${{" in raw_suffix:
-        suffix = None
-    else:
-        suffix = raw_suffix.strip()
-    return _SoldrWriter(workflow=wf, job=job, loc=loc, runs_on=runs_on, suffix=suffix, save=save_text)
+    resolved_target = _as_text(with_.get("cross-targets"))
+    target_raw: YamlValue = (
+        resolved_target if resolved_target is not None and "matrix." in resolved_target else raw.get("cross-targets")
+    )
+    return _SoldrWriter(
+        workflow=wf,
+        job=job,
+        loc=loc,
+        runs_on=runs_on,
+        suffixes=soldr_key_expr.possible_values(raw.get("cache-key-suffix"), ctx),
+        targets=_cross_targets(target_raw, ctx, f"\x00leg:{wf}:{job}"),
+        save=save_text,
+    )
 
 
 def _collect_soldr_writers(repo_root: Path) -> list[_SoldrWriter]:
@@ -1143,16 +1175,18 @@ def _collect_soldr_writers(repo_root: Path) -> list[_SoldrWriter]:
                 raw_with = step.get("with")
                 with_ = raw_with if isinstance(raw_with, dict) else {}
                 loc = f"jobs.{job_id}.steps[{i}]"
-                candidates: list[dict[str, YamlValue]] = []
                 if _is_build_soldr(uses):
-                    candidates.append(with_)
-                else:
-                    for comp in (c for c in composites if c.action == uses.rstrip("/")):
-                        candidates.append(
-                            {k: _resolve_input(v, with_, comp.defaults) for k, v in comp.with_.items()}
-                        )
-                for cand in candidates:
-                    writer = _writer_from_with(item.path, job_id, loc, runs_on, cand)
+                    ctx = soldr_key_expr.Context(caller={}, defaults=(), composite=False)
+                    writer = _writer_from_with(item.path, job_id, loc, runs_on, with_, with_, ctx)
+                    if writer is not None:
+                        writers.append(writer)
+                    continue
+                for comp in (c for c in composites if c.action == uses.rstrip("/")):
+                    resolved = {k: _resolve_input(v, with_, comp.defaults) for k, v in comp.with_.items()}
+                    ctx = soldr_key_expr.Context(
+                        caller=with_, defaults=comp.defaults, composite=True
+                    )
+                    writer = _writer_from_with(item.path, job_id, loc, runs_on, resolved, comp.with_, ctx)
                     if writer is not None:
                         writers.append(writer)
     return writers
@@ -1162,27 +1196,55 @@ def _describe(w: _SoldrWriter) -> str:
     return f"{w.workflow} {w.loc}"
 
 
+def _races(a: _SoldrWriter, b: _SoldrWriter) -> bool:
+    """Two static writers in different jobs can compute one build-cache key."""
+
+    if (a.workflow, a.job) == (b.workflow, b.job) or a.runs_on != b.runs_on:
+        return False
+    if a.suffixes is None or b.suffixes is None or a.targets is None or b.targets is None:
+        return False
+    return bool(a.suffixes & b.suffixes) and bool(a.targets & b.targets)
+
+
+def _race_groups(static: list[_SoldrWriter]) -> list[list[_SoldrWriter]]:
+    parent = list(range(len(static)))
+
+    def find(i: int) -> int:
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    for i, j in itertools.combinations(range(len(static)), 2):
+        if _races(static[i], static[j]):
+            parent[find(i)] = find(j)
+    groups: dict[int, list[_SoldrWriter]] = {}
+    for i, w in enumerate(static):
+        groups.setdefault(find(i), []).append(w)
+    return [g for g in groups.values() if len({(m.workflow, m.job) for m in g}) >= 2]
+
+
 def check_cache_038(ci: CiToml, repo_root: Path) -> list[Finding]:
     """Two or more saving setup-soldr jobs racing for one immutable cache key."""
 
     _ = ci  # uniform group-9 signature; the rule reads only the workflows
     writers = _collect_soldr_writers(repo_root)
     findings: list[Finding] = []
-    dynamic = [w for w in writers if w.runs_on is None or w.suffix is None]
+    dynamic = [w for w in writers if w.runs_on is None or w.suffixes is None or w.targets is None]
     static = sorted(
-        (w for w in writers if w.runs_on is not None and w.suffix is not None),
-        key=lambda w: (w.runs_on or "", w.suffix or ""),
+        (w for w in writers if w not in dynamic),
+        key=lambda w: (w.runs_on or "", w.suffix_shown),
     )
     fix = (
         "give every saving setup-soldr job on the same runner a distinct `cache-key-suffix` "
         "(e.g. the job id), or set `save-cache: \"false\"` on all but the one job whose build "
         "the others should restore (zackees/ci.yml#125, FastLED/fbuild#1587)"
     )
-    for (runs_on, suffix), grouped in itertools.groupby(static, key=lambda w: (w.runs_on, w.suffix)):
-        members = list(grouped)
+    for members in _race_groups(static):
         jobs = {(m.workflow, m.job) for m in members}
-        if len(jobs) < 2:
-            continue
+        runs_on = members[0].runs_on
+        shared = sorted(set.intersection(*(set(m.suffixes or ()) for m in members)) or {members[0].suffix_shown})
+        suffix = shared[0]
         where = "; ".join(_describe(m) for m in members)
         shown = f"`cache-key-suffix: {suffix}`" if suffix else "no `cache-key-suffix`"
         findings.append(
@@ -1200,7 +1262,7 @@ def check_cache_038(ci: CiToml, repo_root: Path) -> list[Finding]:
         )
     if dynamic and len(writers) >= 2:
         for w in dynamic:
-            part = "runs-on" if w.runs_on is None else "cache-key-suffix"
+            part = "runs-on" if w.runs_on is None else ("cache-key-suffix" if w.suffixes is None else "cross-targets")
             findings.append(
                 Finding(
                     rule="CACHE-038",

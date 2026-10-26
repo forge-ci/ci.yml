@@ -119,8 +119,33 @@ def _cancel_of(value: YamlValue) -> bool | None:
     if raw is None:
         return False
     if "${{" in raw:
-        return None
+        return False if _false_off_pr(raw) else None
     return raw.strip().lower() in _TRUTHY
+
+
+# Events whose runs never write the Dylint cache. CACHE-016 asks about the
+# `push`/`schedule` writers, so an expression true only on these is false there.
+_NON_WRITER_EVENTS = frozenset({"pull_request", "pull_request_target", "merge_group"})
+_EVENT_EQ_RE = re.compile(r"^\(?\s*github\.event_name\s*==\s*'([a-z_]+)'\s*\)?$")
+
+
+def _false_off_pr(raw: str) -> bool:
+    """`cancel-in-progress` provably false on every push/schedule run.
+
+    Accepts `${{ <disjunct> || ... }}` where every disjunct is a `&&` chain
+    with at least one `github.event_name == '<pr event>'` conjunct, e.g.
+    `${{ github.event_name == 'pull_request' }}`. Anything else stays unknown.
+    """
+
+    m = re.fullmatch(r"\s*\$\{\{(.*)\}\}\s*", raw, re.DOTALL)
+    if m is None or "(" in m.group(1).replace("(github.event_name", ""):
+        return False
+    for disjunct in m.group(1).split("||"):
+        conjuncts = [c.strip() for c in disjunct.split("&&")]
+        events = [e.group(1) for c in conjuncts if (e := _EVENT_EQ_RE.match(c))]
+        if not any(ev in _NON_WRITER_EVENTS for ev in events):
+            return False
+    return True
 
 
 def _combine_cancel(workflow: bool | None, job: bool | None) -> bool | None:

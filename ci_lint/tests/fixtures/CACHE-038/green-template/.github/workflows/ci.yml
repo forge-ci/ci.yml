@@ -1,0 +1,46 @@
+on: [push]
+jobs:
+  fast:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: ./.github/actions/soldr
+        with:
+          save-cache: ${{ needs.precheck.outputs.cache_save }}
+          cache-key-pr: ${{ needs.precheck.outputs.cache_key_pr }}
+  dylint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: ./.github/actions/soldr
+        with:
+          cache-key-suffix: "dylint"
+          save-cache: ${{ needs.precheck.outputs.cache_save }}
+          cache-key-pr: ${{ needs.precheck.outputs.cache_key_pr }}
+  platform-build:
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        lane: ${{ fromJSON(needs.precheck.outputs.platform_lanes_todo_json) }}
+    steps:
+      - uses: ./.github/actions/soldr
+        with:
+          cross-target: ${{ matrix.lane.target }}
+          cache-key-suffix: platform-build
+          save-cache: ${{ needs.precheck.outputs.cache_save }}
+          cache-key-pr: ${{ needs.precheck.outputs.cache_key_pr }}
+  cross-arm64:
+    # Same suffix as platform-build, different cross target: a distinct key.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: ./.github/actions/soldr
+        with:
+          cross-target: aarch64-unknown-linux-gnu
+          cache-key-suffix: platform-build
+          save-cache: ${{ needs.precheck.outputs.cache_save }}
+  release-linux-x64:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: ./.github/actions/soldr
+        with:
+          cache-key-suffix: "release"
+          save-cache: ${{ needs.precheck.outputs.cache_save }}
+          cache-key-pr: ${{ needs.precheck.outputs.cache_key_pr }}

@@ -696,6 +696,52 @@ class Cache038RacingSoldrWritersTest(unittest.TestCase):
         self.assertEqual(self._check(distinct, action), [])
 
 
+    @requires_yaml_tooling
+    def test_template_compound_suffix_wrapper_is_resolved(self) -> None:
+        """template-python-rust-cmd: the wrapper's compound suffix expression resolves per job."""
+
+        from ci_lint.tests.helpers import fixture
+
+        for kind, want in (("green-template", []), ("red-template", [("CACHE-038", "violation")])):
+            repo = fixture("CACHE-038", kind)
+            ci = load_ci_toml(repo).ci
+            got = [(f.rule, f.status.value) for f in check_cache_038(ci, repo)]
+            self.assertEqual(got, want, kind)
+
+    @requires_yaml_tooling
+    def test_cross_target_distinguishes_shared_suffix(self) -> None:
+        def job(name: str, target: str) -> str:
+            return self._job(name, "ubuntu-24.04", f"          cache-key-suffix: x\n          cross-targets: {target}\n")
+
+        distinct = "on: [push]\njobs:\n" + job("a", "aarch64-unknown-linux-gnu") + job("b", "x86_64-unknown-linux-musl")
+        self.assertEqual(self._check(distinct), [])
+        same = "on: [push]\njobs:\n" + job("a", "aarch64-unknown-linux-gnu") + job("b", "AARCH64-unknown-linux-gnu")
+        self.assertEqual(self._check(same), [("CACHE-038", "violation")])
+        legs = "on: [push]\njobs:\n" + job("a", "${{ matrix.target }}") + self._job(
+            "b", "ubuntu-24.04", "          cache-key-suffix: x\n          cross-targets: aarch64-unknown-linux-gnu\n"
+        )
+        self.assertEqual(self._check(legs), [])
+
+    def test_key_expression_value_sets(self) -> None:
+        from ci_lint.rules.soldr_key_expr import Context, possible_values
+
+        expr = (
+            "${{ inputs.save-cache == 'true' && inputs.cache-key-pr != '' && (inputs.cache-key-suffix != '' && "
+            "format('{0}-{1}', inputs.cache-key-suffix, inputs.cache-key-pr) || inputs.cache-key-pr) || inputs.cache-key-suffix }}"
+        )
+        caller = {
+            "save-cache": "${{ needs.precheck.outputs.cache_save }}",
+            "cache-key-pr": "${{ needs.precheck.outputs.cache_key_pr }}",
+        }
+        plain = possible_values(expr, Context(caller=caller, defaults=(), composite=True))
+        self.assertEqual(plain, frozenset({"", "pr-1"}))
+        named = possible_values(expr, Context(caller={**caller, "cache-key-suffix": "lint"}, defaults=(), composite=True))
+        self.assertTrue(named and "lint" in named and not (named & frozenset({"", "pr-1"})))
+        self.assertIsNone(possible_values("${{ github.job }}", Context(caller={}, defaults=(), composite=False)))
+        self.assertIsNone(possible_values("${{ inputs.x }}", Context(caller={}, defaults=(), composite=False)))
+        self.assertIsNone(possible_values("${{ toJSON(x) == 'a' }}", Context(caller={}, defaults=(), composite=False)))
+
+
 class Cache024AutoKeyTrustedWritersTest(unittest.TestCase):
     """CACHE-024 (#185/#420): `key: auto` on GitHub needs auto-key-trusted-writers."""
 

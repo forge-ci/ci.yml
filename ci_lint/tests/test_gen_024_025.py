@@ -6,6 +6,9 @@ import unittest
 
 from ci_lint.finding import Status
 from ci_lint.rules.needs_graph import check_gen_024, check_gen_025
+from pathlib import Path
+
+from ci_lint.rules.needs_graph import check_needs_graph
 from ci_lint.workflow_scan import ParsedYamlFile
 from ci_lint.yaml_io import LoadStatus
 
@@ -41,6 +44,27 @@ class Gen024Test(unittest.TestCase):
         bare = _job("ubuntu-latest", [{"run": "make"}])
         f = check_gen_024(_wf({"gate": GATE, "cache": cache, "bare": bare}))
         self.assertEqual([x.status for x in f], [Status.NEEDS_REVIEW, Status.NEEDS_REVIEW])
+
+    def test_cache_writer_after_preprune_job_is_exempt(self) -> None:
+        maint = {"runs-on": "ubuntu-latest", "steps": [{"run": "python3 -m ci_lint cache preprune --repo ."}]}
+        writer = {**_job("ubuntu-latest", [{"uses": "actions/cache@v4"}, {"run": "make"}]), "needs": ["maint"]}
+        self.assertEqual(check_gen_024(_wf({"maint": maint, "writer": writer})), [])
+
+    def test_job_named_cache_maint_without_prune_command_is_not_exempt(self) -> None:
+        maint = {"runs-on": "ubuntu-latest", "steps": [{"run": "echo hi"}]}
+        writer = {**_job("ubuntu-latest", [{"uses": "actions/cache@v4"}, {"run": "make"}]), "needs": ["cache-maint"]}
+        f = check_gen_024(_wf({"cache-maint": maint, "writer": writer}))
+        self.assertEqual([x.status for x in f], [Status.NEEDS_REVIEW])
+
+    def test_end_of_queue_janitor_is_exempt(self) -> None:
+        janitor = {"runs-on": "ubuntu-latest", "needs": ["gate"], "steps": [{"run": "ci-lint cache janitor --repo ."}]}
+        self.assertEqual(check_gen_024(_wf({"gate": GATE, "janitor": janitor})), [])
+
+    def test_fixture_repo_flags_only_the_cache_less_ordering_edge(self) -> None:
+        root = Path(__file__).parent / "fixtures" / "GEN-024" / "legit-edges"
+        f = [x for x in check_needs_graph(root) if x.rule == "GEN-024"]
+        self.assertEqual(len(f), 1)
+        self.assertIn("'ordering-only'", f[0].message)
 
 
 def _agg(needs: list[str], run: str = "test '${{ needs.a.result }}' = success") -> dict:

@@ -9,17 +9,28 @@ from pathlib import Path
 
 from ci_lint.finding import Status
 from ci_lint.rules.workflows import check_run_003, is_native_arm_linux_label
-from ci_lint.schema import Platform, load_ci_toml
+from ci_lint.schema import Flow, Platform, load_ci_toml
 from ci_lint.tests.helpers import fixture, requires_yaml_tooling
 from ci_lint.workflow_scan import load_workflows
 
 _PR = "on:\n  pull_request:\n  push:\n    branches: [main]\n"
 
 
-def _run(on: str, jobs: str, platforms: dict[str, Platform] | None = None):
-    ci = load_ci_toml(fixture("RUN-001", "green")).ci
+def _ci():
+    return load_ci_toml(fixture("RUN-001", "green")).ci
+
+
+def _run(
+    on: str,
+    jobs: str,
+    platforms: dict[str, Platform] | None = None,
+    flows: dict[str, Flow] | None = None,
+):
+    ci = _ci()
     if platforms is not None:
         ci = dataclasses.replace(ci, platforms=platforms)
+    if flows is not None:
+        ci = dataclasses.replace(ci, flows={**ci.flows, **flows})
     with tempfile.TemporaryDirectory() as tmp:
         wf_dir = Path(tmp) / ".github" / "workflows"
         wf_dir.mkdir(parents=True)
@@ -84,13 +95,44 @@ class Run003Test(unittest.TestCase):
             "        lane: ${{ fromJSON(needs.plan.outputs.platform_lanes_json) }}\n"
         )
         jobs = _job("${{ matrix.lane.runs_on }}", extra)
-        arm = {"linux-arm": Platform("linux-arm", "aarch64-unknown-linux-gnu",
-                                     "ubuntu-24.04-arm", "linux")}
-        x64 = {"linux": Platform("linux", "x86_64-unknown-linux-gnu", "ubuntu-24.04", "linux")}
-        f = _run(_PR, jobs, arm)
+        x64 = {"linux-x64": Platform("linux-x64", "x86_64-unknown-linux-gnu",
+                                     "ubuntu-24.04", "linux")}
+        both = {**x64, "linux-arm": Platform("linux-arm", "aarch64-unknown-linux-gnu",
+                                             "ubuntu-24.04-arm", "linux")}
+        # `[flow.pr]`'s own platforms are the fast job's, never a lane; an arm
+        # platform added by the untagged `[flow.main]` reaches every push.
+        main = dataclasses.replace(_ci().flows["main"], platforms=("linux-x64", "linux-arm"))
+        f = _run(_PR, jobs, both, flows={"main": main})
         self.assertEqual([x.status for x in f], [Status.VIOLATION])
         self.assertIn("[platforms.linux-arm]", f[0].message)
         self.assertEqual(_run(_PR, jobs, x64), [])
+
+    def test_platform_lanes_arm_selected_only_by_tag_is_clean(self) -> None:
+        """template-python-rust-cmd: `[flow.pr]` selects only linux-x64 and
+        `[flow.main]` extends it, so the plan-built matrix never carries the
+        arm lane on an untagged PR or any push -- only `[ci-full]`/`[release]`
+        opt in. The job `if:` itself proves nothing; the plan selection does."""
+        extra = (
+            "    needs: plan\n"
+            "    if: ${{ !cancelled() && needs.plan.result == 'success' }}\n"
+            "    strategy:\n      matrix:\n"
+            "        lane: ${{ fromJSON(needs.plan.outputs.platform_lanes_todo_json) }}\n"
+        )
+        jobs = _job("${{ matrix.lane.runs_on }}", extra)
+        both = {
+            "linux-x64": Platform("linux-x64", "x86_64-unknown-linux-gnu", "ubuntu-24.04", "linux"),
+            "linux-arm64": Platform("linux-arm64", "aarch64-unknown-linux-gnu",
+                                    "ubuntu-24.04-arm", "linux"),
+        }
+        self.assertEqual(_run(_PR, jobs, both), [])
+        # A literal arm leg beside the plan matrix is not covered by the plan proof.
+        literal = (
+            "    strategy:\n      matrix:\n"
+            "        lane:\n          - { runs_on: ubuntu-24.04-arm }\n"
+            "    if: ${{ needs.guard.result == 'success' }}\n"
+        )
+        f = _run(_PR, _job("${{ matrix.lane.runs_on }}", literal), both)
+        self.assertEqual([x.status for x in f], [Status.NEEDS_REVIEW])
 
     def test_unresolvable_runs_on_is_needs_review(self) -> None:
         f = _run(_PR, _job("${{ vars.RUNNER }}"))

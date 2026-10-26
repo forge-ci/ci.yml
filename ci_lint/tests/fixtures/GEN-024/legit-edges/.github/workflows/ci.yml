@@ -1,0 +1,23 @@
+on: [pull_request, merge_group]
+jobs:
+  cache-maint:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: python3 ci/cache_maint.py
+  build:
+    needs: cache-maint
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: ./.github/actions/soldr
+      - run: cargo build
+  ordering-only:
+    needs: cache-maint
+    runs-on: ubuntu-24.04
+    steps:
+      - run: python3 ci/release_guard.py
+  queue-janitor:
+    needs: [build, ordering-only]
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - run: python3 -m ci_lint cache janitor --repo .
