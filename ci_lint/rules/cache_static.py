@@ -692,6 +692,7 @@ def check_group9(ci: CiToml, repo_root: Path) -> CacheBudgetResult:
     findings.extend(check_cache_032(ci))
     findings.extend(check_cache_034(ci, repo_root))
     findings.extend(check_cache_038(ci, repo_root))
+    findings.extend(check_cache_024(ci, repo_root))
     from ci_lint.rules.lint_cache import check_lint_cache  # pylint: disable=import-outside-toplevel
 
     findings.extend(check_lint_cache(ci, repo_root))
@@ -1207,6 +1208,136 @@ def check_cache_038(ci: CiToml, repo_root: Path) -> list[Finding]:
                         f"{_describe(w)} saves a setup-soldr build cache with a dynamic {part}; "
                         f"with {len(writers)} saving setup-soldr steps in the repository, confirm "
                         "no two of them resolve to the same runner and suffix"
+                    ),
+                    fix=fix,
+                )
+            )
+    return findings
+
+
+# CACHE-024 (#185/#420): `key: auto` on a GitHub-hosted job needs a non-empty
+# `auto-key-trusted-writers`, or every restore takes setup-soldr's legacy
+# fallback and the job becomes a write-only cache.
+_ACT_GUARD_RE = re.compile(r"^\$\{\{\s*env\.ACT\s*&&\s*'auto'\s*\|\|\s*''\s*\}\}$")
+_TRUSTED_WRITER_RE = re.compile(
+    r"^[\w.-]+/[\w.-]+/\.github/workflows/[\w.-]+\.ya?ml@[0-9a-f]{40}:\d+:\d+:\d+$"
+)
+_TRUE_VALUES = frozenset({"true", "1", "yes", "on"})
+
+
+@dataclass(frozen=True)
+class _SoldrStep:
+    """One setup-soldr build step (direct or via a local composite) in a workflow job."""
+
+    workflow: str
+    loc: str
+    runs_on: YamlValue
+    with_: dict[str, YamlValue]
+
+
+def _collect_soldr_steps(repo_root: Path) -> list[_SoldrStep]:
+    composites = _composite_soldr_steps(repo_root)
+    out: list[_SoldrStep] = []
+    for item in load_workflows(repo_root):
+        if item.status != LoadStatus.OK:
+            continue
+        for job_id, job in jobs_of(as_dict(item.document)).items():
+            for i, step in enumerate(steps_of(job)):
+                uses = step.get("uses")
+                if not isinstance(uses, str):
+                    continue
+                raw_with = step.get("with")
+                with_ = raw_with if isinstance(raw_with, dict) else {}
+                loc = f"jobs.{job_id}.steps[{i}]"
+                if _is_build_soldr(uses):
+                    out.append(_SoldrStep(item.path, loc, job.get("runs-on"), with_))
+                    continue
+                for comp in (c for c in composites if c.action == uses.rstrip("/")):
+                    resolved = {k: _resolve_input(v, with_, comp.defaults) for k, v in comp.with_.items()}
+                    out.append(_SoldrStep(item.path, loc, job.get("runs-on"), resolved))
+    return out
+
+
+def _self_hosted(runs_on: YamlValue) -> bool:
+    labels = runs_on if isinstance(runs_on, list) else [runs_on]
+    return any(isinstance(v, str) and v.strip() == "self-hosted" for v in labels)
+
+
+def _auto_key_state(with_: dict[str, YamlValue]) -> str:
+    """'no' (cannot be auto), 'yes' (literal auto), 'act' (env.ACT-guarded), 'unknown'."""
+
+    key = (_as_text(with_.get("key")) or "").strip()
+    if key:
+        if key == "auto":
+            return "yes"
+        if "${{" not in key:
+            return "no"
+        if _ACT_GUARD_RE.match(key):
+            return "act"
+        return "unknown" if "auto" in key or "env." in key or "vars." in key or "inputs." in key else "no"
+    auto_key = (_as_text(with_.get("auto-key")) or "").strip()
+    if "${{" in auto_key:
+        return "unknown"
+    return "yes" if auto_key.lower() in _TRUE_VALUES else "no"
+
+
+def check_cache_024(ci: CiToml, repo_root: Path) -> list[Finding]:
+    """A setup-soldr step whose build-cache key can be `auto` on GitHub with no trusted writers."""
+
+    _ = ci  # uniform group-9 signature; the rule reads only the workflows
+    fix = (
+        "on GitHub-hosted runners, `auto` needs a non-empty `auto-key-trusted-writers` "
+        "(`owner/repo/.github/workflows/file.yml@FULL_SOURCE_SHA:RUN_ID:ATTEMPT:JOB_ID`, one per line); "
+        "otherwise use the interim form `key: ${{ env.ACT && 'auto' || '' }}` (docs/policy-general.md, #185/#420)"
+    )
+    findings: list[Finding] = []
+    for s in _collect_soldr_steps(repo_root):
+        state = _auto_key_state(s.with_)
+        if state in ("no", "act") or _self_hosted(s.runs_on):
+            continue
+        where = f"{s.workflow} {s.loc}"
+        writers = (_as_text(s.with_.get("auto-key-trusted-writers")) or "").strip()
+        if not writers:
+            status = Status.VIOLATION if state == "yes" else Status.NEEDS_REVIEW
+            what = (
+                "selects the `auto` build-cache key"
+                if state == "yes"
+                else "has a build-cache `key`/`auto-key` expression that may evaluate to `auto`"
+            )
+            findings.append(
+                Finding(
+                    rule="CACHE-024",
+                    status=status,
+                    path=s.workflow,
+                    message=(
+                        f"{where} {what} with no `auto-key-trusted-writers`: on GitHub every restore "
+                        "takes the legacy fallback and the job saves an unread ancestor entry per push"
+                    ),
+                    fix=fix,
+                )
+            )
+            continue
+        if "${{" in writers:
+            findings.append(
+                Finding(
+                    rule="CACHE-024",
+                    status=Status.NEEDS_REVIEW,
+                    path=s.workflow,
+                    message=f"{where} sets `auto-key-trusted-writers` from an expression; confirm it is non-empty on GitHub",
+                    fix=fix,
+                )
+            )
+            continue
+        bad = [ln.strip() for ln in writers.splitlines() if ln.strip() and not _TRUSTED_WRITER_RE.match(ln.strip())]
+        if bad:
+            findings.append(
+                Finding(
+                    rule="CACHE-024",
+                    status=Status.VIOLATION,
+                    path=s.workflow,
+                    message=(
+                        f"{where} lists malformed `auto-key-trusted-writers` entries ({', '.join(bad)}); "
+                        "setup-soldr cannot match them, so no donor is ever authorized"
                     ),
                     fix=fix,
                 )

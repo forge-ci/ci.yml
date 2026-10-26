@@ -23,6 +23,7 @@ from ci_lint.rules.cache_static import (
     check_cache_031,
     check_cache_032,
     check_cache_034,
+    check_cache_024,
     check_cache_038,
     parse_size,
 )
@@ -693,3 +694,60 @@ class Cache038RacingSoldrWritersTest(unittest.TestCase):
             "on: [push]\njobs:\n  a:\n" + call + "        with:\n          suffix: x\n  b:\n" + call
         )
         self.assertEqual(self._check(distinct, action), [])
+
+
+class Cache024AutoKeyTrustedWritersTest(unittest.TestCase):
+    """CACHE-024 (#185/#420): `key: auto` on GitHub needs auto-key-trusted-writers."""
+
+    WRITER = "zackees/bosn/.github/workflows/ci.yml@" + "a" * 40 + ":123:1:456"
+
+    def _c24(self, with_: str, runs_on: str = "ubuntu-24.04", action: str | None = None) -> list[tuple[str, str]]:
+        repo = self._repo("on: [push]\njobs:\n" + self._job("build", runs_on, with_), action)
+        ci = load_ci_toml(repo).ci
+        return [(f.rule, f.status.value) for f in check_cache_024(ci, repo)]
+
+    _repo = Cache038RacingSoldrWritersTest._repo
+    _job = staticmethod(Cache038RacingSoldrWritersTest._job)
+
+    @requires_yaml_tooling
+    def test_literal_auto_without_writers_is_violation(self) -> None:
+        self.assertEqual(self._c24("          key: auto\n"), [("CACHE-024", "violation")])
+        self.assertEqual(
+            self._c24("          key: auto\n          auto-key-trusted-writers: ''\n"), [("CACHE-024", "violation")]
+        )
+        self.assertEqual(self._c24("          auto-key: 'true'\n"), [("CACHE-024", "violation")])
+
+    @requires_yaml_tooling
+    def test_act_guard_default_and_self_hosted_are_clean(self) -> None:
+        self.assertEqual(self._c24("          key: ${{ env.ACT && 'auto' || '' }}\n"), [])
+        self.assertEqual(self._c24(""), [])
+        self.assertEqual(self._c24("          key: mykey\n          auto-key: 'true'\n"), [])
+        self.assertEqual(self._c24("          key: auto\n", runs_on="[self-hosted, linux]"), [])
+
+    @requires_yaml_tooling
+    def test_valid_writers_clean_malformed_violation(self) -> None:
+        self.assertEqual(self._c24(f"          key: auto\n          auto-key-trusted-writers: {self.WRITER}\n"), [])
+        self.assertEqual(
+            self._c24("          key: auto\n          auto-key-trusted-writers: some-job\n"),
+            [("CACHE-024", "violation")],
+        )
+
+    @requires_yaml_tooling
+    def test_expressions_need_review(self) -> None:
+        self.assertEqual(self._c24("          key: ${{ vars.KEY }}\n"), [("CACHE-024", "needs_review")])
+        self.assertEqual(self._c24("          auto-key: ${{ inputs.auto }}\n"), [("CACHE-024", "needs_review")])
+        self.assertEqual(
+            self._c24("          key: auto\n          auto-key-trusted-writers: ${{ vars.W }}\n"),
+            [("CACHE-024", "needs_review")],
+        )
+
+    @requires_yaml_tooling
+    def test_composite_input_resolved(self) -> None:
+        action = (
+            "runs:\n  using: composite\n  steps:\n      - uses: zackees/setup-soldr@v0\n"
+            "        with:\n          key: ${{ inputs.key }}\n"
+            "inputs:\n  key:\n    default: auto\n"
+        )
+        repo = self._repo("on: [push]\njobs:\n  b:\n    runs-on: ubuntu-24.04\n    steps:\n      - uses: ./.github/actions/soldr\n", action)
+        ci = load_ci_toml(repo).ci
+        self.assertEqual([(f.rule, f.status.value) for f in check_cache_024(ci, repo)], [("CACHE-024", "violation")])
