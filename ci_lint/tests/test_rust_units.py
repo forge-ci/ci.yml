@@ -165,3 +165,58 @@ class RustUnitsMultilineCfgFeatureTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RustPublicRoleTest(unittest.TestCase):
+    """#95: `[rust].public-role = "library"` exempts only RUST-011's public
+    feature-shape clause, and only under profile `rust-library`."""
+
+    def _repo(self, tmp: str, *, profile: str, role: str | None) -> Path:
+        import shutil
+
+        repo = Path(tmp) / "repo"
+        shutil.copytree(fixture("RUST-011", "green"), repo)
+        ci_path = repo / "ci.toml"
+        text = ci_path.read_text(encoding="utf-8").replace('profile = "rust-pypi-app"', f'profile = "{profile}"')
+        if role is not None:
+            text = text.replace('ship    = [[]]\n', f'ship    = [[]]\npublic-role = "{role}"\n')
+        ci_path.write_text(text, encoding="utf-8")
+        _write(
+            repo,
+            "crates/demo/Cargo.toml",
+            '[package]\nname = "demo"\nversion = "0.1.0"\nedition = "2021"\n\n'
+            '[dependencies]\nserde = { version = "1", optional = true }\n\n'
+            '[features]\njson = ["dep:serde"]\n',
+        )
+        _write(repo, "crates/demo/src/lib.rs", "")
+        root = (repo / "Cargo.toml").read_text(encoding="utf-8")
+        if "crates/demo" not in root:
+            (repo / "Cargo.toml").write_text(root.replace("members = [", 'members = ["crates/demo", '), encoding="utf-8")
+        return repo
+
+    def _shape_hits(self, repo: Path) -> list[str]:
+        ci = load_ci_toml(repo).ci
+        crates = discover_workspace(repo)
+        return [f.message for f in check_rust_011(ci, crates, repo) if "[features].json" in f.message]
+
+    def test_amalgam_default_flags_third_party_dep_feature(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertTrue(self._shape_hits(self._repo(tmp, profile="rust-library", role=None)))
+
+    def test_library_role_skips_feature_shape_clause(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = self._repo(tmp, profile="rust-library", role="library")
+            self.assertEqual([], [f for f in load_ci_toml(repo).findings if "public-role" in f.message])
+            self.assertEqual([], self._shape_hits(repo))
+
+    def test_library_role_requires_rust_library_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = self._repo(tmp, profile="rust-pypi-app", role="library")
+            msgs = [f.message for f in load_ci_toml(repo).findings if f.rule == "CT-002"]
+            self.assertTrue(any("public-role" in m for m in msgs), msgs)
+
+    def test_unknown_role_is_ct_002(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = self._repo(tmp, profile="rust-library", role="facade")
+            msgs = [f.message for f in load_ci_toml(repo).findings if f.rule == "CT-002"]
+            self.assertTrue(any("public-role" in m for m in msgs), msgs)
