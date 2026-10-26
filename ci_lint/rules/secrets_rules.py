@@ -207,7 +207,7 @@ def _job_permission_findings(
         if (key, val) in JOB_FREE_GRANTS:
             continue
         grant = f"{key}: {val}"
-        allowed_jobs = ci.allow.permissions.get(grant, ())
+        allowed_jobs = ci.allow.permissions.get(grant) or ()
         if job_id not in allowed_jobs:
             findings.append(
                 Finding(

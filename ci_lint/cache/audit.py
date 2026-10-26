@@ -208,7 +208,62 @@ class AuditReport:
     closed_pr_ids: frozenset[int] = frozenset()
 
 
-def _split_family_platform(rest: str, ci: CiToml) -> tuple[str, str] | None:
+@dataclass(frozen=True)
+class _FamilyPlatform:
+    family: str
+    platform: str
+
+
+@dataclass(frozen=True)
+class _Generation:
+    """CACHE-006's grouping key: entries sharing a family, a stripped key
+    shape and (for PR-keyed entries) a PR number are generations of one
+    cache."""
+
+    family_id: str
+    shape: str
+    pr: int | None
+
+
+@dataclass(frozen=True)
+class _RuleResult:
+    findings: tuple[Finding, ...]
+    warning: str | None
+
+
+@dataclass(frozen=True)
+class _Cache008Result:
+    findings: tuple[Finding, ...]
+    warning: str | None
+    closed_pr_ids: frozenset[int]
+
+
+@dataclass(frozen=True)
+class _FamilyEntries:
+    family_id: str
+    members: tuple[ClassifiedEntry, ...]
+
+
+@dataclass(frozen=True)
+class _BaseEntries:
+    """Current (non-PR, non-delta, non-retired) entries by family id."""
+
+    families: tuple[_FamilyEntries, ...]
+
+    def get(self, family_id: str) -> tuple[ClassifiedEntry, ...]:
+        for fam in self.families:
+            if fam.family_id == family_id:
+                return fam.members
+        return ()
+
+
+@dataclass
+class _FamilyTally:
+    count: int = 0
+    size: int = 0
+
+
+def _split_family_platform(rest: str, ci: CiToml) -> _FamilyPlatform | None:
     """`rest` is `"<family>-<platform>"`. Resolve it against ci.toml's own
     declared platform ids (longest first, though ids are expected unique)
     rather than guessing with a hyphen-free regex group."""
@@ -216,7 +271,7 @@ def _split_family_platform(rest: str, ci: CiToml) -> tuple[str, str] | None:
     for platform_id in sorted(ci.platforms, key=len, reverse=True):
         suffix = f"-{platform_id}"
         if rest.endswith(suffix) and len(rest) > len(suffix):
-            return rest[: -len(suffix)], platform_id
+            return _FamilyPlatform(rest[: -len(suffix)], platform_id)
     return None
 
 
@@ -237,7 +292,7 @@ def _classify_one(ci: CiToml, entry: CacheEntry) -> ClassifiedEntry:
     if m is not None:
         split = _split_family_platform(m.group("rest"), ci)
         if split is not None:
-            family, platform = split
+            family, platform = split.family, split.platform
             delta = DeltaIdentity(pr=int(m.group("pr")), family=family, platform=platform, base8=m.group("base8"))
             return ClassifiedEntry(
                 entry=entry,
@@ -351,7 +406,7 @@ def _check_cache_005(ci: CiToml, classified: tuple[ClassifiedEntry, ...]) -> lis
 
 
 def _check_cache_006(ci: CiToml, classified: tuple[ClassifiedEntry, ...]) -> list[Finding]:
-    groups: dict[tuple[str, str, int | None], list[ClassifiedEntry]] = {}
+    groups: dict[_Generation, list[ClassifiedEntry]] = {}
     for c in classified:
         if c.family_id is None or c.is_delta or c.is_retired:
             continue
@@ -361,10 +416,11 @@ def _check_cache_006(ci: CiToml, classified: tuple[ClassifiedEntry, ...]) -> lis
         fam = ci.cache.family.get(c.family_id)
         if fam is not None and fam.evict == "lru":
             continue
-        groups.setdefault((c.family_id, _shape(c.entry.key), c.pr if c.pr_in_key else None), []).append(c)
+        groups.setdefault(_Generation(c.family_id, _shape(c.entry.key), c.pr if c.pr_in_key else None), []).append(c)
 
     findings: list[Finding] = []
-    for (fam_id, _shape_key, _pr), members in groups.items():
+    for generation, members in groups.items():
+        fam_id = generation.family_id
         if len(members) < 2:
             continue
         newest = max(members, key=lambda c: c.entry.last_accessed_at)
@@ -737,17 +793,17 @@ def _check_rust_004(
     token: str,
     repo: str,
     default_branch: str,
-) -> tuple[list[Finding], str | None]:
+) -> _RuleResult:
     families = sorted(fam_id for fam_id, fam in ci.cache.family.items() if fam.via in DYLINT_CACHE_VIA_VALUES)
     if not families:
-        return [], None
+        return _RuleResult((), None)
 
     try:
         run = _find_default_branch_dylint_run(fetch, token, repo, default_branch)
     except GitHubApiError as exc:
-        return [], f"RUST-004: could not confirm the default branch's latest successful dylint job: {exc}"
+        return _RuleResult((), f"RUST-004: could not confirm the default branch's latest successful dylint job: {exc}")
     if run is None:
-        return [], None
+        return _RuleResult((), None)
 
     default_ref = f"refs/heads/{default_branch}"
     findings: list[Finding] = []
@@ -790,15 +846,15 @@ def _check_rust_004(
                 f"for '{fam_id}'",
             )
         )
-    return findings, None
+    return _RuleResult(tuple(findings), None)
 
 
-def _current_base_entries(classified: tuple[ClassifiedEntry, ...]) -> dict[str, list[ClassifiedEntry]]:
+def _current_base_entries(classified: tuple[ClassifiedEntry, ...]) -> _BaseEntries:
     out: dict[str, list[ClassifiedEntry]] = {}
     for c in classified:
         if c.family_id is not None and not c.is_delta and not c.is_retired and not c.pr_in_key:
             out.setdefault(c.family_id, []).append(c)
-    return out
+    return _BaseEntries(tuple(_FamilyEntries(fam, tuple(members)) for fam, members in out.items()))
 
 
 def _check_cache_008(  # noqa: C901
@@ -807,7 +863,7 @@ def _check_cache_008(  # noqa: C901
     graphql: GraphQLFn | None,
     token: str,
     repo: str,
-) -> tuple[list[Finding], str | None, frozenset[int]]:
+) -> _Cache008Result:
     """Closed/merged-PR entries (every entry whose key carries `pr-<N>`,
     a legacy `delta-v1-pr<N>-` key, or ref `refs/pull/<N>/merge` -- #23
     section 4.1) plus stale-base PR deltas. ONE GraphQL query for every PR
@@ -815,7 +871,7 @@ def _check_cache_008(  # noqa: C901
 
     pr_entries = [c for c in classified if c.pr is not None]
     if not pr_entries:
-        return [], None, frozenset()
+        return _Cache008Result((), None, frozenset())
 
     warning: str | None = None
     pr_states: dict[int, PrState] = {}
@@ -856,7 +912,7 @@ def _check_cache_008(  # noqa: C901
         d = c.delta
         if d is None:
             continue
-        candidates = base_entries.get(d.family, [])
+        candidates = base_entries.get(d.family)
         matching = [b for b in candidates if d.platform in b.entry.key] or candidates
         if not matching:
             continue  # no live base entry to compare against: unknown, not reported
@@ -873,7 +929,7 @@ def _check_cache_008(  # noqa: C901
                     "the current base and saves fresh",
                 )
             )
-    return findings, warning, frozenset(closed_ids)
+    return _Cache008Result(tuple(findings), warning, frozenset(closed_ids))
 
 
 def _check_family_live_excess(
@@ -1042,18 +1098,16 @@ def audit_classified(
     if default_branch is not None:
         findings.extend(_check_family_live_excess(ci, classified, default_branch))
         findings.extend(_check_cache_006_same_lock(ci, classified, default_branch))
-    cache008_findings, warning, closed_pr_ids = _check_cache_008(
-        classified, graphql=graphql, token=token, repo=repo
-    )
-    findings.extend(cache008_findings)
+    cache008 = _check_cache_008(classified, graphql=graphql, token=token, repo=repo)
+    findings.extend(cache008.findings)
+    warning = cache008.warning
+    closed_pr_ids = cache008.closed_pr_ids
 
     if fetch is not None and default_branch is not None:
-        rust004_findings, rust004_warning = _check_rust_004(
-            ci, classified, fetch=fetch, token=token, repo=repo, default_branch=default_branch
-        )
-        findings.extend(rust004_findings)
-        if rust004_warning and warning is None:
-            warning = rust004_warning
+        rust004 = _check_rust_004(ci, classified, fetch=fetch, token=token, repo=repo, default_branch=default_branch)
+        findings.extend(rust004.findings)
+        if rust004.warning and warning is None:
+            warning = rust004.warning
 
     total_bytes = sum(c.entry.size_in_bytes for c in classified)
     budget_bytes = parse_size(ci.cache.budget) if ci.cache.budget else None
@@ -1112,7 +1166,7 @@ def run_audit(
     )
 
 
-def to_json_dict(report: AuditReport) -> dict[str, object]:
+def to_json_dict(report: AuditReport) -> dict[str, JsonValue]:
     return {
         "entries": [
             {
@@ -1140,16 +1194,17 @@ def to_json_dict(report: AuditReport) -> dict[str, object]:
 
 def render_text(report: AuditReport) -> str:
     lines: list[str] = []
-    by_family: dict[str, tuple[int, int]] = {}
+    by_family: dict[str, _FamilyTally] = {}
     for c in report.classified:
         label = c.family_id or ("delta" if c.is_delta else ("retired" if c.is_retired else "undeclared"))
-        count, size = by_family.get(label, (0, 0))
-        by_family[label] = (count + 1, size + c.entry.size_in_bytes)
+        tally = by_family.setdefault(label, _FamilyTally())
+        tally.count += 1
+        tally.size += c.entry.size_in_bytes
     lines.append(f"ci-lint cache audit: {len(report.classified)} live cache entrie(s), {report.total_bytes}B total")
     lines.append(f"{'family':<24} {'count':>6} {'bytes':>12}")
     for label in sorted(by_family):
-        count, size = by_family[label]
-        lines.append(f"{label:<24} {count:>6} {size:>12}")
+        tally = by_family[label]
+        lines.append(f"{label:<24} {tally.count:>6} {tally.size:>12}")
     if report.budget_bytes is not None:
         pct = f"{report.budget_ratio:.1%}" if report.budget_ratio is not None else "?"
         lines.append(f"budget: {report.total_bytes}B / {report.budget_bytes}B ({pct})")

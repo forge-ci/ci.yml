@@ -22,6 +22,7 @@ from ci_lint.finding import Status
 from ci_lint.fleet import DEFAULT_OWNERS, FleetReport, load_report_json, run_fleet_scan
 from ci_lint.fleet import render_text as render_fleet_text
 from ci_lint.fleet import to_json_dict as fleet_to_json_dict
+from ci_lint.cargo_messages import JsonValue
 from ci_lint.github_api import FetchStatusFn, GitHubApiError, default_fetch_status, default_write
 from ci_lint.history import build_history, load_snapshot
 from ci_lint.history import render_text as render_history_text
@@ -33,7 +34,9 @@ from ci_lint.sync_issues import to_json_list as sync_to_json_list
 
 DEFAULT_MAX_WRITES = 5
 
-RecordTable = dict[str, list[object]]
+# A recorded `--record`/`--replay` fixture: URL -> `[status, body]`, a
+# single-level JSON document at its serialization boundary (PY-002).
+RecordTable = dict[str, JsonValue]
 
 
 def _token() -> str | None:

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import re
 import tomllib
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -247,8 +248,70 @@ SuiteIndex = dict[str, Suite]
 FlowIndex = dict[str, Flow]
 TagRuleIndex = dict[str, TagRule]
 CacheFamilyIndex = dict[str, CacheFamily]
-StrMap = dict[str, str]
-StrTupleMap = dict[str, tuple[str, ...]]
+
+
+@dataclass(frozen=True)
+class StrEntry:
+    """One `key = "value"` pair of a string -> string table."""
+
+    key: str
+    value: str
+
+
+@dataclass(frozen=True)
+class StrMap:
+    """A string -> string table (`[allow].setup-*.require`), kept as typed
+    entries in declaration order rather than a dict field (PY-002, #193)."""
+
+    entries: tuple[StrEntry, ...] = ()
+
+    @classmethod
+    def of(cls, table: Mapping[str, str]) -> StrMap:
+        return cls(tuple(StrEntry(k, v) for k, v in table.items()))
+
+    def get(self, key: str) -> str | None:
+        return next((e.value for e in self.entries if e.key == key), None)
+
+    def __contains__(self, key: object) -> bool:
+        return any(e.key == key for e in self.entries)
+
+    def __iter__(self) -> Iterator[str]:
+        return (e.key for e in self.entries)
+
+    def __len__(self) -> int:
+        return len(self.entries)
+
+
+@dataclass(frozen=True)
+class StrTupleEntry:
+    """One `key = ["a", "b"]` pair of a string -> string-array table."""
+
+    key: str
+    values: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class StrTupleMap:
+    """A string -> string-array table (`[allow].workflows`,
+    `[allow].permissions`), as typed entries (PY-002, #193)."""
+
+    entries: tuple[StrTupleEntry, ...] = ()
+
+    @classmethod
+    def of(cls, table: Mapping[str, tuple[str, ...]]) -> StrTupleMap:
+        return cls(tuple(StrTupleEntry(k, tuple(v)) for k, v in table.items()))
+
+    def get(self, key: str) -> tuple[str, ...] | None:
+        return next((e.values for e in self.entries if e.key == key), None)
+
+    def __contains__(self, key: object) -> bool:
+        return any(e.key == key for e in self.entries)
+
+    def __iter__(self) -> Iterator[str]:
+        return (e.key for e in self.entries)
+
+    def __len__(self) -> int:
+        return len(self.entries)
 
 
 @dataclass(frozen=True)
@@ -939,20 +1002,20 @@ def _parse_allow(root: Cursor) -> AllowConfig:
     raw = root.table_("allow", required=True)
     if raw is None:
         return AllowConfig(
-            workflows={},
+            workflows=StrTupleMap(),
             actions=(),
-            setup_soldr=SetupSoldrAllow(only_in="", require={}),
+            setup_soldr=SetupSoldrAllow(only_in="", require=StrMap()),
             tools=(),
             secrets=(),
             platform_selector="",
             platform_code=(),
-            permissions={},
-            setup_uv=SetupUvAllow(require={}),
+            permissions=StrTupleMap(),
+            setup_uv=SetupUvAllow(require=StrMap()),
             cache_actions=CacheActionsAllow(),
         )
     sub = Cursor(raw, "allow", root.findings, root.source)
     workflows_raw = sub.table_("workflows", required=True)
-    workflows: StrTupleMap = {}
+    workflows_table: dict[str, tuple[str, ...]] = {}
     if workflows_raw is not None:
         for wf_name, triggers in workflows_raw.items():
             if not isinstance(triggers, list) or not all(isinstance(t, str) for t in triggers):
@@ -965,14 +1028,15 @@ def _parse_allow(root: Cursor) -> AllowConfig:
                     )
                 )
                 continue
-            workflows[wf_name] = tuple(triggers)
+            workflows_table[wf_name] = tuple(triggers)
+    workflows = StrTupleMap.of(workflows_table)
     actions = sub.list_str("actions")
     ss_raw = sub.table_("setup-soldr", required=True)
-    setup_soldr = SetupSoldrAllow(only_in="", require={})
+    setup_soldr = SetupSoldrAllow(only_in="", require=StrMap())
     if ss_raw is not None:
         ssub = Cursor(ss_raw, "allow.setup-soldr", root.findings, root.source)
         only_in = ssub.str_("only-in") or ""
-        require = ssub.dict_str_str("require", required=False)
+        require = StrMap.of(ssub.dict_str_str("require", required=False))
         ssub.finish()
         setup_soldr = SetupSoldrAllow(only_in=only_in, require=require)
     tools = sub.list_str("tools")
@@ -984,13 +1048,13 @@ def _parse_allow(root: Cursor) -> AllowConfig:
     # round still loads unchanged (an absent table means "nothing extra
     # allowed" for permissions/setup-uv, and the documented default
     # wrapper directory for cache-actions).
-    permissions = sub.dict_str_list_str("permissions", required=False)
+    permissions = StrTupleMap.of(sub.dict_str_list_str("permissions", required=False))
 
     setup_uv_raw = sub.table_("setup-uv", required=False)
-    setup_uv = SetupUvAllow(require={})
+    setup_uv = SetupUvAllow(require=StrMap())
     if setup_uv_raw is not None:
         uvsub = Cursor(setup_uv_raw, "allow.setup-uv", root.findings, root.source)
-        uv_require = uvsub.dict_str_str("require", required=False)
+        uv_require = StrMap.of(uvsub.dict_str_str("require", required=False))
         uvsub.finish()
         setup_uv = SetupUvAllow(require=uv_require)
 
