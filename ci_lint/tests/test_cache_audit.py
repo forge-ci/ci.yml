@@ -828,6 +828,31 @@ class LiveExcessShapesTest(unittest.TestCase):
         self.assertTrue(_check_family_live_excess(plain, entries, "main"))
 
 
+class LiveExcessLruCountTest(unittest.TestCase):
+    """An `evict = "lru"` family is byte-bounded: many tiny content-addressed
+    entries inside its footprint are not a CACHE-004 live excess (kernal-api's
+    soldr-verdict, 225 entries / 106 KB against `max = "1MB"`, forge-ci/ci.yml#37)."""
+
+    def test_lru_family_counts_bytes_not_entries(self) -> None:
+        from ci_lint.cache.audit import _check_family_live_excess
+
+        ci = load_ci_toml(REPO).ci
+        fam = replace(ci.cache.family["deps"], max="1MB", per=None, evict="lru", shapes=(), lockfile=False, min="100B")
+        lru = replace(ci, cache=replace(ci.cache, family={**ci.cache.family, "deps": fam}))
+
+        def small(i: int, size: int) -> ClassifiedEntry:
+            base = _classified_entry(i, "deps", "refs/heads/main", "2026-10-01T00:00:00Z")
+            return replace(base, entry=replace(base.entry, size_in_bytes=size))
+
+        tiny = tuple(small(i, 470) for i in range(1, 226))
+        self.assertEqual(_check_family_live_excess(lru, tiny, "main"), [])
+        # Over the byte footprint it still fires, and a non-lru family still counts entries.
+        heavy = tuple(small(i, 300 * 1024) for i in range(1, 6))
+        self.assertTrue(_check_family_live_excess(lru, heavy, "main"))
+        plain = replace(lru, cache=replace(lru.cache, family={**lru.cache.family, "deps": replace(fam, evict=None)}))
+        self.assertTrue(_check_family_live_excess(plain, tiny, "main"))
+
+
 class Cache005DeclaredMinTest(unittest.TestCase):
     """zackees/ci.yml#417: a family whose entries are tiny by design (soldr
     verdict records, ~400 B; empty pass markers) declares `min`, and the
