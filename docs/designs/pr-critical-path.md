@@ -77,3 +77,20 @@ Each declared skip job adds `needs.<verify>.outputs.trusted != 'true'` to its jo
 | Test-seconds (all / `cargo_front_door`) | 1,933 / 1,224 | **827 / 387** |
 
 Remote PR wait for an eligible PR fell about 20x. The remaining remote work (`main`, `ci-full`, release) is about 30% faster, because H4 removed a network fetch from every fixture.
+
+### Sustained measurement (#189 done-when, measured 2026-10-26)
+
+Every soldr `CI` `pull_request` run from 2026-10-03 to 2026-10-26 that finished `success` or `failure` (190 runs), classified by the `[GATE-008]` line the `CI mode` job prints:
+
+| Decision | Runs | Median wall (success) | p75 |
+| --- | ---: | ---: | ---: |
+| `trusted` (skip) | 127 | **39 s** | 41 s |
+| `audit-sample` | 11 | 846 s | 860 s |
+| `surface-changed` | 26 | 837 s | 857 s |
+| `full-label` (`ci-full`) | 28 | 2,127 s | 2,171 s |
+
+- **Critical path:** 127 attested PR heads (far above the 10-PR bar) at a median of 39 s, against the 914 s baseline. Across all successful PR runs the median moved from 1,886 s (2026-09-01..10-02, 225 runs) to 40 s (10-03..10-14) and 41 s (10-15..10-26); 64% and then 76% of them finished within 90 s.
+- **Audit agreement:** 11 audit-sampled heads ran the mirrored jobs remotely, and `Linux x64` and `Lint` passed on all 11. Two of those runs were red only in `CI summary`, which failed on PR metadata (`current PR metadata is unavailable`, runs 40051277644 and 39081405712) and not on a mirrored job. No attested head failed remotely, so `mode = "enforce"` stands. The audit sample is still under 20 heads, so `audit-rate` stays at its default of 10, as rollout step 3 requires.
+- **Post-merge failures:** the `main` push failure rate was 36% before adoption (99 of 273 decisive runs, 2026-09-01..10-02), 21% from 10-03 to 10-14 (26 of 123) and 33% from 10-15 to 10-26 (26 of 78), so it did not increase. None of the failures is attributable to a skipped PR run. The eight most recent were `CI Pre / Repository Actions cache budget`, for example run 39962307120. The four test or lint failures before them (runs 38988963551, 38940689191, 38928998097 and 38926036181) came from PRs #3840, #3825, #3820 and #3819. For three of those PRs, `CI mode` itself was red (PR runs 38988949310, 38939967552 and 38925938400), so nothing was trusted and the PRs were merged over a red gate. PR #3820 ran the full remote gate and passed (run 38926924385).
+- **Fleet rollout:** bosn and zccache (`local-gate.toml`) and kernal-api (`ci.toml` `[local.gate.trust]`) run `[gate.trust] mode = "enforce"` on origin/main, following the rollout steps above.
+- **Not done:** soldr's `main` has no branch protection and no ruleset requiring `CI mode` and `Lint` (rollout step 4, recommended). Only the repository owner can add one. The merges over a red `CI mode` listed above are the cost of not having it.

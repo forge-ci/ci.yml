@@ -6,12 +6,19 @@ ci_lint.cache.audit's own test_cache_audit.py.
 
 from __future__ import annotations
 
+import json
 import unittest
 
 from ci_lint.finding import Status
 from ci_lint.github_api import GitHubApiError
 from ci_lint.schema import load_ci_toml
-from ci_lint.settings_audit import DEFAULT_GATE_CHECK_NAME, run_audit
+from ci_lint.settings_audit import (
+    DEFAULT_GATE_CHECK_NAME,
+    _fetch_branch_protection,
+    _fetch_rulesets,
+    check_gen_022_live,
+    run_audit,
+)
 from ci_lint.tests.helpers import FIXTURES, requires_yaml_tooling
 
 REPO = FIXTURES / "runtime" / "cache" / "repo"  # [publish.pypi].environment = "pypi"
@@ -28,6 +35,29 @@ def _fetch_status_from(table: dict[str, tuple[int, object]]):
         return table[url]
 
     return fetch_status
+
+
+_QUEUE_RULESET: dict[str, object] = {
+    "enforcement": "active",
+    "target": "branch",
+    "conditions": {"ref_name": {"include": ["~DEFAULT_BRANCH"], "exclude": []}},
+    "rules": [{"type": "merge_queue"}],
+}
+
+
+def _load_recorded(name: str):
+    """A recorded GET-only replay (fixtures/GEN-022/<name>/api.json): the
+    real branch-protection and rulesets responses of one fleet repository."""
+
+    doc = json.loads((FIXTURES / "GEN-022" / name / "api.json").read_text(encoding="utf-8"))
+    table = {url: (entry[0], entry[1]) for url, entry in doc["api"].items()}
+
+    def fetch_status(url: str, token: str):
+        if url not in table:
+            raise AssertionError(f"unexpected URL in replay: {url}")
+        return table[url]
+
+    return doc["repo"], fetch_status
 
 
 def _clean_table(*, default_branch: str = "main", gate_check_name: str = DEFAULT_GATE_CHECK_NAME) -> dict[str, tuple[int, object]]:
@@ -50,6 +80,15 @@ def _clean_table(*, default_branch: str = "main", gate_check_name: str = DEFAULT
     }
 
 
+def _queued_table() -> dict[str, tuple[int, object]]:
+    """The clean table plus an active merge-queue ruleset (GEN-022 live)."""
+
+    table = _clean_table()
+    table[f"{API}/repos/{REPO_SLUG}/rulesets"] = (200, [{"id": 900}])
+    table[f"{API}/repos/{REPO_SLUG}/rulesets/900"] = (200, _QUEUE_RULESET)
+    return table
+
+
 class SettingsAuditTest(unittest.TestCase):
     def setUp(self) -> None:
         _loaded = load_ci_toml(REPO)
@@ -64,7 +103,7 @@ class SettingsAuditTest(unittest.TestCase):
     # ── clean baseline ──────────────────────────────────────────────────
 
     def test_clean_repo_has_no_findings(self) -> None:
-        report = self._run(_clean_table())
+        report = self._run(_queued_table())
         self.assertEqual([], list(report.findings), [f.render() for f in report.findings])
 
     # ── SEC-005 ─────────────────────────────────────────────────────────
@@ -536,3 +575,54 @@ class SettingsAuditTest(unittest.TestCase):
             )
             report = self._run(table, repo_root=root)
         self.assertEqual([], [f for f in report.findings if f.rule == "RUST-014"])
+
+
+class Gen022LiveTest(unittest.TestCase):
+    """GEN-022 live half (#432): queue ruleset on the default branch."""
+
+    def _replay(self, name: str):
+        repo, fetch = _load_recorded(name)
+        bp = _fetch_branch_protection(fetch, TOKEN, repo, "main")
+        rs = _fetch_rulesets(fetch, TOKEN, repo)
+        return check_gen_022_live(bp, rs, "main")
+
+    def test_recorded_queue_with_ruleset_required_checks_is_clean(self) -> None:
+        # forge-ci/kernal-api: no classic protection (404), queue + checks in one ruleset.
+        self.assertEqual([], self._replay("live-green"))
+
+    def test_recorded_queue_with_classic_protection_checks_is_clean(self) -> None:
+        # forge-ci/bosn: queue-only ruleset, required contexts in branch protection.
+        self.assertEqual([], self._replay("live-green-classic"))
+
+    def test_recorded_repo_without_queue_ruleset_is_violation(self) -> None:
+        # zackees/template-python-rust-cmd: merge_group trigger, no ruleset at all.
+        findings = self._replay("live-red")
+        self.assertEqual(["GEN-022"], [f.rule for f in findings])
+        self.assertEqual(Status.VIOLATION, findings[0].status)
+
+    def test_queue_without_any_required_check_is_needs_review(self) -> None:
+        table = _queued_table()
+        table[f"{API}/repos/{REPO_SLUG}/branches/main/protection"] = (404, {"message": "Branch not protected"})
+        report = run_audit(
+            load_ci_toml(REPO).ci, fetch_status=_fetch_status_from(table), token=TOKEN, repo=REPO_SLUG
+        )
+        f = next(f for f in report.findings if f.rule == "GEN-022")
+        self.assertEqual(Status.NEEDS_REVIEW, f.status)
+
+    def test_disabled_queue_ruleset_is_violation(self) -> None:
+        table = _queued_table()
+        table[f"{API}/repos/{REPO_SLUG}/rulesets/900"] = (200, {**_QUEUE_RULESET, "enforcement": "disabled"})
+        report = run_audit(
+            load_ci_toml(REPO).ci, fetch_status=_fetch_status_from(table), token=TOKEN, repo=REPO_SLUG
+        )
+        f = next(f for f in report.findings if f.rule == "GEN-022")
+        self.assertEqual(Status.VIOLATION, f.status)
+
+    def test_forbidden_rulesets_is_needs_review_never_pass(self) -> None:
+        table = _clean_table()
+        table[f"{API}/repos/{REPO_SLUG}/rulesets"] = (403, {"message": "Forbidden"})
+        report = run_audit(
+            load_ci_toml(REPO).ci, fetch_status=_fetch_status_from(table), token=TOKEN, repo=REPO_SLUG
+        )
+        f = next(f for f in report.findings if f.rule == "GEN-022")
+        self.assertEqual(Status.NEEDS_REVIEW, f.status)

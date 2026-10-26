@@ -208,12 +208,46 @@ def _push_reaches(on: dict[str, YamlValue], default_branch: str) -> bool:
     )
 
 
-def _reuse_check_lines(job: dict[str, YamlValue]) -> list[str]:
+_CI_SCRIPT_RE = re.compile(r"(?<![\w./-])((?:\./)?ci/[\w./-]+\.py)\b")
+# A script's argv list spells the command as separate tokens, e.g.
+# `"-m", "ci_lint", "reuse-check"` (template-python-rust-cmd's
+# ci/reuse_decision.py), so the one-line regex above cannot match it.
+_SCRIPT_REUSE_CHECK_RE = re.compile(r"\bci[-_]lint\b.{0,200}?\breuse-check\b", re.DOTALL)
+# Stand-in run line for a delegated decision: its --required-job values are
+# built at run time, so coverage is unresolved (the `${{` marker makes
+# `_coverage_findings` stop short of the per-job proof check).
+_DELEGATED_LINE = "ci-lint reuse-check --required-job ${{ delegated-to-ci-script }}"
+
+
+def _delegates_reuse_check(repo_root: Path | None, run: str) -> bool:
+    """True when `run` invokes a repository `ci/*.py` script that itself runs
+    `ci_lint reuse-check` (one level deep, GEN-004's delegation convention)."""
+
+    if repo_root is None:
+        return False
+    root = repo_root.resolve()
+    for match in _CI_SCRIPT_RE.finditer(run):
+        path = (root / match.group(1)).resolve()
+        try:
+            path.relative_to(root)
+            text = path.read_text(encoding="utf-8")
+        except (ValueError, OSError, UnicodeDecodeError):
+            continue
+        if _SCRIPT_REUSE_CHECK_RE.search(text):
+            return True
+    return False
+
+
+def _reuse_check_lines(job: dict[str, YamlValue], repo_root: Path | None = None) -> list[str]:
     lines: list[str] = []
     for step in steps_of(job):
         run = step.get("run")
-        if isinstance(run, str) and _REUSE_CHECK_RE.search(run):
+        if not isinstance(run, str):
+            continue
+        if _REUSE_CHECK_RE.search(run):
             lines.append(run)
+        elif _delegates_reuse_check(repo_root, run):
+            lines.append(_DELEGATED_LINE)
     return lines
 
 
@@ -254,11 +288,11 @@ def _reuse_check_runs(repo_root: Path, doc: dict[str, YamlValue]) -> _ReuseRuns:
     reuse_jobs: set[str] = set()
     lines: list[str] = []
     for job_id, job in jobs_of(doc).items():
-        own = _reuse_check_lines(job)
+        own = _reuse_check_lines(job, repo_root)
         callee = _local_callee(repo_root, job)
         if callee is not None:
             for sub in jobs_of(as_dict(callee.document)).values():
-                own.extend(_reuse_check_lines(sub))
+                own.extend(_reuse_check_lines(sub, repo_root))
         if own:
             reuse_jobs.add(job_id)
             lines.extend(own)

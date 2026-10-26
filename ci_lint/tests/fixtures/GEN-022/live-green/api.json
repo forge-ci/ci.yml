@@ -1,0 +1,108 @@
+{
+ "api": {
+  "https://api.github.com/repos/forge-ci/kernal-api/branches/main/protection": [
+   404,
+   {
+    "documentation_url": "https://docs.github.com/rest/branches/branch-protection#get-branch-protection",
+    "message": "Branch not protected",
+    "status": "404"
+   }
+  ],
+  "https://api.github.com/repos/forge-ci/kernal-api/rulesets": [
+   200,
+   [
+    {
+     "_links": {
+      "html": {
+       "href": "https://github.com/forge-ci/kernal-api/rules/25848143"
+      },
+      "self": {
+       "href": "https://api.github.com/repos/forge-ci/kernal-api/rulesets/25848143"
+      }
+     },
+     "created_at": "2026-10-25T19:23:32.848-07:00",
+     "enforcement": "active",
+     "id": 25848143,
+     "name": "main merge queue",
+     "node_id": "RRS_lACqUmVwb3NpdG9yec5QNLzkzgGKaU8",
+     "source": "forge-ci/kernal-api",
+     "source_type": "Repository",
+     "target": "branch",
+     "updated_at": "2026-10-25T19:23:32.894-07:00"
+    }
+   ]
+  ],
+  "https://api.github.com/repos/forge-ci/kernal-api/rulesets/25848143": [
+   200,
+   {
+    "_links": {
+     "html": {
+      "href": "https://github.com/forge-ci/kernal-api/rules/25848143"
+     },
+     "self": {
+      "href": "https://api.github.com/repos/forge-ci/kernal-api/rulesets/25848143"
+     }
+    },
+    "bypass_actors": [
+     {
+      "actor_id": 5,
+      "actor_type": "RepositoryRole",
+      "bypass_mode": "always"
+     }
+    ],
+    "conditions": {
+     "ref_name": {
+      "exclude": [],
+      "include": [
+       "~DEFAULT_BRANCH"
+      ]
+     }
+    },
+    "created_at": "2026-10-25T19:23:32.848-07:00",
+    "current_user_can_bypass": "always",
+    "enforcement": "active",
+    "id": 25848143,
+    "name": "main merge queue",
+    "node_id": "RRS_lACqUmVwb3NpdG9yec5QNLzkzgGKaU8",
+    "rules": [
+     {
+      "parameters": {
+       "check_response_timeout_minutes": 60,
+       "grouping_strategy": "ALLGREEN",
+       "max_entries_to_build": 1,
+       "max_entries_to_merge": 1,
+       "merge_method": "SQUASH",
+       "min_entries_to_merge": 1,
+       "min_entries_to_merge_wait_minutes": 0
+      },
+      "type": "merge_queue"
+     },
+     {
+      "parameters": {
+       "do_not_enforce_on_create": false,
+       "required_status_checks": [
+        {
+         "context": "verify"
+        },
+        {
+         "context": "linux"
+        },
+        {
+         "context": "Dylint workspace"
+        }
+       ],
+       "strict_required_status_checks_policy": false
+      },
+      "type": "required_status_checks"
+     }
+    ],
+    "source": "forge-ci/kernal-api",
+    "source_type": "Repository",
+    "target": "branch",
+    "updated_at": "2026-10-25T19:23:32.894-07:00"
+   }
+  ]
+ },
+ "recorded": "2026-10-26",
+ "repo": "forge-ci/kernal-api"
+}
