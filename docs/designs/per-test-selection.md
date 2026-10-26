@@ -1,6 +1,6 @@
 # Design: per-test selection inside a lane (GATE-007 follow-up)
 
-**Status:** design only. Nothing here is enforced, and no rule ID is assigned yet. Issue: [#188](https://github.com/zackees/ci.yml/issues/188) (pytest half). The Rust/nextest half is generalized in [#191](https://github.com/zackees/ci.yml/issues/191) under the PR critical-path umbrella [#189](https://github.com/zackees/ci.yml/issues/189). The binding text, once measured, goes into `GATE-007` in [policy-general.md](../policy-general.md) or into a new `GATE` ID taken from the registry in AGENTS.md (`GATE-014` is the next free one today).
+**Status:** design only; nothing here is enforced. The policy decision is recorded under `GATE-007` in [policy-general.md](../policy-general.md) as decided policy, not yet enforced: test-impact selection may skip tests only in local lanes, never in a release, `ci-full`, `merge_group` or default-branch writer run, and a run that used selection attests its lane as `partial`. Issue: [#188](https://github.com/zackees/ci.yml/issues/188) (pytest half). The Rust/nextest half is generalized in [#191](https://github.com/zackees/ci.yml/issues/191) under the PR critical-path umbrella [#189](https://github.com/zackees/ci.yml/issues/189). The binding text, once measured, goes into `GATE-007` in [policy-general.md](../policy-general.md) or into a new `GATE` ID taken from the registry in AGENTS.md (`GATE-014` is the next free one today).
 
 ## Problem
 
@@ -61,6 +61,11 @@ Reads outside the repository (the venv, the toolchain, `~/.cargo`) are not hashe
 | Last run of the test failed, errored, was skipped by a marker, or was interrupted | run it (only passes are recorded) |
 | Audit hook unavailable (non-CPython, hook disabled) | run everything |
 | Rust: binary not rebuilt deterministically (hash differs with no source change) | run it (costs time, never correctness) |
+| Rust level 1: `cargo metadata` fails, is not `--locked`-clean, or the workspace member set differs between base and head | run everything |
+| Rust level 1: a changed path is owned by no workspace package, or is a `build.rs`, root `Cargo.toml`, `Cargo.lock`, `rust-toolchain*`, `.cargo/**`, `.config/nextest.toml` | run everything |
+| Rust level 1: `cargo nextest list` binary ids do not match the metadata targets (a binary the selector cannot place) | run everything |
+| Rust level 2: no per-test coverage profile or trace for the test, coverage tool version changed, or the test is marked `opaque` | run it |
+| Invoked in a release, `ci-full`, `merge_group`, default-branch push or any remote job (`CI`/`GITHUB_ACTIONS` set) | refuse to select; run everything and say so |
 | Test reads the network or spawns a process whose reads the hook cannot see | see below: such tests are recorded as `opaque` and always run |
 
 **Subprocesses.** A Python audit hook does not see reads done by a child process (`subprocess`, a spawned `soldr` binary). A test that triggers the `subprocess.Popen` / `os.exec*` / `os.posix_spawn` audit events is marked `opaque` and always runs, unless the lane opts into `strace` recording for that file (phase 3), which follows children (`strace -f`, as `run_audit` already does). Most of soldr's expensive Rust-side behaviour is exercised this way, so this is the main reason the selected fraction may be larger than hoped; it is measured in phase 1 rather than guessed.
@@ -102,6 +107,24 @@ key = sha256(
 
 `include_str!`/`include_bytes!` inputs are already in the binary hash. Runtime reads (fixtures, `env!("CARGO_MANIFEST_DIR")`-relative files) are not, so they come from the trace.
 
+### Rust level 1: crate-graph selection (#191 phase 1)
+
+Level 1 is the cheap pre-filter that runs before any per-binary key is checked. It is sound by construction because it only removes test binaries whose compiled inputs cannot have changed.
+
+1. `cargo metadata --format-version 1 --locked` on the **head** tree (and on the base tree when `Cargo.toml` membership changed; any difference in the workspace member set means run everything).
+2. Map each changed path (from `git diff --name-only <base>...<head>`) to the workspace package whose `manifest_path` directory is the longest prefix of it. A path no package owns is a run-everything trigger.
+3. Build the reverse-dependency closure over `resolve.nodes[].deps[]` restricted to workspace members, following **all** `dep_kinds` (normal, dev, build) and every target platform. Features are not narrowed: a crate is selected if any feature combination could link the changed one.
+4. The selected test binaries are every `test`, `bench`-as-test, `example`-as-test, lib-unittest and bin-unittest target of the closure, matched against `cargo nextest list --message-format json` `binary-id`s, and emitted as a nextest filterset (`-E 'package(a) | package(b)'`) or a package list.
+5. Run everything when the change touches `Cargo.lock`, `rust-toolchain*`, `.cargo/**`, `.config/nextest.toml`, any workspace-root `Cargo.toml`, a `build.rs` (selecting its crate's closure is not enough when it emits `rustc-cfg`/`rustc-env` consumed elsewhere), the gate declaration, or the selector's own config.
+
+Proposed runtime surface (not implemented here): `ci-lint tests select --base <rev> --head <rev> [--format filterset|packages|json]`, with fixtures for a leaf change, a core change, a dev-dependency-only edge, an unowned path and each run-everything trigger. soldr's in-repo `ci/crate_graph.py` (soldr#3731) is the reference behaviour; `ci_lint` adopting it must reproduce its selections on soldr's last 100 commits before anything else changes.
+
+**Measured verdict for soldr (#189 ledger, experiment E2/H2):** level 1 still selects at least 96% of test-seconds on every Rust PR, because `soldr-cli` holds 95% of test time and depends on every crate, and the PRs it would save are already reused whole by the GATE-007 lane cache. Level 1 is therefore **deferred for soldr** and targeted at multi-crate repositories whose test time is not concentrated in a root crate (zccache, running-process are the first candidates; phase 0 measures them).
+
+### Rust level 2: per-test inputs (#191 phase 2)
+
+Inside one binary, a test is skipped only when every input it was observed to use is unchanged: the source regions it executed (from per-test coverage, `cargo llvm-cov nextest` with one profile per test, mapped to file blob shas -- file granularity, not line granularity, in the first cut) plus the tracked files it read at runtime (`strace -f` on that test's process; nextest runs one process per test, so attribution is exact). Key = the binary key above minus the binary hash, plus the test name and those `(path, blob sha)` pairs. Because the binary hash is dropped, the lane-wide invalidators (lockfile, toolchain, `build.rs`, features, `RUSTFLAGS`) become mandatory run-everything triggers, and any `unsafe`/FFI-heavy crate, proc-macro change or generic instantiated in another crate (coverage attributes monomorphised code to the defining file, which is hashed, so this is covered; macro-expanded code from another crate is not) makes the test `opaque`. Level 2 is built **only** if phase 0/3 data shows binary-level selection leaves more than 30% of lane test-seconds on the table (D5); otherwise this subsection stays a design.
+
 ### Storage
 
 Records live next to the lane cache (`<git common dir>/ci-lint/lane-cache/<lane>/tests/`), shared across worktrees, never pushed, only for passing runs, as GATE-007 entries are.
@@ -114,6 +137,21 @@ Records live next to the lane cache (`<git common dir>/ci-lint/lane-cache/<lane>
 - **GEN-021 / merge queue.** Unaffected. Reuse proves a remote job's `success`; a local selection never produces one. A `merge_group` run is remote and always full.
 - **Release.** The release candidate's exact-SHA run is full. A selector must refuse to run when invoked from a release flow.
 
+## Shadow-mode promotion criteria
+
+A selector level moves from shadow (compute the selection, run everything, log `would skip`) to enforce per repository, per level, only when **all** of these hold over the shadow window, and the evidence is posted on the tracking issue:
+
+| Criterion | Threshold |
+| --- | --- |
+| Shadow sample | at least 30 gate runs **and** at least 14 days, on distinct head trees, including at least 5 that touch a non-test source file of a crate with reverse dependencies |
+| Misses | **zero** tests (or files/binaries) the selector would have skipped that failed in the full run; one miss resets the window and must be explained by a fixed fail-closed rule before restarting |
+| Opaque share | reported per run; no threshold, but over 50% of test-seconds `opaque` means enforce is not worth it and the level stays shadow |
+| Saving | median saving of at least 20% of lane test-seconds over the window (the phase 0 stop rule); below that, stay shadow or drop the level |
+| Selector cost | record + selection overhead under 5% of the full lane time on a run that selects everything |
+| Audit | after promotion, 1 in 10 selected runs (deterministic on the head sha, like GATE-008's audit sample) still runs the full lane and compares; any miss demotes the repository back to shadow |
+
+GATE-008 may treat `partial` as covering a lane only after the same criteria hold and the base `[gate.trust]` opts in (D7). Release, `ci-full`, `merge_group` and default-branch writer runs never select, whatever the shadow record says.
+
 ## Rollout
 
 | Phase | Work | Acceptance |
@@ -121,6 +159,7 @@ Records live next to the lane cache (`<git common dir>/ci-lint/lane-cache/<lane>
 | 0. Measure | Add `ci-lint local-gate lanes --simulate-tests <lane>`: replay the last N commits of soldr's history against recorded inputs, report would-run files/binaries and test-seconds, using GATE-007's existing lane replay (`LaneSimulation`) as the harness. | Before/after numbers for soldr: a docs-only change, a single guard-script change, a single-crate leaf change, and a `soldr-cli` change. Recorded in #188/#191. Stop here if the median saving is under 20% of lane time. |
 | 1. Shadow, Python | pytest plugin (shipped from `ci_lint`, stdlib-only) records per-file inputs; the lane still runs everything and logs `would skip`. | 30 gate runs on soldr and one more fleet repo (clud: 220 test files, nested conftests). Zero tests that the selector would have skipped failed. Fraction of `opaque` files reported. |
 | 2. Enforce, Python | Local `guards`-style lanes run the selection; trailer says `partial`. | soldr docs-only change: `guards` under 15 s (from ~73 s), with the 13 doc-contract files still run. GATE-008 still treats `partial` as not covering. |
+| 3a. Rust crate graph | `ci-lint tests select` (level 1) in shadow on zccache and running-process, plus `--simulate` over soldr history to confirm the E2 verdict. | Promotion criteria above; per-commit fraction of tests and test-seconds selected recorded on #191. |
 | 3. Rust binaries | Binary-hash key plus `strace -f` runtime reads; shadow then enforce, same criterion as phase 1. Shares soldr's `ci/crate_graph.py` closure as the level-1 pre-filter. | Shadow: zero misses over 30 runs. Report what fraction of test-seconds is in binaries that any ordinary change selects (expected high on soldr, per H2). |
 | 4. Optional | Node-level Python selection; per-test Rust selection via coverage (#191). | Only if phase 2/3 data shows the file/binary unit leaves more than 30% of lane time on the table. |
 | 5. Policy | Write the measured rule into GATE-007 or a new GATE ID; add a static check that a selector is never wired into a release, `ci-full`, `merge_group` or default-branch push job. | Policy text lands with the rule's Status column marked per what `ci_lint` actually enforces. |
