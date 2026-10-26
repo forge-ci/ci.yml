@@ -246,6 +246,22 @@ The measured cost these directives target is duplicated logic that drifts apart.
 6. **Fail fast, and delete before you abstract.** Reject invalid input at the boundary with a typed error. Never fall back silently to a degraded path: zccache's wrapper exits 125 on a daemon outage because its old uncached fallback turned outages into green builds (zccache#1170). Prefer deleting code to adding a layer. Do not define a trait until there are two real implementations. A test double does not count as a second implementation, and implementing a foreign or std trait is not affected.
 7. **Existing boundaries beat generic DRY.** Platform modules, Dylint-enforced layering, crate boundaries and documented deliberate copies take precedence over removing duplication. Examples are soldr's per-OS copies (`platform_macos.rs`) and kernal-api's rule that it prefers duplication to a selector in its neutral facade. The reverse also holds. Do not copy code across a crate boundary to get around a boundary that hurts. Say that it hurts, as reld's AGENTS.md requires. An undocumented copy is a finding under directive 2. A documented one is not.
 
+**Canonical block.** Repositories copy this block verbatim into `AGENTS.md` (or `CLAUDE.md` when that is the agent doc), reconciling rather than duplicating where equivalent text already exists, and may adapt examples to the repository. The rationale and evidence stay here; the block is the operative text.
+
+````markdown
+## Design principles (fleet directives, zackees/ci.yml#163)
+
+Agent and review guidance from zackees/ci.yml `docs/policy-rust.md` ("Design principles, narrowed"). Not enforced by ci-lint; no rule ID.
+
+1. **Search before you add.** Before adding a resolver, detector, predicate, guard or path helper, `rg` for an existing one. Reuse it, or say in the PR why it does not fit.
+2. **Conflicting implementations get a research issue, not an inline winner.** If the same concept is implemented more than once with observably different behaviour and fixing it needs a design decision, file `research: N conflicting implementations of X -- which is canonical?` listing every copy (`file:line`) and what the difference does to real input; cross-reference it and carry on with your task. Copies that behave identically are a refactor, not an issue.
+3. **Keep behaviour changes and refactors apart.** Separate commits, preferably separate PRs, never one mixed diff.
+4. **Refactor first only when you would grow a giant function.** If a fix would add more than 50 lines to a function already over 200 lines, extract first in a separate behaviour-preserving change with characterization tests written first (RED -> GREEN). Otherwise fix it where it belongs; no unrequested restructures.
+5. **Function and file size follow the complexity ratchet (`RUST-018`).** New functions stay under clippy's `too_many_lines` (100) and `cognitive_complexity` (25). A function carrying an `#[expect]` must not grow; delete the `expect` once it is back under. Never split a file with `include!` fragments to dodge a length ceiling. Before splitting a hot file, check `git branch -a --contains` for in-flight branches -- a split is a rename and conflicts destructively.
+6. **Fail fast, and delete before you abstract.** Reject invalid input at the boundary with a typed error; never fall back silently to a degraded path. Prefer deleting code to adding a layer. No new trait until there are two real implementations (a test double does not count).
+7. **Existing boundaries beat generic DRY.** Platform modules, Dylint-enforced layering, crate boundaries and documented deliberate copies win over removing duplication. Do not copy code across a crate boundary to get around it -- say the boundary hurts. An undocumented copy is a finding under 2; a documented one is not.
+````
+
 **Not enforced by ci-lint, and no rule ID.** Directive 5 depends on `RUST-018`, which is enforced. An `include!` ratchet is a possible later rule, but nothing in this subsection claims one. Rollout is tracked on #163: an agent-docs PR in each repository, plus a refactor issue wherever measurement supports one.
 
 ## Objective: coverage-per-compile-minute, not maximum coverage or minimum time
