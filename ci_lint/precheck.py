@@ -21,6 +21,7 @@ from ci_lint.finding import Finding, Status
 from ci_lint.rules.bin_artifacts import check_group_bin
 from ci_lint.rules.build_parallelism import check_gen_012
 from ci_lint.rules.cache_payload import check_cache_007_static
+from ci_lint.rules.cargo_registry_cache import check_cache_037
 from ci_lint.rules.cache_restore_copy import check_gen_013
 from ci_lint.rules.cache_static import check_group9
 from ci_lint.rules.complexity import check_complexity
@@ -179,6 +180,7 @@ def run_precheck(repo_root: Path, *, title: str = "", local: bool = False, live:
         cache_arithmetic = group9.arithmetic
         all_findings.extend(group9.findings)
         all_findings.extend(check_cache_007_static(ci, repo_root))
+        all_findings.extend(check_cache_037(ci, repo_root))
         all_findings.extend(check_cache_025(repo_root))
         all_findings.extend(check_cache_033(repo_root))
         all_findings.extend(check_group_bin(ci, repo_root))
