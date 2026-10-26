@@ -12,6 +12,8 @@ not resolve to a valid thing" -- documented as a decision in docs/ci-toml.md.
 
 from __future__ import annotations
 
+from ci_lint import repo_identity
+
 import re
 import tomllib
 from collections.abc import Iterator, Mapping
@@ -23,7 +25,7 @@ from ci_lint.finding import Finding
 from ci_lint.local_gate import GateConfig, parse_gate_table
 from ci_lint.toml_cursor import Cursor, StrMap, StrTupleMap, TomlValue
 
-LINTER_RE = re.compile(r"^zackees/ci\.yml@([0-9a-fA-F]{40})$")
+LINTER_RE = re.compile(rf"^{repo_identity.CI_YML_RE}@([0-9a-fA-F]{{40}})$", re.IGNORECASE)
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 URL_RE = re.compile(r"^https?://")
 SIZE_RE = re.compile(r"^\s*\d+(\.\d+)?\s*(B|KB|MB|GB)\s*$", re.IGNORECASE)
@@ -1246,8 +1248,8 @@ def load_ci_toml(repo_root: Path) -> LoadResult:
             Finding(
                 rule="CT-002",
                 path=source,
-                message=f"'linter' must match 'zackees/ci.yml@<40-hex-sha>', got {linter!r}",
-                fix="set 'linter' to \"zackees/ci.yml@<40-char commit SHA>\" in ci.toml",
+                message=f"'linter' must match 'forge-ci/ci.yml@<40-hex-sha>' (or the pre-transfer 'zackees/ci.yml@...'), got {linter!r}",
+                fix="set 'linter' to \"forge-ci/ci.yml@<40-char commit SHA>\" in ci.toml",
             )
         )
     elif m is not None:

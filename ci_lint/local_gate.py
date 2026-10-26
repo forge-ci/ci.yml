@@ -39,6 +39,8 @@ push run and a 1-in-N audit sample play that role.
 
 from __future__ import annotations
 
+from ci_lint import repo_identity
+
 import os
 import re
 import shlex
@@ -103,7 +105,7 @@ SETUP_ACTIONS: frozenset[str] = frozenset(
         "actions/cache/restore",
         "astral-sh/setup-uv",
         "dtolnay/rust-toolchain",
-        "zackees/setup-soldr",
+        *repo_identity.SETUP_SOLDR_REPOS,
     }
 )
 VERIFY_TOKEN = "local-gate verify"

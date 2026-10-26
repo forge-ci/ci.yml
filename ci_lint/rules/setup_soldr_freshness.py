@@ -62,6 +62,8 @@ needs_review, never a silent pass" discipline as `ci_lint.settings_audit`.
 
 from __future__ import annotations
 
+from ci_lint import repo_identity
+
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -75,11 +77,11 @@ from ci_lint.workflow_scan import as_dict, load_composite_actions, load_workflow
 from ci_lint.yaml_io import YamlValue
 from ci_lint.yaml_io import LoadStatus
 
-SETUP_SOLDR_REPO = "zackees/setup-soldr"
+SETUP_SOLDR_REPO = repo_identity.SETUP_SOLDR_REPO
 API_ROOT = "https://api.github.com"
 
 # `zackees/setup-soldr@<sha>`, `zackees/setup-soldr/cook@<sha>`, etc.
-_SHA_PIN_RE = re.compile(r"^zackees/setup-soldr(?:/[\w-]+)?@([0-9a-f]{40})$")
+_SHA_PIN_RE = re.compile(rf"^{repo_identity.SETUP_SOLDR_RE}(?:/[\w-]+)?@([0-9a-f]{{40}})$", re.IGNORECASE)
 
 _CRITICAL_RE = re.compile(r"\bcritical\b", re.IGNORECASE)
 

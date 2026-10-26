@@ -44,7 +44,8 @@ from ci_lint.toml_cursor import Cursor, TomlValue
 from ci_lint.workflow_replay_config import ReplayConfig
 
 SELF_HOSTED_TOOL_REPOS: frozenset[str] = frozenset(
-    {"zackees/soldr", "zackees/zccache", "zackees/clud", "zackees/bosn"}
+    {"zackees/soldr", "zackees/zccache", "zackees/clud", "zackees/bosn",
+     "forge-ci/soldr", "forge-ci/zccache", "talos-hq/clud", "forge-ci/bosn"}
 )
 _ORIGIN_RE = re.compile(r"github\.com[:/](?P<slug>[^/]+/[^/]+?)(?:\.git)?/?$")
 

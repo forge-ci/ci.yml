@@ -81,6 +81,8 @@ STABLE = ("Static checks", "Dylint / Dylint", "Build linux-x64 / x86_64-unknown-
 
 PULLS_1643 = f"{API}/commits/{SHA_1643}/pulls?per_page=100"
 RUNS_1643 = f"{API}/actions/runs?head_sha={HEAD_1643}&event=pull_request&per_page=100&page=1"
+# GET /repos/zackees/clud after the transfer (follows the redirect).
+CANONICAL: dict[str, object] = {"id": 424242, "full_name": "talos-hq/clud"}
 JOBS_1643 = f"{API}/actions/runs/{RUN_1643}/jobs?filter=latest&per_page=100&page=1"
 
 Table = dict[str, list[object]]
@@ -360,13 +362,33 @@ class FailClosedTest(unittest.TestCase):
 
     def test_fork_head_is_never_reused(self) -> None:
         table = load("clud-pr1643.json")
-        body(table, PULLS_1643)[0]["head"]["repo"] = {"full_name": "someone/clud"}  # type: ignore[index]
+        table[API] = [200, CANONICAL]
+        body(table, PULLS_1643)[0]["head"]["repo"] = {"full_name": "someone/clud", "id": 999}  # type: ignore[index]
         self.assertReason(table, "fork-head")
 
     def test_fork_run_is_never_reused(self) -> None:
         table = load("clud-pr1643.json")
-        ci_run(table)["head_repository"] = {"full_name": "someone/clud"}
+        table[API] = [200, CANONICAL]
+        ci_run(table)["head_repository"] = {"full_name": "someone/clud", "id": 999}
         self.assertReason(table, "fork-run")
+
+    def test_transferred_repo_old_name_still_reuses(self) -> None:
+        # zackees/clud moved to talos-hq/clud: GitHub redirects the old
+        # --repo, but PR/run payloads report the new full_name. Same repo id
+        # -> the proof holds (the pre-fix code refused every PR as fork-head).
+        table = load("clud-pr1643.json")
+        table[API] = [200, CANONICAL]
+        renamed = {"full_name": "talos-hq/clud", "id": CANONICAL["id"]}
+        body(table, PULLS_1643)[0]["head"]["repo"] = dict(renamed)  # type: ignore[index]
+        ci_run(table)["head_repository"] = dict(renamed)
+        decision = run(table)
+        self.assertTrue(decision.verdict, decision.detail)
+
+    def test_transferred_repo_lookup_failure_fails_closed(self) -> None:
+        table = load("clud-pr1643.json")
+        table[API] = [500, {"message": "boom"}]
+        body(table, PULLS_1643)[0]["head"]["repo"] = {"full_name": "talos-hq/clud", "id": 1}  # type: ignore[index]
+        self.assertReason(table, "api-error")
 
     def test_pr_head_ci_failed(self) -> None:
         table = load("clud-pr1643.json")

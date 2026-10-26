@@ -10,6 +10,8 @@ file rather than silently passing.
 
 from __future__ import annotations
 
+from ci_lint import repo_identity
+
 import json
 import re
 from dataclasses import dataclass
@@ -257,12 +259,12 @@ def _iter_uses(
 # with GitHub's own `sha_pinning_required` setting on cannot use this float
 # (that setting rejects `@v0` before any job runs) and must SHA-pin instead
 # -- `RUST-014` (docs/policy-rust.md) then requires that pin stay fresh.
-SETUP_SOLDR_FLOAT_REPO = "zackees/setup-soldr"
+SETUP_SOLDR_FLOAT_REPO = repo_identity.SETUP_SOLDR_REPO
 SETUP_SOLDR_FLOAT_REF = "v0"
 
 
 def _is_sanctioned_setup_soldr_float(repo_slug: str, ref: str) -> bool:
-    return repo_slug == SETUP_SOLDR_FLOAT_REPO and ref == SETUP_SOLDR_FLOAT_REF
+    return repo_identity.is_setup_soldr(repo_slug) and ref == SETUP_SOLDR_FLOAT_REF
 
 
 def _check_one_use(uses: str, path: str, loc: str, allowed: frozenset[str]) -> list[Finding]:
@@ -866,7 +868,7 @@ def check_ct_004(ci: CiToml, workflows: list[ParsedYamlFile]) -> list[Finding]:
                 if not isinstance(uses, str) or not uses.startswith("actions/checkout@"):
                     continue
                 with_ = step.get("with")
-                if not isinstance(with_, dict) or with_.get("repository") != "zackees/ci.yml":
+                if not isinstance(with_, dict) or not repo_identity.is_ci_yml(with_.get("repository")):
                     continue
                 found_checkout = True
                 ref = with_.get("ref")

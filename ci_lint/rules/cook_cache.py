@@ -30,6 +30,8 @@ CACHE-018 (interim): a cooking setup-soldr step in `ci-pre.yml` is a
 
 from __future__ import annotations
 
+from ci_lint import repo_identity
+
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -40,7 +42,7 @@ from ci_lint.schema import CiToml
 from ci_lint.workflow_scan import as_dict, get_on_section, jobs_of, load_workflows, steps_of
 from ci_lint.yaml_io import LoadStatus, YamlValue
 
-_SETUP_SOLDR_RE = re.compile(r"^zackees/setup-soldr(/cook)?@", re.IGNORECASE)
+_SETUP_SOLDR_RE = re.compile(rf"^{repo_identity.SETUP_SOLDR_RE}(/cook)?@", re.IGNORECASE)
 _COOKING_VALUES: frozenset[str] = frozenset({"", "soldr-cook", "cargo-chef"})
 _FINGERPRINT_ENV_RE = re.compile(
     r"^(RUSTFLAGS|CARGO_ENCODED_RUSTFLAGS|CARGO_TARGET_DIR|CARGO_TARGET_[A-Z0-9_]+_LINKER|"

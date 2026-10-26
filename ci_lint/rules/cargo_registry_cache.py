@@ -22,6 +22,8 @@ Left candidate: the LF-normalised lockfile hash, the registry family's
 
 from __future__ import annotations
 
+from ci_lint import repo_identity
+
 import re
 from pathlib import Path
 
@@ -113,7 +115,7 @@ def check_cache_037(ci: CiToml, repo_root: Path) -> list[Finding]:
         for step in _iter_uses_with(lf.doc, is_composite=lf.is_composite):
             slug = step.uses.split("@", 1)[0]
             location = f"{path}#{step.loc}"
-            if slug == "zackees/setup-soldr" and _truthy(step.with_.get("cargo-registry-cache")):
+            if repo_identity.is_setup_soldr(slug) and _truthy(step.with_.get("cargo-registry-cache")):
                 findings.append(Finding(
                     rule=RULE, path=location, status=Status.NEEDS_REVIEW,
                     message="setup-soldr cargo-registry-cache: setup-soldr v0.9.86 still saves registry/src/ and "

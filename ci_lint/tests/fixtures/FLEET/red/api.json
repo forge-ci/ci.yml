@@ -1,5 +1,5 @@
 {
- "https://api.github.com/repos/zackees/setup-soldr/commits/668ffc0fef7eeef5dd5b19a73620faf03acceb8c": [
+ "https://api.github.com/repos/forge-ci/setup-soldr/commits/668ffc0fef7eeef5dd5b19a73620faf03acceb8c": [
   200,
   {
    "commit": {
@@ -10,7 +10,7 @@
    "sha": "668ffc0fef7eeef5dd5b19a73620faf03acceb8c"
   }
  ],
- "https://api.github.com/repos/zackees/setup-soldr/releases": [
+ "https://api.github.com/repos/forge-ci/setup-soldr/releases": [
   200,
   [
    {

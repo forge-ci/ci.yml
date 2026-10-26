@@ -29,6 +29,8 @@ truncates that PR's saved cache every time).
 
 from __future__ import annotations
 
+from ci_lint import repo_identity
+
 import itertools
 import re
 from dataclasses import dataclass
@@ -1013,7 +1015,6 @@ def check_cache_034(ci: CiToml, repo_root: Path) -> list[Finding]:
 # other's save is silently dropped while its log still says `saved`
 # (FastLED/fbuild#1587: a 166.5 MB facade cache beat the 478.7 MB workspace one,
 # and PRs restored it for a 28% hit rate).
-_SETUP_SOLDR_SLUG = "zackees/setup-soldr"
 _NON_BUILD_SUBACTIONS: tuple[str, ...] = ("/cook", "/cleanup")
 _NO_SAVE_VALUES: frozenset[str] = frozenset({"false", "none", "no", "off", "0"})
 _INPUT_REF_RE = re.compile(r"^\$\{\{\s*inputs\.([A-Za-z0-9_-]+)\s*\}\}$")
@@ -1049,9 +1050,10 @@ class _CompositeSoldr:
 
 
 def _is_build_soldr(uses: str) -> bool:
-    if not uses.startswith(_SETUP_SOLDR_SLUG):
+    prefix = repo_identity.setup_soldr_prefix(uses)
+    if prefix is None:
         return False
-    rest = uses[len(_SETUP_SOLDR_SLUG) :].split("@", 1)[0]
+    rest = uses[len(prefix) :].split("@", 1)[0]
     return rest == "" or rest not in _NON_BUILD_SUBACTIONS
 
 

@@ -13,6 +13,8 @@ right `path` for that match to work).
 
 from __future__ import annotations
 
+from ci_lint import repo_identity
+
 import re
 import tomllib
 from pathlib import Path
@@ -82,7 +84,7 @@ def _check_setup_soldr_version_input(repo_root: Path) -> list[Finding]:
             uses = use_step.uses
             loc = use_step.loc
             with_ = use_step.with_
-            if not uses.startswith("zackees/setup-soldr"):
+            if repo_identity.setup_soldr_prefix(uses) is None:
                 continue
             version = with_.get("version")
             if _is_literal_version(version):

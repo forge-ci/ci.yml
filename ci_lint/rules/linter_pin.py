@@ -44,6 +44,8 @@ than guessing. `--live` supplies the fetch and a dead pin becomes a finding.
 
 from __future__ import annotations
 
+from ci_lint import repo_identity
+
 from dataclasses import dataclass
 
 from ci_lint.finding import Finding, Status
@@ -52,7 +54,7 @@ from ci_lint.schema import CiToml
 
 RULE = "CT-007"
 
-CI_YML = "zackees/ci.yml"
+CI_YML = repo_identity.CI_YML_REPO
 
 
 @dataclass(frozen=True)
