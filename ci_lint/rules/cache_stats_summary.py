@@ -23,6 +23,8 @@ restore flag in the summary and the < 80% hit-rate warning.
 
 from __future__ import annotations
 
+from ci_lint import repo_identity
+
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -33,7 +35,7 @@ from ci_lint.workflow_scan import as_dict, as_list, load, load_composite_actions
 from ci_lint.yaml_io import LoadStatus, YamlValue
 
 RULE = "GEN-023"
-SETUP_SOLDR = "zackees/setup-soldr"
+SETUP_SOLDR = repo_identity.SETUP_SOLDR_REPO
 INPUT = "compile-cache-stats"
 
 _LAUNCHER = re.compile(r"CMAKE_\w*_COMPILER_LAUNCHER\W+[\w./-]*\b(?:ccache|zccache)\b")
@@ -60,7 +62,7 @@ class JobStep:
 
 
 def _is_setup_soldr(uses: str) -> bool:
-    return uses.split("@", 1)[0].rstrip("/") == SETUP_SOLDR
+    return repo_identity.is_setup_soldr(uses.split("@", 1)[0])
 
 
 def _uses_steps(steps: list[YamlValue], prefix: str) -> list[UsesStep]:

@@ -20,6 +20,8 @@ Black/isort is GEN-004 too).
 
 from __future__ import annotations
 
+from ci_lint import repo_identity
+
 import ast
 import re
 import shlex
@@ -413,7 +415,7 @@ def check_cache_009(ci: CiToml, repo_root: Path) -> list[Finding]:  # noqa: C901
             uses = use_step.uses
             loc = use_step.loc
             with_ = use_step.with_
-            if not uses.startswith("zackees/setup-soldr"):
+            if repo_identity.setup_soldr_prefix(uses) is None:
                 continue
             file_dir = Path(path).parent.as_posix()
             if file_dir != only_in:

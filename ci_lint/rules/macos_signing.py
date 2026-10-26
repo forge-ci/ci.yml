@@ -34,6 +34,8 @@ not use the reference action, and "an unsigned macOS artifact is published".
 
 from __future__ import annotations
 
+from ci_lint import repo_identity
+
 import re
 from enum import Enum
 from pathlib import Path
@@ -57,7 +59,7 @@ SIGNING_SECRETS: tuple[str, ...] = (
     "MACOS_NOTARIZATION_PASSWORD",
 )
 _SECRET_REF = re.compile(r"secrets\s*\.\s*(" + "|".join(SIGNING_SECRETS) + r")\b|secrets\[\s*['\"](" + "|".join(SIGNING_SECRETS) + r")['\"]\s*\]")
-_ACTION = re.compile(r"^(\./|zackees/ci\.yml/)actions/app-signing-macos(@|/?$)", re.IGNORECASE)
+_ACTION = re.compile(rf"^(\./|{repo_identity.CI_YML_RE}/)actions/app-signing-macos(@|/?$)", re.IGNORECASE)
 
 PR_EVENTS: frozenset[str] = frozenset({"pull_request", "pull_request_target", "merge_group"})
 

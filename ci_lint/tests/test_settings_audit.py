@@ -358,7 +358,7 @@ class SettingsAuditTest(unittest.TestCase):
     # ── RUST-014 (live, M2-29, issue #33) ──────────────────────────────────
 
     SOLDR_SHA = "a07bab9" + "0" * 33  # 40 hex chars
-    SOLDR_REPO = "zackees/setup-soldr"
+    SOLDR_REPO = "forge-ci/setup-soldr"
 
     def _repo_with_pin(self, root) -> None:
         from pathlib import Path

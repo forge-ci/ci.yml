@@ -179,7 +179,9 @@ def check_rust_011(ci: CiToml, crates: list[CargoCrate], repo_root: Path) -> lis
             )
 
     public_crate = next((c for c in crates if c.dir == ci.rust.public), None)
-    if public_crate is not None:
+    # #95: a declared `public-role = "library"` crate is the implementation, not an
+    # amalgam, so its [features] legitimately gate optional public integrations.
+    if public_crate is not None and ci.rust.public_role == "amalgam":
         for feat_name, deps in public_crate.features.items():
             for dep in deps:
                 dep_name = dep[len("dep:"):] if dep.startswith("dep:") else None

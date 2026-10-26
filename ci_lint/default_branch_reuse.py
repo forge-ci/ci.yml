@@ -283,6 +283,29 @@ class _RunCandidate:
     run: dict[str, JsonValue]
 
 
+def _same_repo(api: _Api, req: ReuseRequest, repo: JsonValue) -> bool:
+    """Is `repo` (a PR head's `repo` / a run's `head_repository` object) the
+    repository under evaluation? A literal full_name match is the fast path.
+    Otherwise `req.repo` may be a pre-transfer name GitHub still redirects
+    (zackees/zccache -> forge-ci/zccache) while payloads report the new one,
+    so resolve the canonical repository once (GET /repos/{repo} follows the
+    redirect) and compare numeric ids, falling back to the canonical
+    full_name. An API failure raises `_Stop` (fail closed)."""
+
+    obj = _as_dict(repo)
+    name = _str(obj.get("full_name"))
+    if name is not None and name.lower() == req.repo.lower():
+        return True
+    if name is None and _int(obj.get("id")) is None:
+        return False  # deleted repository
+    canonical = _as_dict(api.get(f"/repos/{req.repo}"))
+    canon_id, canon_name = _int(canonical.get("id")), _str(canonical.get("full_name"))
+    head_id = _int(obj.get("id"))
+    if canon_id is not None and head_id is not None:
+        return canon_id == head_id
+    return name is not None and canon_name is not None and name.lower() == canon_name.lower()
+
+
 def _associated_pr(api: _Api, req: ReuseRequest) -> _AssociatedPr:
     pulls = api.get(f"/repos/{req.repo}/commits/{req.sha}/pulls?per_page={PER_PAGE}")
     if not isinstance(pulls, list):
@@ -313,7 +336,7 @@ def _associated_pr(api: _Api, req: ReuseRequest) -> _AssociatedPr:
     if number is None or head_sha is None or not SHA_RE.match(head_sha):
         raise _Stop("api-malformed", "associated PR has no number / 40-hex head.sha")
     head_repo = _str(_as_dict(head.get("repo")).get("full_name"))
-    if head_repo is None or head_repo.lower() != req.repo.lower():
+    if not _same_repo(api, req, head.get("repo")):
         raise _Stop(
             "fork-head",
             f"PR #{number}'s head is in '{head_repo or '<deleted repository>'}', not '{req.repo}' -- a fork "
@@ -323,6 +346,7 @@ def _associated_pr(api: _Api, req: ReuseRequest) -> _AssociatedPr:
 
 
 def _select_run(  # noqa: C901
+    api: _Api,
     runs: list[dict[str, JsonValue]],
     workflow: str,
     req: ReuseRequest,
@@ -361,8 +385,8 @@ def _select_run(  # noqa: C901
                 "newest-run-not-success",
                 f"the newest decisive {workflow} {event} run on {head_sha[:12]} ({run_id}) concluded '{conclusion}'",
             )
-        head_repo = _str(_as_dict(run.get("head_repository")).get("full_name"))
-        if head_repo is None or head_repo.lower() != req.repo.lower():
+        if not _same_repo(api, req, run.get("head_repository")):
+            head_repo = _str(_as_dict(run.get("head_repository")).get("full_name"))
             raise _Stop("fork-run", f"{workflow} run {run_id} ran for '{head_repo}', not '{req.repo}'")
         return run
     raise _Stop("no-successful-run", f"no completed, successful {workflow} {event} run on {head_sha[:12]}")
@@ -464,7 +488,7 @@ def _run_evidence(api: _Api, req: ReuseRequest, sha: str, event: str) -> list[Ru
     ]
     evidence: list[RunEvidence] = []
     for workflow in req.workflows:
-        run = _select_run(runs, workflow, req, sha, event)
+        run = _select_run(api, runs, workflow, req, sha, event)
         evidence.append(
             RunEvidence(
                 workflow=workflow,

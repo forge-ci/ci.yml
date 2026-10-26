@@ -1,5 +1,6 @@
 """Source-bound live cache maintenance never becomes local test evidence."""
 
+from ci_lint import repo_identity
 import re
 import shlex
 from pathlib import Path
@@ -40,7 +41,7 @@ def _safe_env(env: YamlValue, policy_path: str | None) -> bool:
 def _policy_checkout(step: dict[str, YamlValue]) -> str | None:
     inputs = as_dict(step.get("with"))
     path, ref = inputs.get("path"), inputs.get("ref")
-    if (inputs.get("repository") == "zackees/ci.yml" and isinstance(ref, str)
+    if (repo_identity.is_ci_yml(inputs.get("repository")) and isinstance(ref, str)
             and re.fullmatch(r"[0-9a-f]{40}", ref) is not None and isinstance(path, str)
             and re.fullmatch(r"[A-Za-z_.][A-Za-z0-9_.-]*", path) is not None and path not in (".", "..")
             and inputs.get("persist-credentials") is False

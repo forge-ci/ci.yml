@@ -26,6 +26,8 @@ first job of `ci.yml`). Nothing is called "precheck" any more:
 
 from __future__ import annotations
 
+from ci_lint import repo_identity
+
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -77,7 +79,7 @@ class _ScanFile:
 # setup-uv: `enable-cache: false` disables the cache outright; `save-cache: false`
 # keeps restore but never saves -- either way nothing PR-scoped is written.
 PR_KEY_INPUTS: tuple[PrKeyInput, ...] = (
-    PrKeyInput("zackees/setup-soldr", "cache-key-suffix", ("save-cache",)),
+    *(PrKeyInput(r, "cache-key-suffix", ("save-cache",)) for r in repo_identity.SETUP_SOLDR_REPOS),
     PrKeyInput("astral-sh/setup-uv", "cache-suffix", ("enable-cache", "save-cache")),
     PrKeyInput("actions/cache", "key", ()),
     PrKeyInput("actions/cache/save", "key", ()),
