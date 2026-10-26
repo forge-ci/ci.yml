@@ -43,6 +43,7 @@ from ci_lint.rules.py_benchmark import check_group14
 from ci_lint.rules.doc_claims import check_gen_010_static
 from ci_lint.rules.ghapi_reread import check_ghapi_001
 from ci_lint.rules.macos_signing import check_rel_006
+from ci_lint.rules.release_recompute import check_rel_007
 from ci_lint.rules.host_sweeps import check_gen_030
 from ci_lint.rules.status_badges import check_gen_026
 from ci_lint.rules.release_gate import check_group11
@@ -145,7 +146,7 @@ YAML_DEPENDENT_RULES: tuple[str, ...] = (
     "RUST-025", "RUST-027", "CACHE-001", "CACHE-002", "CACHE-007", "CACHE-009",
     "CACHE-010", "CACHE-013", "CACHE-018", "CACHE-024", "CACHE-025", "CACHE-033",
     "CACHE-037", "CACHE-038", "CACHE-039", "GATE-001", "GATE-002", "GATE-012",
-    "ACT-002", "ACT-003", "REL-006", "TEST-003", "CPP-001", "GHAPI-001",
+    "ACT-002", "ACT-003", "REL-006", "REL-007", "TEST-003", "CPP-001", "GHAPI-001",
 )
 YAML_TOOLING_RULE = "PRECHECK-YAML"
 
@@ -272,6 +273,7 @@ def run_precheck(repo_root: Path, *, title: str = "", local: bool = False, live:
         all_findings.extend(check_rust_019(repo_root))
         all_findings.extend(check_ghapi_001(repo_root))
         all_findings.extend(check_rel_006(repo_root))
+        all_findings.extend(check_rel_007(repo_root))
         all_findings.extend(check_gen_023(repo_root))
         all_findings.extend(check_gen_030(repo_root))
         all_findings.extend(check_gen_026(repo_root))
