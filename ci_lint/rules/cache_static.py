@@ -1032,6 +1032,7 @@ class _SoldrWriter:
     suffixes: frozenset[str] | None  # every value the suffix can take; None = unbounded
     targets: frozenset[str] | None  # cross-target identity; a per-leg matrix target is unique to its job
     save: str
+    push: str = "any"  # the job-level `if:` gate on `push`: "only", "never" or "any" (_push_gate)
 
     @property
     def suffix_shown(self) -> str:
@@ -1130,6 +1131,36 @@ def _cross_targets(
     return None if values is None else frozenset(v.lower() for v in values)
 
 
+_PUSH_ONLY_RE = re.compile(r"^github\.event_name\s*==\s*'push'$")
+_NEVER_PUSH_RE = re.compile(r"^github\.event_name\s*!=\s*'push'$")
+
+
+def _push_gate(job_if: YamlValue) -> str:
+    """Classify a job-level `if:` by whether the job can run on a `push` event.
+
+    "only": a top-level `&&` conjunct is `github.event_name == 'push'`; "never":
+    one is `github.event_name != 'push'`. Anything with `||`, or no such
+    conjunct, is "any". A push-only cache writer and a validation job that
+    skips every push (the GEN-022 step-5/6 shape, zackees/ci.yml#432) never run
+    in the same event, so their identical keys cannot race.
+    """
+
+    text = _as_text(job_if)
+    if text is None:
+        return "any"
+    expr = text.strip()
+    if expr.startswith("${{") and expr.endswith("}}"):
+        expr = expr[3:-2].strip()
+    if "||" in expr:
+        return "any"
+    conjuncts = [c.strip().strip("()").strip() for c in expr.split("&&")]
+    if any(_PUSH_ONLY_RE.match(c) for c in conjuncts):
+        return "only"
+    if any(_NEVER_PUSH_RE.match(c) for c in conjuncts):
+        return "never"
+    return "any"
+
+
 def _writer_from_with(
     wf: str,
     job: str,
@@ -1138,6 +1169,7 @@ def _writer_from_with(
     with_: dict[str, YamlValue],
     raw: dict[str, YamlValue],
     ctx: soldr_key_expr.Context,
+    push: str = "any",
 ) -> _SoldrWriter | None:
     """`with_` is the input-resolved step; `raw` the step as written, evaluated under `ctx`."""
 
@@ -1154,6 +1186,7 @@ def _writer_from_with(
         job=job,
         loc=loc,
         runs_on=runs_on,
+        push=push,
         suffixes=soldr_key_expr.possible_values(raw.get("cache-key-suffix"), ctx),
         targets=_cross_targets(target_raw, ctx, f"\x00leg:{wf}:{job}"),
         save=save_text,
@@ -1168,6 +1201,7 @@ def _collect_soldr_writers(repo_root: Path) -> list[_SoldrWriter]:
             continue
         for job_id, job in jobs_of(as_dict(item.document)).items():
             runs_on = _runs_on_key(job.get("runs-on"))
+            push = _push_gate(job.get("if"))
             for i, step in enumerate(steps_of(job)):
                 uses = step.get("uses")
                 if not isinstance(uses, str):
@@ -1177,7 +1211,7 @@ def _collect_soldr_writers(repo_root: Path) -> list[_SoldrWriter]:
                 loc = f"jobs.{job_id}.steps[{i}]"
                 if _is_build_soldr(uses):
                     ctx = soldr_key_expr.Context(caller={}, defaults=(), composite=False)
-                    writer = _writer_from_with(item.path, job_id, loc, runs_on, with_, with_, ctx)
+                    writer = _writer_from_with(item.path, job_id, loc, runs_on, with_, with_, ctx, push)
                     if writer is not None:
                         writers.append(writer)
                     continue
@@ -1186,7 +1220,7 @@ def _collect_soldr_writers(repo_root: Path) -> list[_SoldrWriter]:
                     ctx = soldr_key_expr.Context(
                         caller=with_, defaults=comp.defaults, composite=True
                     )
-                    writer = _writer_from_with(item.path, job_id, loc, runs_on, resolved, comp.with_, ctx)
+                    writer = _writer_from_with(item.path, job_id, loc, runs_on, resolved, comp.with_, ctx, push)
                     if writer is not None:
                         writers.append(writer)
     return writers
@@ -1200,6 +1234,8 @@ def _races(a: _SoldrWriter, b: _SoldrWriter) -> bool:
     """Two static writers in different jobs can compute one build-cache key."""
 
     if (a.workflow, a.job) == (b.workflow, b.job) or a.runs_on != b.runs_on:
+        return False
+    if {a.push, b.push} == {"only", "never"}:
         return False
     if a.suffixes is None or b.suffixes is None or a.targets is None or b.targets is None:
         return False

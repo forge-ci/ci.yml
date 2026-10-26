@@ -656,6 +656,26 @@ class Cache038RacingSoldrWritersTest(unittest.TestCase):
         self.assertEqual(self._check(wf), [])
 
     @requires_yaml_tooling
+    def test_push_only_writer_and_push_skipping_validator_do_not_race(self) -> None:
+        """GEN-022 step 5/6 (#432): a push-only writer job shares its key with a
+        validation job that skips every push -- they never run in one event."""
+        w = "          cache-key-suffix: linux\n"
+        writer = self._job("writer", "ubuntu-24.04", w).replace(
+            "    runs-on:", "    if: github.event_name == 'push'\n    runs-on:", 1
+        )
+        validator = self._job("linux", "ubuntu-24.04", w).replace(
+            "    runs-on:",
+            "    if: needs.verify.outputs.skip_linux != 'true' && github.event_name != 'push'\n    runs-on:",
+            1,
+        )
+        self.assertEqual(self._check("on: [push]\njobs:\n" + writer + validator), [])
+        # An `||` leaves the gate unproven, and two push-only writers still race.
+        either = validator.replace("&& github.event_name != 'push'", "|| github.event_name != 'push'")
+        self.assertEqual(self._check("on: [push]\njobs:\n" + writer + either), [("CACHE-038", "violation")])
+        twin = writer.replace("  writer:", "  writer2:", 1)
+        self.assertEqual(self._check("on: [push]\njobs:\n" + writer + twin), [("CACHE-038", "violation")])
+
+    @requires_yaml_tooling
     def test_single_writer_is_clean_even_if_dynamic(self) -> None:
         wf = "on: [push]\njobs:\n" + self._job("a", "${{ matrix.os }}", "")
         self.assertEqual(self._check(wf), [])
