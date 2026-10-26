@@ -1,0 +1,21 @@
+name: ci
+on: [push]
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - run: soldr cargo clippy --workspace -- -D warnings
+      - run: soldr cargo dylint --all
+      - run: uv run ruff check . && uv run pylint src
+  dylint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - run: soldr cargo nextest run --workspace
+  unit-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - run: soldr cargo nextest run --workspace
+      - run: uv run pytest -n auto

@@ -1,0 +1,8 @@
+name: ci
+on: [push]
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - run: soldr cargo test --doc  # ci-lint: allow GEN-019 doctests are a 2 s compile check here

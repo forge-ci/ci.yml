@@ -1,0 +1,8 @@
+name: ci
+on: [push]
+jobs:
+  clippy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - run: python3 ci/lint.py

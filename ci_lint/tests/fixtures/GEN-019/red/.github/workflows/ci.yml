@@ -1,0 +1,14 @@
+name: ci
+on: [push]
+jobs:
+  fast-lint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - run: soldr cargo clippy --workspace && soldr cargo nextest run --workspace
+  preflight:
+    name: Lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - run: uv run python -m pytest tests/unit
