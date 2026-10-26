@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -107,13 +108,68 @@ def _cmd_fleet_scan(args: argparse.Namespace) -> int:
     if table is not None:
         Path(args.record).write_text(json.dumps(table, indent=1, sort_keys=True), encoding="utf-8")
     if args.json:
-        doc = fleet_to_json_dict(report)
-        # `ci-lint history` dates each recorded scan by this field (#99).
-        doc["scanned_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        doc = _scan_doc(report, datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))
         print(json.dumps(doc, indent=2))
     else:
         print(render_fleet_text(report))
     return 1 if any(f.status == Status.VIOLATION for s in report.repos for f in s.findings) else 0
+
+
+def _scan_doc(report: FleetReport, stamp: str) -> dict[str, JsonValue]:
+    doc = fleet_to_json_dict(report)
+    # `ci-lint history` dates each recorded scan by this field (#99).
+    doc["scanned_at"] = stamp
+    return doc
+
+
+DAILY_PREFIX = "fleet-scan-"
+
+
+def previous_daily_scan(out_dir: Path, date: str) -> Path | None:
+    """The newest `fleet-scan-YYYY-MM-DD.json` in `out_dir` dated strictly
+    before `date` -- the baseline `fleet daily` diffs against (#38)."""
+
+    earlier = sorted(
+        p
+        for p in out_dir.glob(f"{DAILY_PREFIX}????-??-??.json")
+        if p.name[len(DAILY_PREFIX) : len(DAILY_PREFIX) + 10] < date
+    )
+    return earlier[-1] if earlier else None
+
+
+def _cmd_fleet_daily(args: argparse.Namespace) -> int:
+    """The scheduler entry point (#38): one scan per day into
+    `<out-dir>/fleet-scan-<date>.json`, then `history` against the newest
+    earlier file. Run from an agent's cron (docs/agent-guide.md's daily
+    cadence), never from a workflow file in this repository."""
+
+    now = datetime.now(timezone.utc)
+    date = args.date or now.strftime("%Y-%m-%d")
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date):
+        print(f"ci-lint fleet daily: --date must be YYYY-MM-DD, got {date!r}", file=sys.stderr)
+        return 2
+    out_dir = Path(args.out_dir)
+    got = _fetcher(args, "fleet daily")
+    if got is None:
+        return 2
+    report = _scan(args, got.fetch, got.token)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    target = out_dir / f"{DAILY_PREFIX}{date}.json"
+    doc = _scan_doc(report, f"{date}T{now.strftime('%H:%M:%SZ')}")
+    target.write_text(json.dumps(doc, indent=2) + "\n", encoding="utf-8")
+    print(f"ci-lint fleet daily: wrote {target} ({len(report.repos)} repos, {len(report.errors)} errors)")
+    baseline = previous_daily_scan(out_dir, date)
+    if baseline is None:
+        print("ci-lint fleet daily: no earlier fleet-scan-*.json in --out-dir; first scan, no delta")
+        return 1 if report.errors else 0
+    try:
+        hist = build_history([load_snapshot(baseline), load_snapshot(target)])
+    except (OSError, ValueError) as exc:
+        print(f"ci-lint fleet daily: cannot diff against {baseline}: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(history_to_json_dict(hist), indent=2) if args.json else render_history_text(hist))
+    new_violation = any(e.state == "new" and e.status == Status.VIOLATION.value for e in hist.entries)
+    return 1 if new_violation or report.errors else 0
 
 
 def _cmd_sync_issues(args: argparse.Namespace) -> int:  # noqa: C901
@@ -192,6 +248,13 @@ def register(sub: argparse._SubParsersAction) -> None:  # type: ignore[type-arg]
     _common(p_scan)
     p_scan.add_argument("--record", default=None, help="write every API response to this JSON file")
     p_scan.set_defaults(func=_cmd_fleet_scan)
+    p_daily = fleet_sub.add_parser(
+        "daily", help="scheduler entry point: scan into <out-dir>/fleet-scan-<date>.json, diff vs the previous scan (#38)"
+    )
+    _common(p_daily)
+    p_daily.add_argument("--out-dir", required=True, help="directory holding the dated fleet-scan-*.json files")
+    p_daily.add_argument("--date", default=None, help="override today's UTC date (YYYY-MM-DD)")
+    p_daily.set_defaults(func=_cmd_fleet_daily, record=None)
 
     p_sync = sub.add_parser("sync-issues", help="print the fingerprinted issues a fleet scan would create/update")
     _common(p_sync)
