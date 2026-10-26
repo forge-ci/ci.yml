@@ -19,7 +19,7 @@ from ci_lint.cache.audit import ClassifiedEntry, _shape, audit_classified, class
 from ci_lint.cargo_messages import JsonValue
 from ci_lint.cache.github_cache import CacheApiError, delete_cache_by_id, delete_cache_by_key, list_caches
 from ci_lint.github_api import DeleteFn, FetchFn, GraphQLFn
-from ci_lint.rules.cache_static import cardinality, family_footprint, parse_size
+from ci_lint.rules.cache_static import cardinality, family_footprint, parse_size, pr_budget_bytes
 from ci_lint.schema import CiToml
 
 JANITOR_RULES: frozenset[str] = frozenset({"CACHE-001", "CACHE-003", "CACHE-005", "CACHE-006", "CACHE-009"})
@@ -549,8 +549,7 @@ def preprune(
         source = "live" if fam_id in live_max and live_max[fam_id] >= declared_max else "declared"
         lines.append(f"  {fam_id}: {source} size={size}B x {card} = {steady}B" + (" (lockfile)" if fam.lockfile else ""))
 
-    pr_budget = parse_size(ci.cache.pr.budget) if ci.cache.pr.budget else 0
-    pr_budget = pr_budget or 0
+    pr_budget = pr_budget_bytes(ci) or 0
     peak = lockfile_total if lockfile_changed else 0
     forecast = steady_total + peak + pr_budget
     budget_bytes = parse_size(ci.cache.budget) or 0

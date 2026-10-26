@@ -817,3 +817,61 @@ class Cache024AutoKeyTrustedWritersTest(unittest.TestCase):
         repo = self._repo("on: [push]\njobs:\n  b:\n    runs-on: ubuntu-24.04\n    steps:\n      - uses: ./.github/actions/soldr\n", action)
         ci = load_ci_toml(repo).ci
         self.assertEqual([(f.rule, f.status.value) for f in check_cache_024(ci, repo)], [("CACHE-024", "violation")])
+
+
+class SetupUvImpliedSaveGateTest(unittest.TestCase):
+    """[cache.pr].mode = "none" implies the setup-uv save gate without an
+    [allow].setup-uv opt-in (FastLED's ungated memory_report.yml saved a PR
+    cache every push and failed every PR's live budget instead)."""
+
+    def _ci(self, kind: str, mode: str):
+        from ci_lint.schema import SetupUvAllow, StrMap
+
+        repo = fixture("CACHE-003", kind)
+        ci = load_ci_toml(repo).ci
+        assert ci is not None
+        ci = replace(
+            ci,
+            allow=replace(ci.allow, setup_uv=SetupUvAllow(require=StrMap())),
+            cache=replace(ci.cache, pr=replace(ci.cache.pr, mode=mode, budget="")),
+        )
+        return ci, repo
+
+    @requires_yaml_tooling
+    def test_mode_none_flags_ungated_save(self) -> None:
+        ci, repo = self._ci("red", "none")
+        findings = check_cache_003_setup_uv(ci, repo)
+        self.assertEqual(["CACHE-003"], [f.rule for f in findings])
+        self.assertIn('mode = "none"', findings[0].message)
+
+    @requires_yaml_tooling
+    def test_mode_none_accepts_gated_save(self) -> None:
+        ci, repo = self._ci("green", "none")
+        self.assertEqual([], check_cache_003_setup_uv(ci, repo))
+
+    @requires_yaml_tooling
+    def test_pr_caching_mode_without_opt_in_is_silent(self) -> None:
+        ci, repo = self._ci("red", "delta")
+        self.assertEqual([], check_cache_003_setup_uv(ci, repo))
+
+
+class PrBudgetDerivedTest(unittest.TestCase):
+    def _ci(self, **pr):
+        repo = fixture("CACHE-003", "green")
+        ci = load_ci_toml(repo).ci
+        assert ci is not None
+        return replace(ci, cache=replace(ci.cache, pr=replace(ci.cache.pr, **pr)))
+
+    def test_explicit_budget_wins(self) -> None:
+        self.assertEqual(1024 * 1024, cache_static.pr_budget_bytes(self._ci(budget="1MB", mode="none")))
+
+    def test_mode_none_derives_zero(self) -> None:
+        self.assertEqual(0, cache_static.pr_budget_bytes(self._ci(budget="", mode="none")))
+
+    def test_per_pr_times_open_prs(self) -> None:
+        ci = self._ci(budget="", mode="delta", max_per_pr="10MB", expected_open_prs=3)
+        self.assertEqual(30 * 1024 * 1024, cache_static.pr_budget_bytes(ci))
+
+    def test_underivable_is_none(self) -> None:
+        ci = self._ci(budget="", mode="delta", max_per_pr="10MB", expected_open_prs=None)
+        self.assertIsNone(cache_static.pr_budget_bytes(ci))
