@@ -1,0 +1,8 @@
+name: ci
+on: [push]
+jobs:
+  test:
+    runs-on: windows-2025
+    timeout-minutes: 20
+    steps:
+      - run: uv run --no-project --module ci.independent_spawn

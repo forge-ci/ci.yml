@@ -15,7 +15,10 @@ Static signals (run: lines, one level into a referenced ci/*.py script):
 - needs_review: a referenced ci/*.py script that builds a test command and
   holds a `--no-capture`/`--nocapture` string it appends dynamically (the
   running-process shape: an env-var opt-in) -- ci-lint cannot see whether
-  the opt-in is on in CI.
+  the opt-in is on in CI. Also when the argv comes from a
+  `*cargo*("test"|"nextest", ...)` helper (running-process's
+  `cargo_command`). A script is "referenced" by path (`ci/x.py`) or as a
+  module (`python -m ci.x`, `uv run --module ci.x`).
 
 Not a finding (ci.yml#136): `cargo test <name> -- --exact|--ignored
 --test-threads=1`, a single named test, where one thread costs nothing.
@@ -26,6 +29,7 @@ serialization with a documented cause) excuses that line.
 
 from __future__ import annotations
 
+import ast
 from pathlib import Path
 
 from ci_lint.finding import Finding, Status
@@ -106,6 +110,32 @@ def _selects_single_test(args: tuple[str, ...]) -> bool:
     return has_filter and ("--exact" in after or "--ignored" in after)
 
 
+def _calls_cargo_test_helper(script: Path) -> bool:
+    """A `*cargo_command("test"|"nextest", ...)`-style helper call: the
+    script assembles its cargo test argv through a wrapper (running-process's
+    `cargo_command("test", *package, ...)` from ci/soldr.py), so no literal
+    `cargo` token appears. Only the helper's name and literal first argument
+    are trusted; the resulting argv stays dynamic (needs_review)."""
+
+    try:
+        tree = ast.parse(script.read_text(encoding="utf-8"), filename=str(script))
+    except (SyntaxError, UnicodeDecodeError, OSError):
+        return False
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or not node.args:
+            continue
+        func = node.func
+        name = func.id if isinstance(func, ast.Name) else func.attr if isinstance(func, ast.Attribute) else ""
+        first = node.args[0]
+        if (
+            "cargo" in name.lower()
+            and isinstance(first, ast.Constant)
+            and first.value in ("test", "nextest")
+        ):
+            return True
+    return False
+
+
 def check_rust_017(repo_root: Path) -> list[Finding]:  # noqa: C901
     findings: list[Finding] = []
     for inv in iter_test_invocations(repo_root):
@@ -135,6 +165,8 @@ def check_rust_017(repo_root: Path) -> list[Finding]:  # noqa: C901
             builds_tests = any(v in ("nextest", "test") for v in (c.value for c in constants)) and any(
                 v == "cargo" or v.endswith("/cargo") for v in (c.value for c in constants)
             )
+        if not builds_tests:
+            builds_tests = _calls_cargo_test_helper(script)
         if not builds_tests:
             continue
         if rel in flagged_paths:

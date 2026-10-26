@@ -46,6 +46,15 @@ class Rust017Test(unittest.TestCase):
         self.assertEqual(Status.NEEDS_REVIEW, findings[0].status)
         self.assertEqual(6, findings[0].line)
 
+    def test_module_reference_and_cargo_helper_is_needs_review(self) -> None:
+        # running-process: `uv run --module ci.independent_spawn`, argv built by
+        # cargo_command("test", ...) with --nocapture held in a list literal.
+        findings = check_rust_017(fixture("RUST-017", "review-module-helper"))
+        self.assertEqual(
+            [("ci/independent_spawn.py", 10, Status.NEEDS_REVIEW)],
+            [(f.path, f.line, f.status) for f in findings],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

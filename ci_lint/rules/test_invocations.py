@@ -313,10 +313,27 @@ def referenced_scripts(repo_root: Path) -> list[str]:
     seen: set[str] = set()
     for run in iter_run_lines(repo_root):
         for tokens in split_commands(run.line):
-            for tok in tokens:
+            for i, tok in enumerate(tokens):
                 if CI_SCRIPT_RE.match(tok) and (repo_root / tok).is_file():
                     seen.add(tok)
+                elif tok in ("-m", "--module") and i + 1 < len(tokens):
+                    rel = module_script(tokens[i + 1])
+                    if rel is not None and (repo_root / rel).is_file():
+                        seen.add(rel)
     return sorted(seen)
+
+
+_CI_MODULE_RE = re.compile(r"^ci(?:\.[A-Za-z_][A-Za-z0-9_]*)+$")
+
+
+def module_script(module: str) -> str | None:
+    """`ci.foo.bar` (a `python -m`/`uv run --module` target) -> `ci/foo/bar.py`;
+    anything outside the `ci` package -> None (running-process's
+    `uv run --no-project --module ci.independent_spawn`)."""
+
+    if not _CI_MODULE_RE.match(module):
+        return None
+    return module.replace(".", "/") + ".py"
 
 
 def iter_command_sites(repo_root: Path) -> list[CommandSite]:
