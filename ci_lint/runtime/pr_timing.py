@@ -33,6 +33,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from ci_lint.cargo_messages import JsonValue
 from ci_lint.finding import Finding, Status
 
 PR_TIMING_SCHEMA_VERSION = 1
@@ -205,8 +206,16 @@ def _scan_one(
     return ScanResult(source, len(ordinary), len(windowed), p75_job, p75_crit, job_breach, crit_breach, False)
 
 
+@dataclass(frozen=True)
+class HistoryScan:
+    """One `--history` file: its source path and the parsed history."""
+
+    source: str
+    history: HistoryFile
+
+
 def compute_pr_timing(
-    scans: list[tuple[str, HistoryFile]],
+    scans: list[HistoryScan],
     *,
     min_samples: int = DEFAULT_MIN_SAMPLES,
     window_days: int = DEFAULT_WINDOW_DAYS,
@@ -222,7 +231,7 @@ def compute_pr_timing(
             job_threshold_seconds=job_threshold_seconds,
             critical_path_threshold_seconds=critical_path_threshold_seconds,
         )
-        for source, hist in scans
+        for source, hist in ((sc.source, sc.history) for sc in scans)
     ]
 
     findings: list[Finding] = []
@@ -278,7 +287,7 @@ def compute_pr_timing(
     return PrTimingReport(scans=tuple(results), findings=tuple(findings))
 
 
-def to_json_dict(report: PrTimingReport) -> dict[str, object]:
+def to_json_dict(report: PrTimingReport) -> dict[str, JsonValue]:
     return {
         "scans": [
             {

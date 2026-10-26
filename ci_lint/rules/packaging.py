@@ -19,6 +19,7 @@ from ci_lint.repo_files import list_repo_files
 from ci_lint.rules.pkg_abi3 import check_pkg_008
 from ci_lint.rules.pkg_one_compile import check_pkg_009
 from ci_lint.schema import CliBinary, CiToml
+from ci_lint.toml_cursor import TomlValue
 from ci_lint.workflow_scan import as_dict, jobs_of, load_workflows, steps_of
 from ci_lint.yaml_io import LoadStatus
 
@@ -113,7 +114,7 @@ def check_pkg_007(repo_root: Path) -> list[Finding]:
     return findings
 
 
-def _load_toml(path: Path) -> dict[str, object] | None:
+def _load_toml(path: Path) -> dict[str, TomlValue] | None:
     try:
         with path.open("rb") as fh:
             return tomllib.load(fh)

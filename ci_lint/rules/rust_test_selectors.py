@@ -22,6 +22,8 @@ A same-line `# ci-lint: allow RUST-015 <reason>` excuses one line.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import re
 from pathlib import Path
 
@@ -55,8 +57,15 @@ VALUE_OPTIONS: frozenset[str] = frozenset(
 _REDIRECT_RE = re.compile(r"^\d*[<>]")
 
 
-def _classify(args: tuple[str, ...]) -> tuple[bool, str | None, bool]:
-    """(has_features, filter_description, has_selector)."""
+@dataclass(frozen=True)
+class _ArgClass:
+    has_features: bool
+    filt: str | None
+    has_selector: bool
+
+
+def _classify(args: tuple[str, ...]) -> _ArgClass:
+    """Whether a feature set, a test filter and a target selector appear."""
 
     has_features = False
     filt: str | None = None
@@ -80,13 +89,14 @@ def _classify(args: tuple[str, ...]) -> tuple[bool, str | None, bool]:
         if not arg.startswith("-") and "$" not in arg and filt is None:
             filt = f"name filter '{arg}'"
         i += 1
-    return has_features, filt, has_selector
+    return _ArgClass(has_features, filt, has_selector)
 
 
 def check_rust_015(repo_root: Path) -> list[Finding]:
     findings: list[Finding] = []
     for inv in iter_test_invocations(repo_root):
-        has_features, filt, has_selector = _classify(inv.args)
+        cls = _classify(inv.args)
+        has_features, filt, has_selector = cls.has_features, cls.filt, cls.has_selector
         if not has_features or filt is None or has_selector or allowed(inv.site.raw, RULE):
             continue
         what = "cargo nextest run" if inv.kind == "nextest" else "cargo test"

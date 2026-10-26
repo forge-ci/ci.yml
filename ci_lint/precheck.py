@@ -43,6 +43,7 @@ from ci_lint.rules.py_benchmark import check_group14
 from ci_lint.rules.doc_claims import check_gen_010_static
 from ci_lint.rules.ghapi_reread import check_ghapi_001
 from ci_lint.rules.host_sweeps import check_gen_030
+from ci_lint.rules.status_badges import check_gen_026
 from ci_lint.rules.release_gate import check_group11
 from ci_lint.rules.rust_dylint_target import check_rust_016
 from ci_lint.rules.cpp_ctest import check_cpp_001
@@ -51,6 +52,7 @@ from ci_lint.rules.rust_async_guards import check_rust_019
 from ci_lint.rules.cache_stats_summary import check_gen_023
 from ci_lint.rules.rust_doc_lane import check_rust_027
 from ci_lint.rules.rust_nocapture import check_rust_017
+from ci_lint.rules.test_parallelism import check_test_003
 from ci_lint.rules.rust_system_packages import check_rust_028
 from ci_lint.rules.lint_job_tests import check_gen_019
 from ci_lint.rules.rust_double_check import check_rust_023
@@ -76,15 +78,21 @@ from ci_lint.schema import CiToml, load_ci_toml
 # not leave CACHE-005/006/008's absence unexplained -- it reports each one
 # explicitly as skipped, with `needs_review` (never `passed`), so a local
 # run is never mistaken for having covered live cache state.
-LOCAL_SKIPPED_CHECKS: tuple[tuple[str, str], ...] = (
-    ("CACHE-005", "live cache poisoned/superseded-entry audit (GitHub Actions cache API)"),
-    ("CACHE-006", "live cache usage-near-budget audit (GitHub Actions cache API)"),
-    (
+@dataclass(frozen=True)
+class SkippedCheck:
+    rule: str
+    desc: str
+
+
+LOCAL_SKIPPED_CHECKS: tuple[SkippedCheck, ...] = (
+    SkippedCheck("CACHE-005", "live cache poisoned/superseded-entry audit (GitHub Actions cache API)"),
+    SkippedCheck("CACHE-006", "live cache usage-near-budget audit (GitHub Actions cache API)"),
+    SkippedCheck(
         "CACHE-008",
         "PR cache save/trim policy audit against live cache entries "
         "(GitHub Actions cache API + GraphQL PR state)",
     ),
-    (
+    SkippedCheck(
         "ACT-001",
         "local act cache-store audit against the remote cache policy -- implemented as a "
         "distinct command, 'ci-lint act audit --store-dir <dir>' (round M2-20), not folded into "
@@ -102,17 +110,17 @@ LIVE_COVERED_RULES: frozenset[str] = frozenset({"CACHE-005", "CACHE-006", "CACHE
 def _local_skip_findings(*, live: bool = False) -> list[Finding]:
     checks = LOCAL_SKIPPED_CHECKS
     if live:
-        checks = tuple((rule, desc) for rule, desc in checks if rule not in LIVE_COVERED_RULES)
+        checks = tuple(c for c in checks if c.rule not in LIVE_COVERED_RULES)
     return [
         Finding(
-            rule=rule,
+            rule=c.rule,
             status=Status.NEEDS_REVIEW,
-            message=f"skipped (local): {desc}",
+            message=f"skipped (local): {c.desc}",
             fix="run 'ci-lint precheck' without --local (in CI, where the GitHub API is reachable, "
             "or under bosn -> act's remote-equivalent lane) to cover this check; it is never treated "
             "as passing in a --local/ACT=true run",
         )
-        for rule, desc in checks
+        for c in checks
     ]
 
 
@@ -193,11 +201,11 @@ def run_precheck(repo_root: Path, *, title: str = "", local: bool = False, live:
         all_findings.extend(check_group12(ci, repo_root))
         all_findings.extend(check_group13(ci, repo_root))
         all_findings.extend(check_group14(ci, repo_root))
-        gen_010_findings, _gen_010_claims = check_gen_010_static(repo_root)
-        all_findings.extend(gen_010_findings)
+        all_findings.extend(check_gen_010_static(repo_root).findings)
         all_findings.extend(check_group_m2_22(ci, repo_root))
         all_findings.extend(check_group_cook_cache(ci, repo_root))
         all_findings.extend(check_rust_017(repo_root))
+        all_findings.extend(check_test_003(repo_root))
         all_findings.extend(check_gen_019(repo_root))
         all_findings.extend(check_rust_023(repo_root))
         all_findings.extend(check_cpp_001(repo_root))
@@ -215,6 +223,7 @@ def run_precheck(repo_root: Path, *, title: str = "", local: bool = False, live:
         all_findings.extend(check_ghapi_001(repo_root))
         all_findings.extend(check_gen_023(repo_root))
         all_findings.extend(check_gen_030(repo_root))
+        all_findings.extend(check_gen_026(repo_root))
         gate_cfg = ci.local.gate
         gate_runs = () if gate_cfg is None else (gate_cfg.run, *(lane.run for lane in gate_cfg.lanes))
         all_findings.extend(check_act_002(repo_root, gate_runs))

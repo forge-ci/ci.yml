@@ -42,6 +42,7 @@ from ci_lint.github_api import FetchStatusFn, GitHubApiError
 from ci_lint.remote_only import check_required_checks as check_gate_012_required
 from ci_lint.rules.doc_claims import DocClaim, scan_repo_docs
 from ci_lint.rules.setup_soldr_freshness import check_rust_014
+from ci_lint.rules.status_badges import check_gen_026
 from ci_lint.schema import CiToml
 from ci_lint.rules.linter_pin import check_ct_007
 
@@ -612,6 +613,8 @@ def run_audit(
         claims = scan_repo_docs(repo_root)
         findings.extend(check_gen_010(claims, branch_protection, rulesets, default_branch))
         findings.extend(check_rust_014(fetch_status, token, repo_root))
+        # GEN-026 with the live default branch: resolves the static needs_review.
+        findings.extend(check_gen_026(repo_root, default_branch=default_branch))
 
     return AuditReport(findings=tuple(findings), repo=repo, default_branch=default_branch)
 

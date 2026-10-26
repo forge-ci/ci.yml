@@ -50,7 +50,13 @@ def _as_str_tuple(value: JsonValue) -> tuple[str, ...]:
     return ()
 
 
-def _parse_package_id(package_id: JsonValue) -> tuple[str, str]:
+@dataclass(frozen=True)
+class PackageId:
+    name: str
+    version: str
+
+
+def _parse_package_id(package_id: JsonValue) -> PackageId:
     """`package_id` is either the legacy `"name version (source)"` string
     or (cargo >= 1.77 with `-Znext-lockfile-bump`/newer toolchains) a
     `"registry+source#name@version"`-shaped SPEC string. Handle both; an
@@ -58,28 +64,29 @@ def _parse_package_id(package_id: JsonValue) -> tuple[str, str]:
     malformed/missing package_id must never crash the whole scan."""
 
     if not isinstance(package_id, str):
-        return "", ""
+        return PackageId("", "")
     if " " in package_id:
         parts = package_id.split(" ", 2)
         if len(parts) >= 2:
-            return parts[0], parts[1]
-        return parts[0], ""
+            return PackageId(parts[0], parts[1])
+        return PackageId(parts[0], "")
     if "#" in package_id:
         head, _, tail = package_id.rpartition("#")
         if "@" in tail:
             name, version = tail.rsplit("@", 1)
-            return name, version
+            return PackageId(name, version)
         # Cargo's package-ID spec omits the name when it equals the final
         # path component of the source URL: `path+file:///ws/crates/foo#0.1.0`
         # means package `foo` version `0.1.0`. The fragment is then only a
         # version, and the name is the URL's last path segment.
         name = head.rstrip("/").rsplit("/", 1)[-1] if head else ""
-        return name, tail
-    return package_id, ""
+        return PackageId(name, tail)
+    return PackageId(package_id, "")
 
 
 def _one_artifact(doc: dict[str, JsonValue]) -> CompilerArtifact:
-    name, version = _parse_package_id(doc.get("package_id"))
+    pkg = _parse_package_id(doc.get("package_id"))
+    name, version = pkg.name, pkg.version
     manifest_path = doc.get("manifest_path")
     target = _as_dict(doc.get("target"))
     profile = _as_dict(doc.get("profile"))

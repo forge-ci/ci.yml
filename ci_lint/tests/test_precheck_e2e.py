@@ -54,7 +54,7 @@ class LocalModeTest(unittest.TestCase):
             os.environ.pop("ACT", None)
             result = run_precheck(fixture("_e2e", "green"), title="x")
         self.assertFalse(result.local)
-        skip_rules = {rule for rule, _ in LOCAL_SKIPPED_CHECKS}
+        skip_rules = {c.rule for c in LOCAL_SKIPPED_CHECKS}
         self.assertEqual(set(), {f.rule for f in result.findings} & skip_rules)
 
     @requires_yaml_tooling
@@ -64,7 +64,7 @@ class LocalModeTest(unittest.TestCase):
             result = run_precheck(fixture("_e2e", "green"), title="x", local=True)
         self.assertTrue(result.local)
         by_rule = {f.rule: f for f in result.findings}
-        for rule, _ in LOCAL_SKIPPED_CHECKS:
+        for rule in (c.rule for c in LOCAL_SKIPPED_CHECKS):
             self.assertIn(rule, by_rule, msg=render_text(result))
             f = by_rule[rule]
             self.assertEqual(Status.NEEDS_REVIEW, f.status)

@@ -30,6 +30,7 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
 
+from ci_lint.cargo_messages import JsonValue
 from ci_lint.finding import Finding
 from ci_lint.schema import CiToml
 
@@ -115,7 +116,15 @@ def _parse_cargo_test_log(path: Path) -> SuiteSourceCounts:
     )
 
 
-def _sum_junit_suite(elem: ET.Element) -> tuple[int, int, int, int]:
+@dataclass(frozen=True)
+class _JunitTotals:
+    tests: int
+    failures: int
+    errors: int
+    skipped: int
+
+
+def _sum_junit_suite(elem: ET.Element) -> _JunitTotals:
     def _int_attr(name: str) -> int:
         raw = elem.get(name)
         if raw is None:
@@ -125,7 +134,7 @@ def _sum_junit_suite(elem: ET.Element) -> tuple[int, int, int, int]:
         except ValueError:
             return 0
 
-    return _int_attr("tests"), _int_attr("failures"), _int_attr("errors"), _int_attr("skipped")
+    return _JunitTotals(_int_attr("tests"), _int_attr("failures"), _int_attr("errors"), _int_attr("skipped"))
 
 
 def _parse_pytest_junit(path: Path) -> SuiteSourceCounts:
@@ -148,11 +157,11 @@ def _parse_pytest_junit(path: Path) -> SuiteSourceCounts:
 
     tests = failures = errors = skipped = 0
     for elem in suite_elems:
-        t, f, e, sk = _sum_junit_suite(elem)
-        tests += t
-        failures += f
-        errors += e
-        skipped += sk
+        totals = _sum_junit_suite(elem)
+        tests += totals.tests
+        failures += totals.failures
+        errors += totals.errors
+        skipped += totals.skipped
 
     failed = failures + errors
     passed = tests - failed - skipped
@@ -220,7 +229,7 @@ def compute_suite_check(
     )
 
 
-def to_json_dict(report: SuiteCheckReport) -> dict[str, object]:
+def to_json_dict(report: SuiteCheckReport) -> dict[str, JsonValue]:
     return {
         "suite_id": report.suite_id,
         "required": report.required,

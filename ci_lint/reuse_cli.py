@@ -23,7 +23,7 @@ import argparse
 import json
 import os
 import sys
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -68,47 +68,62 @@ def _now(args: argparse.Namespace) -> datetime | None:
     return parse_time(value)
 
 
-def _fetcher(args: argparse.Namespace) -> tuple[FetchStatusFn | None, str | None, RecordTable | None]:
-    """(fetch, token, record-table). A live run without a token returns
-    (None, None, None): `decide` then fails closed with `no-token`."""
+@dataclass(frozen=True)
+class _MaybeFetcher:
+    """fetch, token and record table; all None for a live run without a
+    token, so `decide` fails closed with `no-token` (PY-002, #193)."""
 
+    fetch: FetchStatusFn | None = None
+    token: str | None = None
+    table: RecordTable | None = None
+
+
+@dataclass(frozen=True)
+class _CommonRequest:
+    """The parsed request template, or None plus the usage exit code."""
+
+    template: ReuseRequest | None
+    code: int
+
+
+def _fetcher(args: argparse.Namespace) -> _MaybeFetcher:
     if args.replay:
-        return replay_fetch(args.replay_table), "replay", None
+        return _MaybeFetcher(replay_fetch(args.replay_table), "replay")
     token = _token()
     if not token:
-        return None, None, None
+        return _MaybeFetcher()
     if args.record:
         recorded: RecordTable = {}
-        return _recording(default_fetch_status, recorded), token, recorded
-    return default_fetch_status, token, None
+        return _MaybeFetcher(_recording(default_fetch_status, recorded), token, recorded)
+    return _MaybeFetcher(default_fetch_status, token)
 
 
-def _common_request(args: argparse.Namespace, command: str) -> tuple[ReuseRequest | None, int]:
+def _common_request(args: argparse.Namespace, command: str) -> _CommonRequest:
     repo = args.repo or os.environ.get("GITHUB_REPOSITORY") or ""
     if not REPO_RE.match(repo):
-        return None, _usage(command, f"--repo must be owner/name (got {repo!r}; or set GITHUB_REPOSITORY)")
+        return _CommonRequest(None, _usage(command, f"--repo must be owner/name (got {repo!r}; or set GITHUB_REPOSITORY)"))
     workflows = tuple(normalize_workflow(w) for w in _dedupe(args.workflow))
     if not workflows:
-        return None, _usage(command, "at least one --workflow <file> is required")
+        return _CommonRequest(None, _usage(command, "at least one --workflow <file> is required"))
     required = _dedupe(args.required_job)
     if not required:
-        return None, _usage(command, "at least one --required-job <exact job name> is required")
+        return _CommonRequest(None, _usage(command, "at least one --required-job <exact job name> is required"))
     if not args.max_age_hours > 0:
-        return None, _usage(command, "--max-age-hours must be > 0")
+        return _CommonRequest(None, _usage(command, "--max-age-hours must be > 0"))
     if args.record and args.replay:
-        return None, _usage(command, "--record and --replay are mutually exclusive")
+        return _CommonRequest(None, _usage(command, "--record and --replay are mutually exclusive"))
     if args.replay:
         try:
             table = json.loads(Path(args.replay).read_text(encoding="utf-8"))
         except (OSError, ValueError) as exc:
-            return None, _usage(command, f"cannot read --replay {args.replay!r}: {exc}")
+            return _CommonRequest(None, _usage(command, f"cannot read --replay {args.replay!r}: {exc}"))
         if not isinstance(table, dict):
-            return None, _usage(command, "--replay must be a `--record` JSON object")
+            return _CommonRequest(None, _usage(command, "--replay must be a `--record` JSON object"))
         args.replay_table = table
     now = _now(args)
     if now is None:
-        return None, _usage(command, f"--now must be an ISO-8601 timestamp (got {getattr(args, 'now', None)!r})")
-    return (
+        return _CommonRequest(None, _usage(command, f"--now must be an ISO-8601 timestamp (got {getattr(args, 'now', None)!r})"))
+    return _CommonRequest(
         ReuseRequest(
             repo=repo,
             sha="0" * 40,
@@ -129,9 +144,10 @@ def _write_record(args: argparse.Namespace, table: RecordTable | None) -> None:
 
 
 def _cmd_reuse_check(args: argparse.Namespace) -> int:
-    template, code = _common_request(args, "reuse-check")
+    common = _common_request(args, "reuse-check")
+    template = common.template
     if template is None:
-        return code
+        return common.code
     sha = args.sha or os.environ.get("GITHUB_SHA") or ""
     if not SHA_RE.match(sha):
         return _usage("reuse-check", f"--sha must be a 40-hex commit SHA (got {sha!r}; or set GITHUB_SHA)")
@@ -140,7 +156,8 @@ def _cmd_reuse_check(args: argparse.Namespace) -> int:
     req = replace(
         template, sha=sha, mode=args.mode, event_name=event_name, ref=ref, queue_evidence=args.queue_evidence
     )
-    fetch, token, table = _fetcher(args)
+    got = _fetcher(args)
+    fetch, token, table = got.fetch, got.token, got.table
     decision = decide(req, fetch, token)
     _write_record(args, table)
 
@@ -167,15 +184,17 @@ def _cmd_reuse_check(args: argparse.Namespace) -> int:
 
 
 def _cmd_reuse_report(args: argparse.Namespace) -> int:
-    template, code = _common_request(args, "reuse-report")
+    common = _common_request(args, "reuse-report")
+    template = common.template
     if template is None:
-        return code
+        return common.code
     for flag, value in (("--since", args.since), ("--until", args.until)):
         if value is not None and parse_time(f"{value}T00:00:00Z") is None:
             return _usage("reuse-report", f"{flag} must be YYYY-MM-DD (got {value!r})")
     if args.min_runs <= 0 or args.limit <= 0:
         return _usage("reuse-report", "--min-runs and --limit must be positive")
-    fetch, token, table = _fetcher(args)
+    got = _fetcher(args)
+    fetch, token, table = got.fetch, got.token, got.table
     if fetch is None or token is None:
         return _usage("reuse-report", "GITHUB_TOKEN (or GH_TOKEN) is required for a live run (or pass --replay)")
     report = run_report(

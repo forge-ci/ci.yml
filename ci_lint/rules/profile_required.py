@@ -30,6 +30,7 @@ from pathlib import Path
 
 from ci_lint.finding import Finding, Status
 from ci_lint.schema import CiToml
+from ci_lint.yaml_io import YamlValue
 from ci_lint.workflow_scan import (
     as_dict,
     jobs_of,
@@ -69,7 +70,7 @@ def check_group13(ci: CiToml, repo_root: Path) -> list[Finding]:  # noqa: C901
 
     prefixes = {sid: _run_prefix(s.run) for sid, s in required.items()}
 
-    files: list[dict[str, object]] = []
+    files: list[dict[str, YamlValue]] = []
     for wf in load_workflows(repo_root):
         if wf.status.name == "OK":
             files.append(as_dict(wf.document))

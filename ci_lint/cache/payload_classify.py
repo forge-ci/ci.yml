@@ -21,20 +21,26 @@ from dataclasses import dataclass
 # One entry per `[cache].never` content class this module can recognize
 # from a path string alone. Order matters only for the first-match message;
 # a path can trip more than one class and every match is reported.
-_NEVER_CLASS_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
-    (
+@dataclass(frozen=True)
+class _NeverClass:
+    content_class: str
+    pattern: re.Pattern[str]
+
+
+_NEVER_CLASS_PATTERNS: tuple[_NeverClass, ...] = (
+    _NeverClass(
         "linked test binary",
         re.compile(r"(?:^|/)target/(?:[^/]+/)?[^/]+/deps/[^/]*-[0-9a-f]{16}(?:\.exe)?$"),
     ),
-    (
+    _NeverClass(
         "nextest archive",
         re.compile(r"\.tar\.zst$|nextest-archive"),
     ),
-    (
+    _NeverClass(
         "incremental/",
         re.compile(r"(?:^|/)incremental(?:/|$)"),
     ),
-    (
+    _NeverClass(
         "whole target/ directory",
         re.compile(r"(?:^|/)target/?$"),
     ),
@@ -44,7 +50,7 @@ _NEVER_CLASS_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     # directory (`build/`, `build-<x>/`, `build_<x>/`, `cmake-build-<x>/`,
     # `out/build/<preset>/`), or any path inside CMake's own `CMakeFiles/` or
     # `CMakeCache.txt`, is the build tree.
-    (
+    _NeverClass(
         "CMake build tree",
         re.compile(
             r"(?:^|/)(?:_?build|build[-_][A-Za-z0-9._-]+|cmake-build-[A-Za-z0-9._-]+|out/build(?:/[^/]+)?)/?$"
@@ -57,7 +63,7 @@ _NEVER_CLASS_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
 def is_cmake_build_tree(path: str) -> bool:
     """True when `path` is (or is inside the metadata of) a CMake build tree."""
 
-    pattern = dict(_NEVER_CLASS_PATTERNS)["CMake build tree"]
+    pattern = next(n.pattern for n in _NEVER_CLASS_PATTERNS if n.content_class == "CMake build tree")
     return pattern.search(path.strip().replace("\\", "/")) is not None
 
 
@@ -80,7 +86,7 @@ def classify_payload_paths(paths: list[str]) -> list[PayloadViolation]:
         path = raw.strip().replace("\\", "/")
         if not path:
             continue
-        for content_class, pattern in _NEVER_CLASS_PATTERNS:
-            if pattern.search(path):
-                violations.append(PayloadViolation(path=raw, content_class=content_class))
+        for never in _NEVER_CLASS_PATTERNS:
+            if never.pattern.search(path):
+                violations.append(PayloadViolation(path=raw, content_class=never.content_class))
     return violations

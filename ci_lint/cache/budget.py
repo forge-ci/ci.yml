@@ -20,6 +20,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 
 from ci_lint.cache.audit import _check_cache_003, _check_cache_006, classify
+from ci_lint.cargo_messages import JsonValue
 from ci_lint.cache.github_cache import CacheApiError, list_caches
 from ci_lint.github_api import FetchFn
 from ci_lint.rules.cache_static import parse_size
@@ -49,7 +50,7 @@ class BudgetVerdict:
     def failed(self) -> bool:
         return self.verdict == "fail"
 
-    def to_json_dict(self) -> dict[str, object]:
+    def to_json_dict(self) -> dict[str, JsonValue]:
         return {
             "verdict": self.verdict,
             "total_bytes": self.total_bytes,
