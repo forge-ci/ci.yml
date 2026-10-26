@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -65,7 +66,7 @@ class PlatformLane:
     wheel: str | None
     suites: tuple[str, ...]
 
-    def to_json_dict(self) -> dict[str, object]:
+    def to_json_dict(self) -> dict[str, JsonValue]:
         return {
             "id": self.id,
             "target": self.target,
@@ -74,6 +75,31 @@ class PlatformLane:
             "wheel": self.wheel,
             "suites": list(self.suites),
         }
+
+
+@dataclass(frozen=True)
+class LaneDigest:
+    lane: str  # "fast", "dylint" or "platform:<id>"
+    digest: str  # 12 hex characters
+
+
+@dataclass(frozen=True)
+class LaneDigests(Mapping[str, str]):
+    """Read-only lane -> digest mapping backed by typed `LaneDigest` records."""
+
+    entries: tuple[LaneDigest, ...] = ()
+
+    def __getitem__(self, lane: str) -> str:
+        for entry in self.entries:
+            if entry.lane == lane:
+                return entry.digest
+        raise KeyError(lane)
+
+    def __iter__(self) -> Iterator[str]:
+        return (entry.lane for entry in self.entries)
+
+    def __len__(self) -> int:
+        return len(self.entries)
 
 
 @dataclass(frozen=True)
@@ -98,9 +124,9 @@ class Plan:
     # rule and keeps this a purely additive change) keeps working.
     platform_lanes: tuple[PlatformLane, ...] = ()
     fast_suites: tuple[str, ...] = ()
-    lane_digests: dict[str, str] = field(default_factory=dict)
+    lane_digests: LaneDigests = field(default_factory=LaneDigests)
 
-    def to_json_dict(self) -> dict[str, object]:
+    def to_json_dict(self) -> dict[str, JsonValue]:
         return {
             "flow": self.flow,
             "event_name": self.event_name,
@@ -232,7 +258,7 @@ def _sha256_file(path: Path) -> str | None:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _env_fingerprint(ci: CiToml, repo_root: Path | None) -> dict[str, str]:
+def _env_fingerprint(ci: CiToml, repo_root: Path | None) -> dict[str, JsonValue]:
     """The environment component mixed into every lane digest: the
     `linter` pin (always available -- no repo_root needed) plus the
     lockfile/toolchain blob hashes "when present" (round-3A brief, Part
@@ -241,7 +267,7 @@ def _env_fingerprint(ci: CiToml, repo_root: Path | None) -> dict[str, str]:
     only as strong as `linter`, which keeps `compute_plan` callable
     without a repo_root, matching every pre-round-3A call site."""
 
-    fingerprint: dict[str, str] = {"linter": ci.linter}
+    fingerprint: dict[str, JsonValue] = {"linter": ci.linter}
     if repo_root is not None:
         for name in _ENV_FINGERPRINT_FILES:
             digest = _sha256_file(repo_root / name)
@@ -267,8 +293,8 @@ def _compute_lane_digests(
     fast_suites: tuple[str, ...],
     dylint_targets: tuple[str, ...],
     platform_lanes: tuple[PlatformLane, ...],
-    env: dict[str, str],
-) -> dict[str, str]:
+    env: dict[str, JsonValue],
+) -> LaneDigests:
     digests: dict[str, str] = {}
 
     fast_platforms_payload: list[JsonValue] = [
@@ -292,7 +318,7 @@ def _compute_lane_digests(
             }
         )
 
-    return digests
+    return LaneDigests(tuple(LaneDigest(lane, digest) for lane, digest in digests.items()))
 
 
 def _resolve_publish_mode(ci: CiToml, flow_publish: str | None) -> str:
@@ -517,7 +543,7 @@ def compute_plan(  # noqa: C901
     )
 
 
-def build_act_event(title: str) -> dict[str, object]:
+def build_act_event(title: str) -> dict[str, JsonValue]:
     """A minimal `pull_request` act event JSON carrying the title (bosn -> act, §11)."""
 
     return {

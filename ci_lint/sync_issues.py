@@ -44,6 +44,7 @@ import hashlib
 import re
 from dataclasses import dataclass
 
+from ci_lint.cargo_messages import JsonValue
 from ci_lint.finding import Finding, Status
 from ci_lint.fleet import API_ROOT, FleetReport, RepoScan
 from ci_lint.github_api import FetchStatusFn, GitHubApiError, WriteFn
@@ -72,6 +73,30 @@ class IssueAction:
     number: int | None = None
 
 
+@dataclass(frozen=True)
+class RenderedIssue:
+    title: str
+    body: str
+
+
+@dataclass(frozen=True)
+class ExistingListing:
+    issues: list[ExistingIssue]
+    error: str | None = None
+
+
+@dataclass(frozen=True, order=True)
+class _GroupKey:
+    rule: str
+    subject: str
+
+
+@dataclass(frozen=True)
+class SyncPlan:
+    actions: list[IssueAction]
+    errors: list[str]
+
+
 def subject_of(finding: Finding, repo: str) -> str:
     return finding.path or f"repo:{repo}"
 
@@ -80,7 +105,7 @@ def fingerprint(repo: str, rule: str, subject: str) -> str:
     return hashlib.sha256(f"{repo}|{rule}|{subject}".encode("utf-8")).hexdigest()[:16]
 
 
-def render_issue(repo: str, rule: str, subject: str, findings: list[Finding]) -> tuple[str, str]:
+def render_issue(repo: str, rule: str, subject: str, findings: list[Finding]) -> RenderedIssue:
     fp = fingerprint(repo, rule, subject)
     title = f"ci-lint {rule}: {subject}"
     lines = [
@@ -93,19 +118,19 @@ def render_issue(repo: str, rule: str, subject: str, findings: list[Finding]) ->
         loc = f.location()
         lines.append(f"- `{loc}`: {f.message}")
     lines.extend(["", f"Fix: {findings[0].fix}", "", "Policy: https://github.com/zackees/ci.yml (docs/policy-*.md)."])
-    return title, "\n".join(lines)
+    return RenderedIssue(title, "\n".join(lines))
 
 
-def fetch_existing(fetch_status: FetchStatusFn, token: str, repo: str) -> tuple[list[ExistingIssue], str | None]:
+def fetch_existing(fetch_status: FetchStatusFn, token: str, repo: str) -> ExistingListing:
     url = f"{API_ROOT}/repos/{repo}/issues?state=open&labels={ISSUE_LABEL}&per_page=100"
     try:
         status, body = fetch_status(url, token)
     except GitHubApiError as exc:
-        return [], f"{repo}: listing issues failed ({exc})"
+        return ExistingListing([], f"{repo}: listing issues failed ({exc})")
     if status == 404:
-        return [], None
+        return ExistingListing([])
     if status != 200 or not isinstance(body, list):
-        return [], f"{repo}: listing issues failed (HTTP {status})"
+        return ExistingListing([], f"{repo}: listing issues failed (HTTP {status})")
     issues: list[ExistingIssue] = []
     for item in body:
         if not isinstance(item, dict) or "pull_request" in item:
@@ -120,22 +145,24 @@ def fetch_existing(fetch_status: FetchStatusFn, token: str, repo: str) -> tuple[
         issues.append(
             ExistingIssue(number=number, title=title if isinstance(title, str) else "", body=text, fingerprint=match.group(1))
         )
-    return issues, None
+    return ExistingListing(issues)
 
 
 def plan_repo(scan: RepoScan, existing: list[ExistingIssue]) -> list[IssueAction]:
-    groups: dict[tuple[str, str], list[Finding]] = {}
+    groups: dict[_GroupKey, list[Finding]] = {}
     for f in scan.findings:
         if f.status != Status.VIOLATION:
             continue
-        groups.setdefault((f.rule, subject_of(f, scan.repo)), []).append(f)
+        groups.setdefault(_GroupKey(f.rule, subject_of(f, scan.repo)), []).append(f)
     by_fp = {e.fingerprint: e for e in existing}
     actions: list[IssueAction] = []
     seen: set[str] = set()
-    for (rule, subject), findings in sorted(groups.items()):
+    for key, findings in sorted(groups.items()):
+        rule, subject = key.rule, key.subject
         fp = fingerprint(scan.repo, rule, subject)
         seen.add(fp)
-        title, body = render_issue(scan.repo, rule, subject, findings)
+        rendered = render_issue(scan.repo, rule, subject, findings)
+        title, body = rendered.title, rendered.body
         prior = by_fp.get(fp)
         if prior is None:
             kind, number = "create", None
@@ -163,7 +190,7 @@ def plan_repo(scan: RepoScan, existing: list[ExistingIssue]) -> list[IssueAction
 
 def plan_sync(
     report: FleetReport, fetch_status: FetchStatusFn | None, token: str
-) -> tuple[list[IssueAction], list[str]]:
+) -> SyncPlan:
     """`fetch_status=None` plans offline (every issue is `create`)."""
 
     actions: list[IssueAction] = []
@@ -171,14 +198,15 @@ def plan_sync(
     for scan in report.repos:
         existing: list[ExistingIssue] = []
         if fetch_status is not None:
-            existing, err = fetch_existing(fetch_status, token, scan.repo)
-            if err:
-                errors.append(err)
+            listing = fetch_existing(fetch_status, token, scan.repo)
+            existing = listing.issues
+            if listing.error:
+                errors.append(listing.error)
         actions.extend(plan_repo(scan, existing))
-    return actions, errors
+    return SyncPlan(actions, errors)
 
 
-def to_json_list(actions: list[IssueAction]) -> list[dict[str, str | int | None]]:
+def to_json_list(actions: list[IssueAction]) -> list[JsonValue]:
     return [
         {
             "action": a.action,
@@ -304,11 +332,11 @@ def run_apply(
             if any(f.status == Status.VIOLATION for f in scan.findings):
                 skipped_not_opted_in.append(scan.repo)
             continue
-        existing, err = fetch_existing(fetch_status, token, scan.repo)
-        if err:
-            errors.append(err)
+        listing = fetch_existing(fetch_status, token, scan.repo)
+        if listing.error:
+            errors.append(listing.error)
             continue
-        for action in plan_repo(scan, existing):
+        for action in plan_repo(scan, listing.issues):
             if action.action == "unchanged":
                 continue
             if remaining <= 0:
@@ -328,7 +356,7 @@ def run_apply(
     )
 
 
-def apply_to_json(result: ApplyResult) -> dict[str, object]:
+def apply_to_json(result: ApplyResult) -> dict[str, JsonValue]:
     return {
         "executed": to_json_list(list(result.executed)),
         "skipped_not_opted_in": list(result.skipped_not_opted_in),

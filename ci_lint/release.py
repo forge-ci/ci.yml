@@ -22,6 +22,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from ci_lint.cargo_messages import JsonValue
 from ci_lint.finding import Finding, Status
 from ci_lint.runtime.wheel import SoldrVersion, WheelFilenameParts, check_wheel, parse_wheel_filename
 from ci_lint.schema import CiToml, Platform
@@ -29,6 +30,9 @@ from ci_lint.schema import CiToml, Platform
 RELEASE_MANIFEST_SCHEMA_VERSION = 1
 SDIST_RE = re.compile(r"^(?P<name>.+)-(?P<version>[^-]+)\.tar\.gz$")
 SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
+
+
+_CPXY_RE = re.compile(r"^cp3\d+$")
 
 
 class ReleaseVerifyError(Exception):
@@ -81,9 +85,15 @@ class StagedWheel:
 
 
 @dataclass(frozen=True)
+class StagedSdist:
+    path: Path
+    parts: SdistParts
+
+
+@dataclass(frozen=True)
 class StagedArtifacts:
     wheels: tuple[StagedWheel, ...]
-    sdist: tuple[Path, SdistParts] | None
+    sdist: StagedSdist | None
     unparsed: tuple[Path, ...]  # .whl/.tar.gz files this module could not parse at all
 
 
@@ -91,8 +101,8 @@ def discover_staged_artifacts(dist_dir: Path) -> StagedArtifacts:
     if not dist_dir.is_dir():
         raise ReleaseVerifyError(f"--dist {dist_dir} is not a directory")
     wheels: list[StagedWheel] = []
-    sdist: tuple[Path, SdistParts] | None = None
-    sdists_found: list[tuple[Path, SdistParts]] = []
+    sdist: StagedSdist | None = None
+    sdists_found: list[StagedSdist] = []
     unparsed: list[Path] = []
     for entry in sorted(dist_dir.iterdir()):
         if not entry.is_file():
@@ -108,7 +118,7 @@ def discover_staged_artifacts(dist_dir: Path) -> StagedArtifacts:
             if sd_parts is None:
                 unparsed.append(entry)
             else:
-                sdists_found.append((entry, sd_parts))
+                sdists_found.append(StagedSdist(entry, sd_parts))
     if len(sdists_found) == 1:
         sdist = sdists_found[0]
     return StagedArtifacts(wheels=tuple(wheels), sdist=sdist, unparsed=tuple(unparsed))
@@ -269,7 +279,7 @@ def verify_staged_artifacts(  # noqa: C901
     # Version consistency across every staged (parseable) artifact.
     versions: set[str] = {w.parts.version for w in staged.wheels}
     if staged.sdist is not None:
-        versions.add(staged.sdist[1].version)
+        versions.add(staged.sdist.parts.version)
     version: str | None = None
     if len(versions) > 1:
         findings.append(
@@ -282,10 +292,26 @@ def verify_staged_artifacts(  # noqa: C901
     elif len(versions) == 1:
         version = next(iter(versions))
 
+    # PKG-008 (#119): a staged set must not contain any version-specific
+    # cpXY-cpXY wheel -- checked over every staged wheel, matched or not.
+    for staged_wheel in staged.wheels:
+        p = staged_wheel.parts
+        if _CPXY_RE.match(p.python_tag) and p.abi_tag == p.python_tag:
+            findings.append(
+                Finding(
+                    rule="PKG-008",
+                    path=staged_wheel.path.name,
+                    message=f"staged release set contains a version-specific '{p.python_tag}-{p.abi_tag}' "
+                    "wheel; a rust-pypi-app ships only cp310-abi3 wheels",
+                    fix='enable pyo3\'s "abi3-py310" feature on the Cargo dependency, rebuild, and '
+                    "re-stage only the cp310-abi3 wheels",
+                )
+            )
+
     # Reuse the existing wheel check (PKG-003/004/005) per staged wheel;
     # the sdist backend check only needs to run once (it reads the same
     # pyproject.toml regardless of which wheel it's paired with).
-    sdist_path = staged.sdist[0] if staged.sdist is not None else None
+    sdist_path = staged.sdist.path if staged.sdist is not None else None
     all_staged_wheels = [w for lst in matched.values() for w in lst]
     for i, wheel in enumerate(all_staged_wheels):
         report = check_wheel(ci, wheel.path, sdist_path if i == 0 else None, soldr_floor=soldr_floor)
@@ -306,7 +332,7 @@ def verify_staged_artifacts(  # noqa: C901
             )
         )
     if staged.sdist is not None:
-        path, parts = staged.sdist
+        path, parts = staged.sdist.path, staged.sdist.parts
         artifacts.append(
             ArtifactRecord(path=path.name, kind="sdist", platform=None, version=parts.version, sha256=_sha256_file(path))
         )
@@ -564,7 +590,7 @@ def write_release_manifest(report: ReleaseVerifyReport, dist_dir: Path) -> Path:
     return out_path
 
 
-def to_json_dict(report: ReleaseVerifyReport) -> dict[str, object]:
+def to_json_dict(report: ReleaseVerifyReport) -> dict[str, JsonValue]:
     return {
         "candidate_sha": report.candidate_sha,
         "ci_toml_digest": report.ci_toml_digest,

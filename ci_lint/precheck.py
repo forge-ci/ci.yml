@@ -21,6 +21,7 @@ from ci_lint.finding import Finding, Status
 from ci_lint.rules.bin_artifacts import check_group_bin
 from ci_lint.rules.build_parallelism import check_gen_012
 from ci_lint.rules.cache_payload import check_cache_007_static
+from ci_lint.rules.cargo_registry_cache import check_cache_037
 from ci_lint.rules.cache_restore_copy import check_gen_013
 from ci_lint.rules.cache_static import check_group9
 from ci_lint.rules.complexity import check_complexity
@@ -29,6 +30,7 @@ from ci_lint.rules.merge_queue import check_gen_022
 from ci_lint.gate_bare_tools import check_no_bare_rust
 from ci_lint.local_gate import GATE_FILE, check_gate_static
 from ci_lint.remote_only import check_gate_012
+from ci_lint.act_static import check_act_002
 from ci_lint.rules.ci_pre import check_group12
 from ci_lint.rules.contract import check_ct_006, check_tag_001, check_tag_002
 from ci_lint.rules.layout import check_group6
@@ -126,7 +128,7 @@ GROUP_LABELS: dict[int, str] = {
     15: "paths blast radius + platform check-only coverage + cook safety (GEN-007, RUST-008/010)",
     16: "default-branch skips only through verified reuse (GEN-021)",
     17: "local gate first: remote quick gate mirrors the local gate, PR entry verifies it (GATE-001/002)",
-    18: "remote-only checks never gate a PR: CodeRabbit suppressed, act-impossible steps confined, no app waits (GATE-012)",
+    18: "remote-only checks never gate a PR: CodeRabbit suppressed, act-impossible steps confined, no app waits (GATE-012); local workflow runs go through bosn -> pinned act2, no legacy action-cache flags (ACT-002)",
     19: "function-complexity ratchet: clippy and ruff ceilings, per-function expect/noqa only (RUST-018, PY-004)",
     20: "GitHub API budget: no unbounded GitHub re-read loops in run:, ci/ or skill/tool scripts (GHAPI-001)",
     21: "async guard lints: workspace deny + member inheritance + clippy.toml well-formed (RUST-019)",
@@ -175,9 +177,11 @@ def run_precheck(repo_root: Path, *, title: str = "", local: bool = False, live:
         all_findings.extend(check_group8(ci, repo_root))
         if ci.profile in NATIVE_WHEEL_PROFILES:
             all_findings.extend(check_pkg_010(repo_root))
-        findings9, cache_arithmetic = check_group9(ci, repo_root)
-        all_findings.extend(findings9)
+        group9 = check_group9(ci, repo_root)
+        cache_arithmetic = group9.arithmetic
+        all_findings.extend(group9.findings)
         all_findings.extend(check_cache_007_static(ci, repo_root))
+        all_findings.extend(check_cache_037(ci, repo_root))
         all_findings.extend(check_cache_025(repo_root))
         all_findings.extend(check_cache_033(repo_root))
         all_findings.extend(check_group_bin(ci, repo_root))
@@ -203,6 +207,9 @@ def run_precheck(repo_root: Path, *, title: str = "", local: bool = False, live:
         all_findings.extend(check_ghapi_001(repo_root))
         all_findings.extend(check_gen_023(repo_root))
         all_findings.extend(check_gen_030(repo_root))
+        gate_cfg = ci.local.gate
+        gate_runs = () if gate_cfg is None else (gate_cfg.run, *(lane.run for lane in gate_cfg.lanes))
+        all_findings.extend(check_act_002(repo_root, gate_runs))
         if ci.local.gate is not None:
             all_findings.extend(check_gate_static(ci.local.gate, repo_root))
             all_findings.extend(check_no_bare_rust(repo_root, ci.local.gate.run, workflows=False))

@@ -23,6 +23,7 @@ from ci_lint.rules.cache_static import (
     check_cache_031,
     check_cache_032,
     check_cache_034,
+    check_cache_024,
     check_cache_038,
     parse_size,
 )
@@ -133,23 +134,27 @@ class CacheStaticFixtureTest(unittest.TestCase):
         findings = _loaded.findings
         assert ci is not None, findings
         self.assertEqual([], [f for f in findings if f.rule == "CT-002"])
-        found, arithmetic = check_cache_004(ci)
+        _r = check_cache_004(ci)
+        found, arithmetic = _r.findings, _r.arithmetic
         self.assertNotIn("CACHE-004", [f.rule for f in found], msg=arithmetic)
         self.assertIn("ccache", arithmetic)
 
         ci = load_ci_toml(fixture("CACHE-004", "red-cpp")).ci
         assert ci is not None
-        found, arithmetic = check_cache_004(ci)
+        _r = check_cache_004(ci)
+        found, arithmetic = _r.findings, _r.arithmetic
         self.assertIn("CACHE-004", [f.rule for f in found], msg=arithmetic)
 
     def test_cache_004_budget_exceeded_without_pre_prune(self) -> None:
         ci = load_ci_toml(fixture("CACHE-004", "red")).ci
-        findings, arithmetic = check_cache_004(ci)
+        _r = check_cache_004(ci)
+        findings, arithmetic = _r.findings, _r.arithmetic
         self.assertIn("CACHE-004", [f.rule for f in findings])
         self.assertIn("worst case", arithmetic)
 
         ci = load_ci_toml(fixture("CACHE-004", "green")).ci
-        findings, arithmetic = check_cache_004(ci)
+        _r = check_cache_004(ci)
+        findings, arithmetic = _r.findings, _r.arithmetic
         self.assertNotIn("CACHE-004", [f.rule for f in findings])
 
     def test_cache_004_budget_over_10gb_is_always_a_violation(self) -> None:
@@ -158,7 +163,8 @@ class CacheStaticFixtureTest(unittest.TestCase):
 
         big = replace(ci.cache, budget="11GB")
         ci_big = replace(ci, cache=big)
-        findings, _ = check_cache_004(ci_big)
+        _r = check_cache_004(ci_big)
+        findings, _ = _r.findings, _r.arithmetic
         self.assertIn("CACHE-004", [f.rule for f in findings])
 
     def test_cache_004_full_pre_prune_removes_only_the_lockfile_peak_term(self) -> None:
@@ -182,7 +188,8 @@ class CacheStaticFixtureTest(unittest.TestCase):
         # the fixed formula must still fail, even though every writer flow
         # pre-prunes.
         tight = replace(ci, cache=replace(ci.cache, budget="1GB"))
-        findings, arithmetic = check_cache_004(tight)
+        _r = check_cache_004(tight)
+        findings, arithmetic = _r.findings, _r.arithmetic
         self.assertIn("CACHE-004", [f.rule for f in findings], msg=arithmetic)
         self.assertIn("lockfile peak waived", arithmetic)
 
@@ -190,7 +197,8 @@ class CacheStaticFixtureTest(unittest.TestCase):
         # i.e. below steady + lockfile-peak + pr.budget = ~1.104GB) to prove
         # the lockfile-peak term really was dropped, not just shrunk.
         just_enough = replace(ci, cache=replace(ci.cache, budget="1100MB"))
-        findings2, arithmetic2 = check_cache_004(just_enough)
+        _r = check_cache_004(just_enough)
+        findings2, arithmetic2 = _r.findings, _r.arithmetic
         self.assertNotIn("CACHE-004", [f.rule for f in findings2], msg=arithmetic2)
 
     def test_cache_004_partial_pre_prune_still_counts_the_lockfile_peak(self) -> None:
@@ -198,7 +206,8 @@ class CacheStaticFixtureTest(unittest.TestCase):
 
         ci = load_ci_toml(fixture("CACHE-004", "green")).ci
         one_flow_only = replace(ci, flows={**ci.flows, "nightly": replace(ci.flows["nightly"], pre_prune=False)})
-        findings, arithmetic = check_cache_004(replace(one_flow_only, cache=replace(one_flow_only.cache, budget="1100MB")))
+        _r = check_cache_004(replace(one_flow_only, cache=replace(one_flow_only.cache, budget="1100MB")))
+        findings, arithmetic = _r.findings, _r.arithmetic
         self.assertIn("CACHE-004", [f.rule for f in findings], msg=arithmetic)
         self.assertIn("not every writer flow pre-prunes", arithmetic)
 
@@ -685,3 +694,60 @@ class Cache038RacingSoldrWritersTest(unittest.TestCase):
             "on: [push]\njobs:\n  a:\n" + call + "        with:\n          suffix: x\n  b:\n" + call
         )
         self.assertEqual(self._check(distinct, action), [])
+
+
+class Cache024AutoKeyTrustedWritersTest(unittest.TestCase):
+    """CACHE-024 (#185/#420): `key: auto` on GitHub needs auto-key-trusted-writers."""
+
+    WRITER = "zackees/bosn/.github/workflows/ci.yml@" + "a" * 40 + ":123:1:456"
+
+    def _c24(self, with_: str, runs_on: str = "ubuntu-24.04", action: str | None = None) -> list[tuple[str, str]]:
+        repo = self._repo("on: [push]\njobs:\n" + self._job("build", runs_on, with_), action)
+        ci = load_ci_toml(repo).ci
+        return [(f.rule, f.status.value) for f in check_cache_024(ci, repo)]
+
+    _repo = Cache038RacingSoldrWritersTest._repo
+    _job = staticmethod(Cache038RacingSoldrWritersTest._job)
+
+    @requires_yaml_tooling
+    def test_literal_auto_without_writers_is_violation(self) -> None:
+        self.assertEqual(self._c24("          key: auto\n"), [("CACHE-024", "violation")])
+        self.assertEqual(
+            self._c24("          key: auto\n          auto-key-trusted-writers: ''\n"), [("CACHE-024", "violation")]
+        )
+        self.assertEqual(self._c24("          auto-key: 'true'\n"), [("CACHE-024", "violation")])
+
+    @requires_yaml_tooling
+    def test_act_guard_default_and_self_hosted_are_clean(self) -> None:
+        self.assertEqual(self._c24("          key: ${{ env.ACT && 'auto' || '' }}\n"), [])
+        self.assertEqual(self._c24(""), [])
+        self.assertEqual(self._c24("          key: mykey\n          auto-key: 'true'\n"), [])
+        self.assertEqual(self._c24("          key: auto\n", runs_on="[self-hosted, linux]"), [])
+
+    @requires_yaml_tooling
+    def test_valid_writers_clean_malformed_violation(self) -> None:
+        self.assertEqual(self._c24(f"          key: auto\n          auto-key-trusted-writers: {self.WRITER}\n"), [])
+        self.assertEqual(
+            self._c24("          key: auto\n          auto-key-trusted-writers: some-job\n"),
+            [("CACHE-024", "violation")],
+        )
+
+    @requires_yaml_tooling
+    def test_expressions_need_review(self) -> None:
+        self.assertEqual(self._c24("          key: ${{ vars.KEY }}\n"), [("CACHE-024", "needs_review")])
+        self.assertEqual(self._c24("          auto-key: ${{ inputs.auto }}\n"), [("CACHE-024", "needs_review")])
+        self.assertEqual(
+            self._c24("          key: auto\n          auto-key-trusted-writers: ${{ vars.W }}\n"),
+            [("CACHE-024", "needs_review")],
+        )
+
+    @requires_yaml_tooling
+    def test_composite_input_resolved(self) -> None:
+        action = (
+            "runs:\n  using: composite\n  steps:\n      - uses: zackees/setup-soldr@v0\n"
+            "        with:\n          key: ${{ inputs.key }}\n"
+            "inputs:\n  key:\n    default: auto\n"
+        )
+        repo = self._repo("on: [push]\njobs:\n  b:\n    runs-on: ubuntu-24.04\n    steps:\n      - uses: ./.github/actions/soldr\n", action)
+        ci = load_ci_toml(repo).ci
+        self.assertEqual([(f.rule, f.status.value) for f in check_cache_024(ci, repo)], [("CACHE-024", "violation")])

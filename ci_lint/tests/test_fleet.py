@@ -223,7 +223,8 @@ class SyncIssuesTest(unittest.TestCase):
         from ci_lint.fleet import FleetReport
 
         report = FleetReport(("zackees",), (_scan((Finding(rule="RUN-001", path="a.yml", message="x", fix="y"),)),), ())
-        actions, errors = plan_sync(report, fetch, "t")
+        plan = plan_sync(report, fetch, "t")
+        actions, errors = plan.actions, plan.errors
         self.assertEqual(errors, [])
         self.assertEqual([(a.action, a.number) for a in actions], [("update", 3)])
 

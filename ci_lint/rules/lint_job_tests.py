@@ -59,7 +59,7 @@ def is_lint_job(job_id: str, name: str | None) -> bool:
 def find_test_suite(tokens: tuple[str, ...]) -> str | None:
     found = find_test_invocation(tokens)
     if found is not None:
-        return "cargo nextest run" if found[0] == "nextest" else "cargo test"
+        return "cargo nextest run" if found.kind == "nextest" else "cargo test"
     for i, tok in enumerate(tokens):
         if tok.rsplit("/", 1)[-1] in ("pytest", "py.test", "pytest.exe"):
             return "pytest"

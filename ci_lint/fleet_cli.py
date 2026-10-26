@@ -132,8 +132,8 @@ def _cmd_sync_issues(args: argparse.Namespace) -> int:  # noqa: C901
             print(f"ci-lint sync-issues: cannot read --from-scan: {exc}", file=sys.stderr)
             return 2
         if args.dry_run and args.offline:
-            actions, errors = plan_sync(report, None, "")
-            print(json.dumps(sync_to_json_list(actions), indent=2) if args.json else render_sync_text(actions, errors))
+            plan = plan_sync(report, None, "")
+            print(json.dumps(sync_to_json_list(plan.actions), indent=2) if args.json else render_sync_text(plan.actions, plan.errors))
             return 0
         got = _fetcher(args, "sync-issues")
         if got is None:
@@ -151,8 +151,8 @@ def _cmd_sync_issues(args: argparse.Namespace) -> int:  # noqa: C901
         print(json.dumps(apply_to_json(result), indent=2) if args.json else render_sync_apply_text(result))
         return 1 if result.errors else 0
 
-    actions, errors = plan_sync(report, None if args.offline else fetch, token)
-    print(json.dumps(sync_to_json_list(actions), indent=2) if args.json else render_sync_text(actions, errors))
+    plan = plan_sync(report, None if args.offline else fetch, token)
+    print(json.dumps(sync_to_json_list(plan.actions), indent=2) if args.json else render_sync_text(plan.actions, plan.errors))
     return 0
 
 

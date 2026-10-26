@@ -16,6 +16,7 @@ from pathlib import Path
 
 from ci_lint.finding import Finding
 from ci_lint.repo_files import list_repo_files
+from ci_lint.rules.pkg_abi3 import check_pkg_008
 from ci_lint.schema import CliBinary, CiToml
 from ci_lint.workflow_scan import as_dict, jobs_of, load_workflows, steps_of
 from ci_lint.yaml_io import LoadStatus
@@ -451,6 +452,7 @@ def check_group8(ci: CiToml, repo_root: Path) -> list[Finding]:
     if ci.profile in NATIVE_WHEEL_PROFILES:
         findings.extend(check_pkg_004(repo_root))
         findings.extend(check_pkg_003(ci, repo_root))
+        findings.extend(check_pkg_008(repo_root))
     findings.extend(check_pkg_005(repo_root))
     findings.extend(check_pkg_007(repo_root))
     return findings
