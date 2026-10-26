@@ -20,6 +20,7 @@ from ci_lint.runtime.wheel import (
     check_magic,
     check_wheel,
     parse_wheel_filename,
+    SoldrVersion,
     soldr_requires_floor,
 )
 from ci_lint.schema import load_ci_toml
@@ -93,28 +94,34 @@ def _build_wheel(
 
 class MagicCheckUnitTest(unittest.TestCase):
     def test_elf_x86_64_matches(self) -> None:
-        ok, detail = check_magic(ELF_X86_64, "elf", "x86_64")
+        magic = check_magic(ELF_X86_64, "elf", "x86_64")
+        ok, detail = magic.ok, magic.detail
         self.assertTrue(ok, detail)
 
     def test_elf_wrong_arch_fails(self) -> None:
-        ok, detail = check_magic(ELF_X86_64, "elf", "aarch64")
+        magic = check_magic(ELF_X86_64, "elf", "aarch64")
+        ok, detail = magic.ok, magic.detail
         self.assertFalse(ok)
         self.assertIn("e_machine", detail)
 
     def test_elf_wrong_magic_fails(self) -> None:
-        ok, _ = check_magic(b"not an elf file at all", "elf", "x86_64")
+        magic = check_magic(b"not an elf file at all", "elf", "x86_64")
+        ok, _ = magic.ok, magic.detail
         self.assertFalse(ok)
 
     def test_pe_x64_matches(self) -> None:
-        ok, detail = check_magic(PE_X64, "pe", "x86_64")
+        magic = check_magic(PE_X64, "pe", "x86_64")
+        ok, detail = magic.ok, magic.detail
         self.assertTrue(ok, detail)
 
     def test_macho_arm64_matches(self) -> None:
-        ok, detail = check_magic(MACHO_ARM64, "macho", "aarch64")
+        magic = check_magic(MACHO_ARM64, "macho", "aarch64")
+        ok, detail = magic.ok, magic.detail
         self.assertTrue(ok, detail)
 
     def test_macho_wrong_arch_fails(self) -> None:
-        ok, _ = check_magic(MACHO_ARM64, "macho", "x86_64")
+        magic = check_magic(MACHO_ARM64, "macho", "x86_64")
+        ok, _ = magic.ok, magic.detail
         self.assertFalse(ok)
 
 
@@ -204,8 +211,8 @@ class WheelCheckTest(unittest.TestCase):
         self.assertEqual([], pkg004)
 
     def test_soldr_requires_floor_parses_operators(self) -> None:
-        self.assertEqual((0, 9, 26), soldr_requires_floor(FIXTURES / "PKG-004" / "red-generator-floor"))
-        self.assertEqual((1, 2, 3), soldr_requires_floor(FIXTURES / "PKG-004" / "green"))
+        self.assertEqual(SoldrVersion(0, 9, 26), soldr_requires_floor(FIXTURES / "PKG-004" / "red-generator-floor"))
+        self.assertEqual(SoldrVersion(1, 2, 3), soldr_requires_floor(FIXTURES / "PKG-004" / "green"))
         self.assertIsNone(soldr_requires_floor(self.tmp_path))
 
     def test_wrong_abi_tag_is_pkg_004(self) -> None:

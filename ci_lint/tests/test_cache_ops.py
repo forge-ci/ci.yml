@@ -125,10 +125,11 @@ class JanitorTest(unittest.TestCase):
         (9001, PR #7 CLOSED); an open PR's stale-base delta (9002) stays
         trim's job."""
 
-        result, table = janitor(
+        report = janitor(
             self.ci, fetch=self.fetch, graphql=self.graphql, delete=None, token=TOKEN, repo=REPO_SLUG,
             dry_run=True, stale_days=999999,  # disable the stale-entry sweep for this assertion
         )
+        result, table = report.result, report.text
         planned_ids = {p.id for p in result.planned}
         self.assertEqual({9001, 9003, 9004, 9005}, planned_ids)
         self.assertIn("family", table)
@@ -139,10 +140,11 @@ class JanitorTest(unittest.TestCase):
         import datetime
 
         far_future = datetime.datetime(2030, 1, 1, tzinfo=datetime.timezone.utc).timestamp()
-        result, _table = janitor(
+        report = janitor(
             self.ci, fetch=self.fetch, graphql=self.graphql, delete=None, token=TOKEN, repo=REPO_SLUG,
             dry_run=True, stale_days=5, now=far_future, max_deletes=100,
         )
+        result, _table = report.result, report.text
         planned_ids = {p.id for p in result.planned}
         self.assertIn(9002, planned_ids)  # an open PR's delta, stale by access time
         # 8237210113 (the live "compile" base entry) is stale too, but it is the newest
@@ -151,10 +153,11 @@ class JanitorTest(unittest.TestCase):
 
     def test_before_after_table_reflects_a_live_delete(self) -> None:
         calls: list[str] = []
-        result, table = janitor(
+        report = janitor(
             self.ci, fetch=self.fetch, graphql=self.graphql, delete=_recording_delete(calls), token=TOKEN,
             repo=REPO_SLUG, dry_run=False, stale_days=999999,
         )
+        result, table = report.result, report.text
         self.assertEqual(4, len(result.deleted))
         self.assertIn("retired", table)  # id 9003's family label
 
@@ -173,10 +176,11 @@ class JanitorTest(unittest.TestCase):
             "created_at": "2026-10-20T00:00:00Z", "last_accessed_at": "2026-10-25T00:00:00Z",
         }
         fetch = _fetch_from({"total_count": 1, "actions_caches": [entry]})
-        result, _table = janitor(
+        report = janitor(
             self.ci, fetch=fetch, graphql=self.graphql, delete=None, token=TOKEN, repo=REPO_SLUG,
             dry_run=True, stale_days=999999,
         )
+        result, _table = report.result, report.text
         warning = result.warning or ""
         self.assertIn("live footprint 500000000B", warning)
         self.assertIn("exceed max", warning)
@@ -221,10 +225,11 @@ class JanitorIssue23Test(unittest.TestCase):
         ]
 
     def _run(self, entries, graphql, ci=None):
-        result, _table = janitor(
+        report = janitor(
             ci or self.ci, fetch=_fetch_from({"actions_caches": entries}), graphql=graphql, delete=None,
             token=TOKEN, repo=REPO_SLUG, dry_run=True, stale_days=999999, now=NOW,
         )
+        result, _table = report.result, report.text
         return result
 
     def test_closed_pr_keyed_entries_deleted_open_and_young_kept(self) -> None:
@@ -316,10 +321,11 @@ class PrepruneTest(unittest.TestCase):
         self.ci = ci
 
     def test_under_budget_without_lockfile_change_prunes_nothing(self) -> None:
-        result, summary = preprune(
+        report = preprune(
             self.ci, fetch=_fetch_from(_load("caches-live-template.json")), graphql=None, delete=None,
             token=TOKEN, repo=REPO_SLUG, lockfile_changed=False, dry_run=True,
         )
+        result, summary = report.result, report.text
         self.assertEqual((), result.planned)
         self.assertIn("under budget", summary)
 
@@ -327,10 +333,11 @@ class PrepruneTest(unittest.TestCase):
         from dataclasses import replace
 
         ci_tiny_budget = replace(self.ci, cache=replace(self.ci.cache, budget="1B"))
-        result, summary = preprune(
+        report = preprune(
             ci_tiny_budget, fetch=_fetch_from(_load("caches-registry-per-job.json")), graphql=None, delete=None,
             token=TOKEN, repo=REPO_SLUG, lockfile_changed=True, dry_run=True,
         )
+        result, summary = report.result, report.text
         self.assertIn("OVER budget", summary)
         # the superseded (CACHE-006) "registry" entry -- an older Cargo.lock
         # hash under the same toolchain digest (ci.yml#88) -- is lockfile-keyed
@@ -393,7 +400,7 @@ class LruFootprintTest(unittest.TestCase):
                                     CacheShape("c", "500MB"))))
         entries = [self._entry(1, "2026-10-04T00:00:00Z", 1200),
                    self._entry(2, "2026-10-03T00:00:00Z", 1200)]
-        self.assertEqual(_lru_evictions(ci, entries), {})
+        self.assertEqual(_lru_evictions(ci, entries), ())
 
     def test_an_over_budget_shapes_family_still_evicts(self) -> None:
         from ci_lint.schema import CacheShape
@@ -401,7 +408,7 @@ class LruFootprintTest(unittest.TestCase):
         ci = self._ci(self._family((CacheShape("a", "1300MB"),)))
         entries = [self._entry(1, "2026-10-04T00:00:00Z", 1200),
                    self._entry(2, "2026-10-03T00:00:00Z", 1200)]
-        self.assertEqual(set(_lru_evictions(ci, entries)), {2})
+        self.assertEqual({e.cache_id for e in _lru_evictions(ci, entries)}, {2})
 
 
 class JanitorRepoBudgetTest(unittest.TestCase):
@@ -417,10 +424,11 @@ class JanitorRepoBudgetTest(unittest.TestCase):
         self.ci = replace(ci, cache=replace(ci.cache, budget="100MB"))
 
     def _run(self, entries, **kwargs):
-        result, _table = janitor(
+        report = janitor(
             self.ci, fetch=_fetch_from({"actions_caches": entries}), graphql=None, delete=None,
             token=TOKEN, repo=REPO_SLUG, dry_run=True, stale_days=999999, now=NOW, **kwargs,
         )
+        result, _table = report.result, report.text
         return result
 
     def test_over_budget_evicts_least_recently_accessed_first(self) -> None:
