@@ -850,6 +850,21 @@ class SetupUvImpliedSaveGateTest(unittest.TestCase):
         self.assertEqual([], check_cache_003_setup_uv(ci, repo))
 
     @requires_yaml_tooling
+    def test_mode_none_skips_disabled_cache(self) -> None:
+        import shutil
+        import tempfile
+
+        src = fixture("CACHE-003", "red")
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = pathlib.Path(tmp) / "repo"
+            shutil.copytree(src, repo)
+            wf = repo / ".github" / "workflows" / "ci.yml"
+            wf.write_text(wf.read_text(encoding="utf-8").replace('save-cache: "true"', "enable-cache: false"),
+                          encoding="utf-8")
+            ci, _ = self._ci("red", "none")
+            self.assertEqual([], check_cache_003_setup_uv(ci, repo))
+
+    @requires_yaml_tooling
     def test_pr_caching_mode_without_opt_in_is_silent(self) -> None:
         ci, repo = self._ci("red", "delta")
         self.assertEqual([], check_cache_003_setup_uv(ci, repo))

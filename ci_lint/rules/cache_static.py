@@ -259,8 +259,8 @@ def _check_setup_uv_save_gate_implied(repo_root: Path) -> list[Finding]:
                 continue
             with_ = use_step.with_
             enable = with_.get("enable-cache")
-            if isinstance(enable, str) and enable.strip().lower() == "false":
-                continue
+            if enable is False or (isinstance(enable, str) and enable.strip().lower() == "false"):
+                continue  # YAML may hand back a bool or a string
             reason = _setup_uv_save_cache_violation(with_.get("save-cache"))
             if reason is None:
                 continue
