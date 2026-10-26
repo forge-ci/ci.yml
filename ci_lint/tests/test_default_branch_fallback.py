@@ -27,6 +27,7 @@ class DefaultBranchFallbackTest(unittest.TestCase):
         env.start()
         self.addCleanup(env.stop)
         os.environ.pop("GITHUB_EVENT_PATH", None)
+        os.environ.pop("RUNNER_TEMP", None)
         fetch = mock.patch.object(cli, "default_fetch", _offline)
         fetch.start()
         self.addCleanup(fetch.stop)
@@ -74,6 +75,19 @@ class DefaultBranchFallbackTest(unittest.TestCase):
 
     def test_neither_branch_is_an_error(self) -> None:
         self.assertIsNone(self._resolve(None, self._repo("trunk"))[0])
+
+    def test_memo_skips_second_lookup(self) -> None:
+        os.environ["RUNNER_TEMP"] = str(self.tmp)
+        root = self._repo("master")
+        self.assertEqual(self._resolve(None, root)[0], "master")
+        with mock.patch.object(cli, "infer_default_branch", side_effect=AssertionError("looked up again")):
+            self.assertEqual(self._resolve(None, root)[0], "master")
+
+    def test_explicit_bypasses_memo(self) -> None:
+        os.environ["RUNNER_TEMP"] = str(self.tmp)
+        root = self._repo("master")
+        self._resolve(None, root)
+        self.assertEqual(self._resolve("dev", root)[0], "dev")
 
 
 if __name__ == "__main__":
