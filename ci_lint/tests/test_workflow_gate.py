@@ -11,6 +11,7 @@ from pathlib import Path
 from ci_lint.cargo_messages import JsonValue
 from ci_lint.workflow_gate import build_plan
 from ci_lint.cli import main
+from ci_lint.tests.helpers import requires_yaml_tooling
 
 
 class WorkflowGateTest(unittest.TestCase):
@@ -57,6 +58,7 @@ jobs:
     def plan(self, needs: dict[str, JsonValue]) -> dict[str, JsonValue]:
         return build_plan(self.repo, "ci.yml", "ci-ok", needs, event="pull_request")
 
+    @requires_yaml_tooling
     def test_native_mode_selection_and_attested_skips_stay_required(self) -> None:
         for tier, required in (
             ("minimal", ["mode", "fast"]),
@@ -67,6 +69,7 @@ jobs:
             with self.subTest(tier=tier):
                 self.assertEqual(self.plan(self.needs(tier))["required_jobs"], required)
 
+    @requires_yaml_tooling
     def test_failed_or_missing_selection_producer_cannot_excuse_jobs(self) -> None:
         for result in ("failure", "skipped", "cancelled", None):
             needs = self.needs("minimal")
@@ -77,6 +80,7 @@ jobs:
             with self.subTest(result=result):
                 self.assertEqual(self.plan(needs)["required_jobs"], ["mode", "fast", "windows", "macos"])
 
+    @requires_yaml_tooling
     def test_unselected_failure_still_fails_the_gate(self) -> None:
         needs = self.needs("minimal")
         needs["macos"]["result"] = "failure"
@@ -87,6 +91,7 @@ jobs:
             with self.subTest(workflow=workflow, gate=gate), self.assertRaises(ValueError):
                 build_plan(self.repo, workflow, gate, self.needs("minimal"), event="pull_request")
 
+    @requires_yaml_tooling
     def test_actual_cli_keeps_unexplained_skip_red(self) -> None:
         needs = self.repo / "needs.json"
         values = self.needs("minimal")
@@ -98,11 +103,13 @@ jobs:
             needs.write_text(json.dumps(values), encoding="utf-8")
             self.assertEqual(main(args), 0)
 
+    @requires_yaml_tooling
     def test_missing_selection_output_keeps_every_job_required(self) -> None:
         needs = self.needs("minimal")
         needs["mode"]["outputs"] = {"skip_fast": "true"}
         self.assertEqual(self.plan(needs)["required_jobs"], ["mode", "fast", "windows", "macos"])
 
+    @requires_yaml_tooling
     def test_default_dependency_skip_requires_source_exclusion(self) -> None:
         path = self.repo / ".github/workflows/ci.yml"
         text = (
@@ -114,6 +121,7 @@ jobs:
         self.assertNotIn("macos-tests", self.plan(self.needs("minimal"))["required_jobs"])
         self.assertIn("macos-tests", self.plan(self.needs("full"))["required_jobs"])
 
+    @requires_yaml_tooling
     def test_matrix_or_undeclared_outputs_cannot_excuse_coverage(self) -> None:
         path = self.repo / ".github/workflows/ci.yml"
         original = path.read_text(encoding="utf-8")
@@ -124,6 +132,7 @@ jobs:
             path.write_text(text, encoding="utf-8")
             self.assertEqual(self.plan(self.needs("minimal"))["required_jobs"], ["mode", "fast", "windows", "macos"])
 
+    @requires_yaml_tooling
     def test_trust_decision_and_its_output_alias_cannot_remove_required_jobs(self) -> None:
         path = self.repo / ".github/workflows/ci.yml"
         original = path.read_text(encoding="utf-8")
@@ -142,6 +151,7 @@ jobs:
         with self.assertRaises(ValueError):
             build_plan(self.repo, "ci.yml", "ci-ok", self.needs("minimal"), event="")
 
+    @requires_yaml_tooling
     def test_every_decision_step_output_alias_keeps_validation_required(self) -> None:
         path = self.repo / ".github/workflows/ci.yml"
         original = path.read_text(encoding="utf-8")

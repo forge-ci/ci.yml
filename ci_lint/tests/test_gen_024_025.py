@@ -11,6 +11,7 @@ from pathlib import Path
 from ci_lint.rules.needs_graph import check_needs_graph
 from ci_lint.workflow_scan import ParsedYamlFile
 from ci_lint.yaml_io import LoadStatus
+from ci_lint.tests.helpers import requires_yaml_tooling
 
 GATE = {"runs-on": "ubuntu-latest", "outputs": {"mode": "x"}, "steps": [{"run": "python ci/ci_mode.py"}]}
 
@@ -60,6 +61,7 @@ class Gen024Test(unittest.TestCase):
         janitor = {"runs-on": "ubuntu-latest", "needs": ["gate"], "steps": [{"run": "ci-lint cache janitor --repo ."}]}
         self.assertEqual(check_gen_024(_wf({"gate": GATE, "janitor": janitor})), [])
 
+    @requires_yaml_tooling
     def test_fixture_repo_flags_only_the_cache_less_ordering_edge(self) -> None:
         root = Path(__file__).parent / "fixtures" / "GEN-024" / "legit-edges"
         f = [x for x in check_needs_graph(root) if x.rule == "GEN-024"]

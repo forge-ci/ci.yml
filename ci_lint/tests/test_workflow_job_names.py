@@ -12,6 +12,7 @@ from ci_lint.cli import main
 from ci_lint.runtime.gate import compute_gate
 from ci_lint.workflow_gate import build_plan
 from ci_lint.workflow_job_names import WorkflowJobNames
+from ci_lint.tests.helpers import requires_yaml_tooling
 
 
 class WorkflowJobNamesTest(unittest.TestCase):
@@ -72,11 +73,13 @@ jobs:
             workflow_jobs=self.source(),
         )
 
+    @requires_yaml_tooling
     def test_native_names_and_all_three_shards_reuse(self) -> None:
         self.assertEqual(self.source().for_job("static"), ("Static checks",))
         self.assertEqual(set(self.source().for_job("unit")), set(self.names))
         self.assertTrue(self.report().ok)
 
+    @requires_yaml_tooling
     def test_incomplete_or_duplicate_shard_proof_fails(self) -> None:
         original = self.doc["jobs"]
         for jobs in (original[:-1], original + [original[0]], [original[0]] * 3):
@@ -84,14 +87,17 @@ jobs:
                 self.doc["jobs"] = jobs
                 self.assertFalse(self.report().ok)
 
+    @requires_yaml_tooling
     def test_distinct_names_cannot_reuse_one_job_id(self) -> None:
         self.doc["jobs"][2]["job_id"] = self.doc["jobs"][0]["job_id"]
         self.assertFalse(self.report().ok)
 
+    @requires_yaml_tooling
     def test_native_source_never_falls_back_to_a_bare_caller_name(self) -> None:
         self.doc["jobs"] = [{"name": "unit", "job_id": 9000}]
         self.assertFalse(self.report().ok)
 
+    @requires_yaml_tooling
     def test_every_live_shard_checks_name_head_run_and_conclusion(self) -> None:
         for field, value in (("name", "another job"), ("head_sha", "other"), ("run_id", 556),
                              ("conclusion", "failure")):
@@ -108,11 +114,13 @@ jobs:
         with self.assertRaises(ValueError):
             self.source().for_job("unit")
 
+    @requires_yaml_tooling
     def test_unknown_name_expression_never_uses_a_head_supplied_alias(self) -> None:
         path = self.directory / "test.yml"
         path.write_text(path.read_text().replace("${{ inputs.target }}", "${{ github.ref }}"))
         self.assertFalse(self.report().ok)
 
+    @requires_yaml_tooling
     def test_actual_cli_derives_proofs_from_workflow_source(self) -> None:
         needs = self.repo / "needs.json"
         document = self.repo / "reuse.json"

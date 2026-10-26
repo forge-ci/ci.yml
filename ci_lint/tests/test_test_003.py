@@ -9,6 +9,7 @@ from pathlib import Path
 
 from ci_lint.finding import Status
 from ci_lint.rules.test_parallelism import check_test_003, workers_flag
+from ci_lint.tests.helpers import requires_yaml_tooling
 
 _WF = """name: ci
 on: [pull_request]
@@ -47,6 +48,7 @@ class WorkersFlagTest(unittest.TestCase):
 
 
 class Test003(unittest.TestCase):
+    @requires_yaml_tooling
     def test_no_evidence_is_review(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             findings = check_test_003(_repo(tmp, "uv run pytest -n auto"))
@@ -67,6 +69,7 @@ class Test003(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             self.assertEqual([], check_test_003(_repo(tmp, "pytest -n auto", _GOOD)))
 
+    @requires_yaml_tooling
     def test_cpu_bound_evidence_is_review(self) -> None:
         bad = dict(_GOOD, sum_test_seconds=135.0, wall_seconds=135.0)
         with tempfile.TemporaryDirectory() as tmp:
@@ -74,12 +77,14 @@ class Test003(unittest.TestCase):
         self.assertEqual(1, len(findings))
         self.assertIn("CPU-bound", findings[0].message)
 
+    @requires_yaml_tooling
     def test_malformed_evidence_is_review(self) -> None:
         bad = dict(_GOOD, physical_cores=0)
         with tempfile.TemporaryDirectory() as tmp:
             findings = check_test_003(_repo(tmp, "pytest -n auto", bad))
         self.assertIn("positive number", findings[0].message)
 
+    @requires_yaml_tooling
     def test_script_one_level(self) -> None:
         script = 'import subprocess\nsubprocess.run(["uv", "run", "pytest", "-n", "auto"], check=True)\n'
         with tempfile.TemporaryDirectory() as tmp:
