@@ -15,7 +15,12 @@ clauses.
   default branch: a ``schedule``-triggered workflow whose
   ``actions/checkout`` step pins a literal ``ref:`` other than the default
   branch is a violation (``needs_review`` when the default is unknown).
-  Expression refs (``${{ ... }}``) are not judged.
+  Expression refs (``${{ ... }}``) are not judged. Only a checkout of the
+  repository's own code counts (#480): a step whose ``repository:`` names
+  the ci.yml linter (the CT-004 pinned tool checkout) or any other
+  repository is skipped, and so is a job whose ``if:`` tests
+  ``github.event_name`` without ever admitting ``schedule`` (it never runs
+  in the sweep).
 
 The default branch comes from a caller (``ci-lint audit`` passes the one it
 read live), else from the checkout's ``refs/remotes/origin/HEAD``; with
@@ -32,8 +37,9 @@ from pathlib import Path
 from urllib.parse import parse_qs
 
 from ci_lint.finding import Finding, Status
+from ci_lint.repo_identity import is_ci_yml
 from ci_lint.workflow_scan import as_dict, get_on_section, jobs_of, load_workflows, steps_of
-from ci_lint.yaml_io import LoadStatus
+from ci_lint.yaml_io import LoadStatus, YamlValue
 
 RULE = "GEN-026"
 
@@ -177,8 +183,60 @@ def _check_badges(repo_root: Path, default: str | None) -> list[Finding]:
     return findings
 
 
+def resolve_own_slug(repo_root: Path) -> str | None:
+    """``owner/name`` of the checkout's ``origin`` remote, read from
+    ``.git/config``; None when absent."""
+
+    gd = _git_dir(repo_root)
+    if gd is None:
+        return None
+    try:
+        text = (gd / "config").read_text(encoding="utf-8")
+    except OSError:
+        return None
+    m = re.search(r'\[remote "origin"\][^\[]*?url\s*=\s*(\S+)', text)
+    if m is None:
+        return None
+    slug = re.search(r"[:/]([\w.-]+/[\w.-]+?)(?:\.git)?/?$", m.group(1))
+    return slug.group(1).lower() if slug else None
+
+
+def _checks_out_own_code(step: dict[str, YamlValue], own: str | None) -> bool:
+    repo = as_dict(step.get("with")).get("repository")
+    if not isinstance(repo, str) or not repo.strip():
+        return True
+    repo = repo.strip()
+    if repo.replace(" ", "") == "${{github.repository}}":
+        return True
+    if "${{" in repo or is_ci_yml(repo):
+        return False
+    return own is not None and repo.lower() == own
+
+
+def _job_skips_schedule(job: dict[str, YamlValue]) -> bool:
+    cond = str(job.get("if", ""))
+    # Conservative: any negation might admit schedule, so only a positive-only
+    # event test that never names schedule excludes the job.
+    return "event_name" in cond and "schedule" not in cond and "!" not in cond
+
+
+def _own_literal_checkout_ref(step: dict[str, YamlValue], own: str | None) -> str | None:
+    """The literal branch ``ref:`` of a checkout of the repo's own code, else None."""
+
+    uses = step.get("uses")
+    if not isinstance(uses, str) or not uses.startswith("actions/checkout@"):
+        return None
+    if not _checks_out_own_code(step, own):
+        return None
+    ref = as_dict(step.get("with")).get("ref")
+    if not isinstance(ref, str) or not ref.strip() or "${{" in ref:
+        return None
+    return ref.strip().removeprefix("refs/heads/")
+
+
 def _check_sweeps(repo_root: Path, default: str | None) -> list[Finding]:
     findings: list[Finding] = []
+    own = resolve_own_slug(repo_root)
     for wf in load_workflows(repo_root):
         if wf.status != LoadStatus.OK:
             continue
@@ -186,14 +244,12 @@ def _check_sweeps(repo_root: Path, default: str | None) -> list[Finding]:
         if "schedule" not in get_on_section(doc):
             continue
         for job_id, job in jobs_of(doc).items():
+            if _job_skips_schedule(job):
+                continue
             for step in steps_of(job):
-                uses = step.get("uses")
-                if not isinstance(uses, str) or not uses.startswith("actions/checkout@"):
+                ref = _own_literal_checkout_ref(step, own)
+                if ref is None:
                     continue
-                ref = as_dict(step.get("with")).get("ref")
-                if not isinstance(ref, str) or not ref.strip() or "${{" in ref:
-                    continue
-                ref = ref.strip().removeprefix("refs/heads/")
                 f = _branch_finding(
                     wf.path, None, f"scheduled sweep job {job_id!r} checks out a ref that", ref, default,
                     "let the scheduled sweep check out the default branch (drop the literal ref:)",

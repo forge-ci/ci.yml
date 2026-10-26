@@ -7,6 +7,11 @@ depends (directly or transitively) on every other job of the workflow, runs
 on `always()`, and holds the repo-wide non-cancelling `cache-janitor`
 group. The queue serializes default-branch cache writes, so that job has
 exclusive access and evicts by LRU itself before GitHub's eviction can.
+
+The #409 `cancel-superseded` job has no `needs:` and nothing depends on it
+except the janitor: the janitor must run after every job, so it is the one
+sanctioned dependent; any other job waiting on the cancel step would delay
+its own start for no benefit and is a violation.
 """
 
 from __future__ import annotations
@@ -21,6 +26,7 @@ from ci_lint.yaml_io import LoadStatus, YamlValue
 
 RULE = "GEN-022"
 JANITOR_GROUP = "cache-janitor"
+CANCEL_JOB = "cancel-superseded"
 
 
 def _needs(job: dict[str, YamlValue]) -> set[str]:
@@ -58,6 +64,26 @@ def _janitor_problems(job_id: str, job: dict[str, YamlValue], graph: dict[str, f
     return problems
 
 
+def _cancel_edge_findings(path: str, document: YamlValue) -> list[Finding]:
+    jobs = jobs_of(as_dict(document))
+    if CANCEL_JOB not in jobs:
+        return []
+    findings: list[Finding] = []
+    if _needs(jobs[CANCEL_JOB]):
+        findings.append(Finding(
+            rule=RULE, path=path, message=f"job '{CANCEL_JOB}' has `needs:`, so it cannot run first",
+            fix=f"drop `needs:` from '{CANCEL_JOB}'",
+        ))
+    for job_id, job in jobs.items():
+        if CANCEL_JOB in _needs(job) and not _runs_janitor(job):
+            findings.append(Finding(
+                rule=RULE, path=path,
+                message=f"job '{job_id}' needs '{CANCEL_JOB}'; only the end-of-queue cache janitor may depend on it",
+                fix=f"remove '{CANCEL_JOB}' from '{job_id}'.needs",
+            ))
+    return findings
+
+
 def check_gen_022(ci: CiToml, repo_root: Path) -> list[Finding]:
     workflows = [wf for wf in load_workflows(repo_root) if wf.status == LoadStatus.OK]
     if not workflows:
@@ -70,9 +96,9 @@ def check_gen_022(ci: CiToml, repo_root: Path) -> list[Finding]:
             fix="add `merge_group:` to the required CI workflow's triggers and enable the merge queue "
             "in the default branch's ruleset",
         )]
+    findings = [f for wf in queued for f in _cancel_edge_findings(wf.path, wf.document)]
     if not parse_size(ci.cache.budget):
-        return []
-    findings: list[Finding] = []
+        return findings
     for wf in queued:
         jobs = jobs_of(as_dict(wf.document))
         janitors = [job_id for job_id, job in jobs.items() if _runs_janitor(job)]

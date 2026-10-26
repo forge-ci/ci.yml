@@ -40,3 +40,13 @@ class MergeQueueTest(unittest.TestCase):
     @requires_yaml_tooling
     def test_merge_queue_without_budget_needs_no_janitor(self) -> None:
         self.assertEqual([], _messages("green-no-budget"))
+
+    @requires_yaml_tooling
+    def test_janitor_may_need_cancel_superseded(self) -> None:
+        self.assertEqual([], _messages("green-cancel"))
+
+    @requires_yaml_tooling
+    def test_other_job_needing_cancel_superseded_fails(self) -> None:
+        messages = _messages("red-cancel")
+        self.assertEqual(1, len(messages), messages)
+        self.assertIn("job 'test' needs 'cancel-superseded'", messages[0])
