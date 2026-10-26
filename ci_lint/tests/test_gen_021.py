@@ -94,6 +94,35 @@ class Gen021Test(unittest.TestCase):
         self.assertTrue(all(f.status == Status.NEEDS_REVIEW for f in findings))
         self.assertTrue(any("does not run `ci-lint reuse-check`" in f.message for f in findings))
 
+    def test_reuse_check_delegated_to_a_ci_script_counts(self) -> None:
+        # forge-ci/ci.yml#52 / template-python-rust-cmd#50: the template's
+        # decision job runs `python3 ci/reuse_decision.py`, whose argv list
+        # spells `"-m", "ci_lint", "reuse-check"` one token per line. That is
+        # a real decision, not a hand-written flag.
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            shutil.copytree(fixture("GEN-021", "review-unverified"), repo)
+            (repo / "ci").mkdir(exist_ok=True)
+            (repo / "ci" / "always_reuse.py").write_text(
+                "import subprocess, sys\n"
+                "cmd = [\n    sys.executable,\n    \"-m\",\n    \"ci_lint\",\n    \"reuse-check\",\n"
+                "    \"--required-job\",\n    f\"Test linux-x64 (unit) [{sys.argv[1]}]\",\n]\n"
+                "raise SystemExit(subprocess.run(cmd, check=False).returncode)\n",
+                encoding="utf-8",
+            )
+            findings = check_gen_021(repo)
+        self.assertFalse(any("does not run `ci-lint reuse-check`" in f.message for f in findings), findings)
+        self.assertEqual(findings, [])
+
+    def test_script_without_reuse_check_stays_unverified(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            shutil.copytree(fixture("GEN-021", "review-unverified"), repo)
+            (repo / "ci").mkdir(exist_ok=True)
+            (repo / "ci" / "always_reuse.py").write_text("print('reuse=true')\n", encoding="utf-8")
+            findings = check_gen_021(repo)
+        self.assertTrue(any("does not run `ci-lint reuse-check`" in f.message for f in findings))
+
     def test_coverage_and_consumption_gaps_are_needs_review(self) -> None:
         findings = check_gen_021(fixture("GEN-021", "review-coverage"))
         messages = " | ".join(f.message for f in findings)
