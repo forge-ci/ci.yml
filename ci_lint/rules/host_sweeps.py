@@ -25,7 +25,12 @@ What it reports (violation, one per line):
   (a glob or `..` path ending in `target`), or of a soldr/bosn state dir
   (`~/.soldr`, `.cache/soldr`, `$SOLDR_*`, `/tmp/bosn-*`, `$BOSN_STATE_DIR`,
   `~/.bosn`) -> `soldr gc` / bosn;
-- an mtime-only `find ... -mtime ... -delete` -> the owning reclaimer.
+- an mtime-only `find ... -mtime ... -delete` -> the owning reclaimer;
+- switching an owner's reclaimer off: bosn's `auto_retention = false`
+  (its `retention.toml` opt-out, bosn#545) or soldr's
+  `SOLDR_AUTO_GC_DISABLED`/`SOLDR_NO_GC_TARGET` set truthy (soldr's
+  disk-pressure auto-GC and its `target/` tier). The owners now reclaim by
+  default, so disabling them is how a host goes back to degrading.
 
 Coordination with GEN-028 (raw `docker` instead of bosn): a `docker ...
 prune` line is a GEN-030 finding only. `is_broad_sweep` is exported so
@@ -49,7 +54,9 @@ POLICY = "docs/policy-general.md#dev-host-hygiene-every-local-artifact-class-has
 SCRIPT_SUFFIXES: frozenset[str] = frozenset({".py", ".sh", ".bash"})
 SCRIPT_DIRS: tuple[str, ...] = ("ci/", "scripts/", ".claude/")
 TOOL_DIR_NAMES: frozenset[str] = frozenset({"skills", "tools"})
-ROOT_FILES: frozenset[str] = frozenset({"Makefile", "makefile", "GNUmakefile", "justfile", "Justfile", "bosn.toml"})
+ROOT_FILES: frozenset[str] = frozenset(
+    {"Makefile", "makefile", "GNUmakefile", "justfile", "Justfile", "bosn.toml", "local-gate.toml", "retention.toml"}
+)
 
 
 @dataclass(frozen=True)
@@ -67,6 +74,10 @@ _SOLDR_BOSN = re.compile(
 )
 _TARGET_SWEEP = re.compile(r"(?:\*|\.\.)[^\s]*/target/?(?:\s|$|\*)")
 _FIND_MTIME_DELETE = re.compile(r"\bfind\b.*-mtime\b.*-delete\b")
+_BOSN_RETENTION_OFF = re.compile(r"\bauto_retention\s*=\s*false\b", re.IGNORECASE)
+_SOLDR_GC_OFF = re.compile(
+    r"\b(?:SOLDR_AUTO_GC_DISABLED|SOLDR_NO_GC_TARGET)\b[\s:=]+(?:1|true|yes|on)\b", re.IGNORECASE
+)
 
 
 def _normalize(line: str) -> str:
@@ -75,7 +86,11 @@ def _normalize(line: str) -> str:
 
 
 def is_broad_sweep(line: str) -> Sweep | None:
+    if _BOSN_RETENTION_OFF.search(line):
+        return Sweep("bosn automatic retention disabled", "bosn's default retention pass (leave `auto_retention` on)")
     text = _normalize(line)
+    if _SOLDR_GC_OFF.search(text):
+        return Sweep("soldr auto-GC disabled", "soldr's daemon maintenance / disk-pressure auto-GC (leave it on)")
     if _DOCKER_PRUNE.search(text) or _DOCKER_IMAGE_ALL.search(text):
         return Sweep("docker prune", "bosn (`bosn gc` / `bosn manifest volume-gc` / `bosn ci runners prune-cache`)")
     rm = _RM_RF.search(text)
@@ -126,8 +141,8 @@ def check_file(repo_root: Path, rel: str) -> list[Finding]:
                 path=rel,
                 line=number,
                 status=Status.VIOLATION,
-                message=f"broad host sweep ({sweep.kind}) in dev-host tooling: it cannot tell what is in use and "
-                f"kills other sessions' runs on a shared host",
+                message=f"host reclamation outside its owner ({sweep.kind}) in dev-host tooling: a sweep cannot tell "
+                f"what is in use and kills other sessions' runs; a disabled owner leaves the host to degrade",
                 fix=f"remove the sweep and let its owner reclaim it: {sweep.owner}; local-gate keeps its own last "
                 f"20 lane-log runs. A deliberate recovery step takes a same-line `# ci-lint: allow {RULE} <reason>` ({POLICY})",
             )

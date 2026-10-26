@@ -27,6 +27,17 @@ Clauses:
 * RUST-022 (d), compression on a Dylint setup-soldr step:
   `target-cache-compress: none` or a literal level 1 is a violation; a
   literal level above 12 is needs_review (level 19 is not worth ~100 s).
+* RUST-022 (e), payload of an `actions/cache*` step whose key names
+  `dylint`/`lint`: a `path:` entry with an `incremental` segment is a
+  violation (the deps layer never holds incremental/); a path that is a
+  workspace build tree (`target`, `target/<profile-or-triple>`, not the
+  lint-library trees under `target/dylint/`) persists workspace units, which
+  the policy allows only as the L2 layer under `-Zchecksum-freshness` -- so
+  it is needs_review when neither the workflow file nor
+  `.cargo/config.toml` enables checksum freshness. Fleet survey 2026-10-25:
+  soldr caches only `target/dylint/{libraries,target}` (the lint-library
+  foundation, exempt), clud caches only a pass marker, zccache and
+  kernal-api use setup-soldr's own Dylint caches -- no current hit.
 * CACHE-015, violation: a hand-rolled `dylint-target-v*` cache (an
   `actions/cache` key or a `[cache.family]` prefix) beside setup-soldr's
   Dylint caches.
@@ -67,6 +78,8 @@ _TRUTHY = frozenset({"true", "1", "yes", "on"})
 LINT_VIAS: frozenset[str] = frozenset({"setup-soldr:dylint-output", "setup-soldr:dylint", "setup-soldr:lint-output"})
 _PREFIX_INPUT_RE = re.compile(r"(cargo\.lock|cargo\.toml|lockfile|\block\b|manifest|workspace)", re.IGNORECASE)
 _RESTORE_HASH_RE = re.compile(r"hashFiles\([^)]*Cargo\.(lock|toml)", re.IGNORECASE)
+_LINT_KEY_RE = re.compile(r"(^|[^A-Za-z0-9])(dy)?lint", re.IGNORECASE)
+_FRESHNESS_RE = re.compile(r"checksum-freshness")
 _HAND_ROLLED_RE = re.compile(r"(^|[^A-Za-z0-9])dylint-target-v", re.IGNORECASE)
 MAX_LINT_ZSTD_LEVEL = 12
 
@@ -155,6 +168,7 @@ class CacheStep:
     loc: str
     key: str
     restore_keys: str
+    paths: tuple[str, ...] = ()
 
 
 def _cache_steps(repo_root: Path) -> list[CacheStep]:
@@ -172,6 +186,7 @@ def _cache_steps(repo_root: Path) -> list[CacheStep]:
                     s.loc,
                     _as_text(s.with_.get("key")) or "",
                     _as_text(s.with_.get("restore-keys")) or "",
+                    tuple(ln.strip() for ln in (_as_text(s.with_.get("path")) or "").splitlines() if ln.strip()),
                 )
             )
     return out
@@ -304,6 +319,62 @@ def _rust_022_contents(steps: list[DylintStep]) -> list[Finding]:
     return out
 
 
+def _segments(path: str) -> list[str]:
+    return [seg for seg in path.replace("\\", "/").split("/") if seg not in ("", ".")]
+
+
+def _is_workspace_build_tree(path: str) -> bool:
+    segs = _segments(path)
+    if not segs or segs[0] != "target" or "${{" in path:
+        return False
+    return len(segs) <= 2 and (len(segs) < 2 or segs[1] != "dylint")
+
+
+def _freshness_enabled(repo_root: Path, workflow: str) -> bool:
+    for rel in (workflow, ".cargo/config.toml"):
+        try:
+            if _FRESHNESS_RE.search((repo_root / rel).read_text(encoding="utf-8")):
+                return True
+        except OSError:
+            continue
+    return False
+
+
+def _rust_022_payload(repo_root: Path) -> list[Finding]:
+    out: list[Finding] = []
+    for c in _cache_steps(repo_root):
+        if not _LINT_KEY_RE.search(c.key):
+            continue
+        if any("incremental" in _segments(p) for p in c.paths):
+            out.append(
+                Finding(
+                    rule="RUST-022",
+                    path=c.path,
+                    message=f"{c.path} {c.loc}: lint cache `path:` persists `incremental/`",
+                    fix="drop incremental/ from the lint cache; the deps layer never holds it (#110)",
+                )
+            )
+        trees = [p for p in c.paths if _is_workspace_build_tree(p)]
+        if trees and not _freshness_enabled(repo_root, c.path):
+            out.append(
+                Finding(
+                    rule="RUST-022",
+                    status=Status.NEEDS_REVIEW,
+                    path=c.path,
+                    message=(
+                        f"{c.path} {c.loc}: lint cache saves the workspace build tree ({', '.join(trees)}) "
+                        "without `-Zchecksum-freshness`; a fresh checkout's mtimes dirty every workspace unit, "
+                        "so those units are dead weight"
+                    ),
+                    fix=(
+                        "cache third-party units only (strip workspace units by dep-info unit hash), or run the "
+                        "lint pass with `-Zchecksum-freshness` so the workspace units are a usable L2 layer"
+                    ),
+                )
+            )
+    return out
+
+
 def _cache_015(ci: CiToml, repo_root: Path, steps: list[DylintStep]) -> list[Finding]:
     if not steps:
         return []
@@ -386,6 +457,7 @@ def check_lint_cache(ci: CiToml, repo_root: Path) -> list[Finding]:
     findings.extend(_rust_022_full_mode(ci, steps))
     findings.extend(_rust_022_prefix(ci, repo_root))
     findings.extend(_rust_022_contents(steps))
+    findings.extend(_rust_022_payload(repo_root))
     findings.extend(_cache_015(ci, repo_root, steps))
     findings.extend(_cache_016(steps))
     return findings

@@ -57,9 +57,13 @@ class SweepTest(unittest.TestCase):
             "rm -rf $HOME/.soldr",
             "rm -rf /tmp/bosn-*",
             "find /tmp -mtime +3 -delete",
+            "auto_retention = false",
+            "export SOLDR_AUTO_GC_DISABLED=1",
+            'env = { SOLDR_NO_GC_TARGET = "true" }',
         ):
             self.assertIsNotNone(is_broad_sweep(line), line)
-        for line in ("docker image prune", "rm -rf build", "rm -rf ./dist", "docker run --rm x", "find . -name x -delete"):
+        for line in ("docker image prune", "rm -rf build", "rm -rf ./dist", "docker run --rm x", "find . -name x -delete",
+                     "auto_retention = true", "SOLDR_AUTO_GC_DISABLED=0"):
             self.assertIsNone(is_broad_sweep(line), line)
 
     def test_scope_and_allow(self) -> None:
@@ -77,9 +81,10 @@ class SweepTest(unittest.TestCase):
             (repo / ".github" / "workflows" / "ci.yml").write_text(
                 "jobs:\n  a:\n    steps:\n      - run: docker system prune -af\n", encoding="utf-8"
             )
+            (repo / "local-gate.toml").write_text('[gate.env]\nSOLDR_AUTO_GC_DISABLED = "1"\n', encoding="utf-8")
             findings = check_gen_030(repo)
             got = sorted((f.path, f.line) for f in findings)
-            self.assertEqual(got, [(".claude/skills/x/go.py", 2), ("ci/clean.sh", 3)])
+            self.assertEqual(got, [(".claude/skills/x/go.py", 2), ("ci/clean.sh", 3), ("local-gate.toml", 2)])
             self.assertTrue(all(f.status == Status.VIOLATION and f.rule == "GEN-030" for f in findings))
 
 
