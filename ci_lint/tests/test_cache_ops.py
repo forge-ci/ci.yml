@@ -280,8 +280,8 @@ class JanitorIssue23Test(unittest.TestCase):
         old = _iso(-7200)
         entries = [
             _entry(11, "setup-soldr-dylint-v2-1111111111111111", "refs/heads/main", 50 * MB, old, _iso(-100)),
-            _entry(12, "setup-soldr-dylint-v2-2222222222222222-x", "refs/heads/main", 20 * MB, old, _iso(-200)),
-            _entry(13, "setup-soldr-dylint-v2-3333333333333333-y", "refs/heads/main", 20 * MB, old, _iso(-300)),
+            _entry(12, "setup-soldr-dylint-v2-2222222222222222", "refs/heads/main", 20 * MB, old, _iso(-200)),
+            _entry(13, "setup-soldr-dylint-v2-3333333333333333", "refs/heads/main", 20 * MB, old, _iso(-300)),
         ]
         result = self._run(entries, None, ci)
         planned = {p.id: p.reason for p in result.planned}
@@ -289,6 +289,60 @@ class JanitorIssue23Test(unittest.TestCase):
         self.assertNotIn(12, planned)  # 70MB cumulative: fits
         self.assertIn(13, planned)  # 90MB cumulative: evicted, least recently used
         self.assertTrue(planned[13].startswith("lru"))
+
+    def _lru_ci(self):
+        from dataclasses import replace
+
+        fams = dict(self.ci.cache.family)
+        fams["dylint"] = replace(fams["dylint"], evict="lru")  # 80MB footprint
+        return replace(self.ci, cache=replace(self.ci.cache, family=fams))
+
+    def test_lru_keeps_newest_entry_of_every_key_variant(self) -> None:
+        """forge-ci/zccache dry run (jan026): the only `integration` build
+        cache was LRU-evicted because a `test` entry of the same family was
+        accessed later -- protection was per family, not per key variant."""
+
+        old = _iso(-7200)
+        entries = [
+            _entry(31, "setup-soldr-dylint-v2-3081971d3321c28a-test-f0b451a55dc2de6d", "refs/heads/main",
+                   50 * MB, old, _iso(-100)),
+            _entry(32, "setup-soldr-dylint-v2-3081971d3321c28a-integration-f0b451a55dc2de6d", "refs/heads/main",
+                   60 * MB, old, _iso(-200)),
+            _entry(33, "setup-soldr-dylint-v2-1111111111111111-test-f0b451a55dc2de6d", "refs/heads/main",
+                   10 * MB, old, _iso(-300)),
+        ]
+        planned = {p.id: p.reason for p in self._run(entries, None, self._lru_ci()).planned}
+        self.assertNotIn(31, planned)
+        self.assertNotIn(32, planned, "newest (only) integration entry must survive the LRU pass")
+        self.assertIn(33, planned)  # a superseded test entry is still evicted
+        self.assertTrue(planned[33].startswith("lru"))
+
+    def test_poisoned_entry_does_not_take_the_protected_slot(self) -> None:
+        old = _iso(-7200)
+        entries = [
+            _entry(41, "setup-soldr-dylint-v2-49c064eaa429735b-2b403828b00c09ec", "refs/heads/main",
+                   200, old, _iso(-100)),
+            _entry(42, "setup-soldr-dylint-v2-06f0ef039c4ec3d1-2b403828b00c09ec", "refs/heads/main",
+                   90 * MB, old, _iso(-200)),
+        ]
+        planned = {p.id: p.reason for p in self._run(entries, None, self._lru_ci()).planned}
+        self.assertTrue(planned[41].startswith("CACHE-005"))
+        self.assertNotIn(42, planned, "the healthy entry a job restores keeps its protection")
+
+    def test_abandoned_variant_loses_protection_after_stale_window(self) -> None:
+        old = _iso(-30 * 86400)
+        entries = [
+            _entry(51, "setup-soldr-dylint-v2-aaaaaaaaaaaaaaaa-test-f0b451a55dc2de6d", "refs/heads/main",
+                   70 * MB, old, _iso(-100)),
+            _entry(52, "setup-soldr-dylint-v2-bbbbbbbbbbbbbbbb-gone-f0b451a55dc2de6d", "refs/heads/main",
+                   30 * MB, old, _iso(-20 * 86400)),
+        ]
+        report = janitor(
+            self._lru_ci(), fetch=_fetch_from({"actions_caches": entries}), graphql=None, delete=None,
+            token=TOKEN, repo=REPO_SLUG, dry_run=True, stale_days=7, now=NOW,
+        )
+        self.assertIn(52, {p.id for p in report.result.planned})
+        self.assertNotIn(51, {p.id for p in report.result.planned})
 
     def test_non_lru_family_keeps_newest_per_prefix(self) -> None:
         old = _iso(-7200)

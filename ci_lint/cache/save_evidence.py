@@ -1,4 +1,4 @@
-"""`ci-lint cache save-check`: CACHE-011/CACHE-012 from real job-log
+"""`ci-lint cache save-check`: CACHE-011/CACHE-012/CACHE-026 from real job-log
 evidence (issue #7).
 
 CACHE-010 (`ci_lint.rules.cache_static.check_cache_010`) is the static
@@ -31,6 +31,12 @@ Mechanical signals (issue #7's own evidence, zackees/clud run
   layer recorded in between -- the steady-state detector for a writer
   that never heals itself (pairs with `ci_lint.cache.ops.heal`, which
   clears the symptom but not the cause).
+
+  CACHE-026: a cache guard disabled writes (`cache writes disabled ...`,
+  `*CACHE_WRITES=false`, `cache_writes=false`) on >= `guard_threshold`
+  (default 3) CONSECUTIVE default-branch runs' logs -- a silent permanent
+  freeze rather than a time-boxed, self-healing refusal (forge-ci/zccache
+  2026-10-22..26).
 """
 
 from __future__ import annotations
@@ -70,6 +76,22 @@ _UNUSABLE_RE = re.compile(
 )
 
 DEFAULT_UNUSABLE_STREAK_THRESHOLD = 2
+
+# CACHE-026: a cache guard (barrier/budget/pre-prune) that turned cache
+# writes off for the run. zccache's wait-cache-pre-prune emits
+# `##[warning]cache writes disabled for this job: <reason>` and exports
+# `ZCCACHE_CACHE_WRITES=false`; a `cache_writes=false` step output is the
+# policy's own sanctioned shape. Any of the three counts as one event per log.
+_GUARD_DISABLED_RE = re.compile(
+    r"(?:^(?:##\[warning\]|Warning:\s*)?(?P<reason>cache[ _-]writes?\b[^\n]*\bdisabled\b[^\n]*)$"
+    r"|(?P<flag>\b[A-Z0-9_]*CACHE_WRITES=false\b|\bcache_writes=false\b))",
+    re.MULTILINE | re.IGNORECASE,
+)
+
+# Consecutive default-branch runs with writes guard-disabled before the
+# freeze stops being a transient refusal (zccache: every main push for 4+
+# days, 2026-10-22..26, with every PR restoring the frozen lock).
+DEFAULT_GUARD_FREEZE_THRESHOLD = 3
 
 # GitHub CLI logs have two tab-delimited job/step fields before their
 # ISO timestamp; setup-soldr adds an elapsed MM:SS prefix to its messages.
@@ -230,10 +252,70 @@ def check_cache_012(
 
 
 @dataclass(frozen=True)
+class GuardDisabledEvent:
+    source: str
+    reason: str
+
+
+@dataclass(frozen=True)
+class Cache026Result:
+    events: tuple[GuardDisabledEvent, ...]
+    findings: tuple[Finding, ...]
+
+
+def _guard_event(path: Path) -> GuardDisabledEvent | None:
+    m = _GUARD_DISABLED_RE.search(_read(path))
+    if m is None:
+        return None
+    return GuardDisabledEvent(source=str(path), reason=(m.group("reason") or m.group("flag")).strip())
+
+
+def _longest_streak(per_log: list[GuardDisabledEvent | None]) -> list[GuardDisabledEvent]:
+    best: list[GuardDisabledEvent] = []
+    cur: list[GuardDisabledEvent] = []
+    for ev in per_log:
+        cur = [*cur, ev] if ev is not None else []
+        if len(cur) > len(best):
+            best = cur
+    return best
+
+
+def check_cache_026(
+    log_paths: list[Path], *, threshold: int = DEFAULT_GUARD_FREEZE_THRESHOLD
+) -> Cache026Result:
+    """`log_paths` are successive DEFAULT-BRANCH runs' logs, OLDEST-FIRST
+    (one combined log per run). A guard that disables cache writes is
+    allowed as a transient, surfaced refusal; `threshold` or more
+    consecutive runs each showing it is the silent permanent freeze
+    CACHE-026 forbids -- the guard is not self-healing (it never retires
+    the superseded entries that keep it over its limit). A log with no
+    disable signal breaks the streak."""
+
+    per_log = [_guard_event(p) for p in log_paths]
+    events = tuple(ev for ev in per_log if ev is not None)
+    streak = _longest_streak(per_log)
+    if threshold < 1 or len(streak) < threshold:
+        return Cache026Result(events, ())
+    finding = Finding(
+        rule="CACHE-026",
+        path=f"cache:log:{streak[0].source}",
+        message=f"a cache guard disabled cache writes on {len(streak)} consecutive default-branch run(s) "
+        f"(>= {threshold}): caches are frozen and every PR restores a stale generation "
+        f"({', '.join(e.source for e in streak)}); first reason: {streak[0].reason}",
+        fix="make the guard self-healing: when over its limit, retire superseded entries first "
+        "(ci-lint cache janitor / preprune, oldest non-current lock first) and re-forecast, and only "
+        "then refuse writes, with a failed or annotated cache-budget verdict -- never a permanent "
+        "restore-only state (CACHE-026, zccache 2026-10-22..26)",
+    )
+    return Cache026Result(events, (finding,))
+
+
+@dataclass(frozen=True)
 class SaveEvidenceReport:
     skip_events: tuple[SaveSkipEvent, ...]
     unusable_events: tuple[UnusableRestoreEvent, ...]
     findings: tuple[Finding, ...]
+    guard_events: tuple[GuardDisabledEvent, ...] = ()
 
 
 def run_save_check(
@@ -242,11 +324,16 @@ def run_save_check(
     conclusion: str,
     run_url: str | None = None,
     threshold: int = DEFAULT_UNUSABLE_STREAK_THRESHOLD,
+    guard_threshold: int = DEFAULT_GUARD_FREEZE_THRESHOLD,
 ) -> SaveEvidenceReport:
     r011 = check_cache_011(log_paths, conclusion=conclusion, run_url=run_url)
     r012 = check_cache_012(log_paths, threshold=threshold)
+    r026 = check_cache_026(log_paths, threshold=guard_threshold)
     return SaveEvidenceReport(
-        skip_events=r011.events, unusable_events=r012.events, findings=r011.findings + r012.findings
+        skip_events=r011.events,
+        unusable_events=r012.events,
+        findings=r011.findings + r012.findings + r026.findings,
+        guard_events=r026.events,
     )
 
 
@@ -259,6 +346,7 @@ def to_json_dict(report: SaveEvidenceReport) -> dict[str, JsonValue]:
             {"source": e.source, "layer": e.layer, "archive_bytes": e.archive_bytes}
             for e in report.unusable_events
         ],
+        "guard_disabled_events": [{"source": e.source, "reason": e.reason} for e in report.guard_events],
         "findings": [
             {"rule": f.rule, "status": f.status.value, "path": f.path, "message": f.message, "fix": f.fix}
             for f in report.findings
@@ -269,7 +357,8 @@ def to_json_dict(report: SaveEvidenceReport) -> dict[str, JsonValue]:
 def render_text(report: SaveEvidenceReport) -> str:
     lines = [
         f"ci-lint cache save-check: {len(report.skip_events)} skip event(s), "
-        f"{len(report.unusable_events)} unusable-restore event(s)"
+        f"{len(report.unusable_events)} unusable-restore event(s), "
+        f"{len(report.guard_events)} guard-disabled-writes event(s)"
     ]
     if not report.findings:
         lines.append("ci-lint cache save-check: no findings.")

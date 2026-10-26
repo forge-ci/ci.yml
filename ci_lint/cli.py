@@ -1092,6 +1092,7 @@ def _cmd_cache_save_check(args: argparse.Namespace) -> int:
             conclusion=args.conclusion,
             run_url=args.run_url,
             threshold=args.unusable_threshold,
+            guard_threshold=args.guard_freeze_threshold,
         )
     except SaveEvidenceError as exc:
         print(f"ci-lint cache save-check: {exc}", file=sys.stderr)
@@ -1500,8 +1501,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_cache_save_check = cache_sub.add_parser(
         "save-check",
-        help="CACHE-011/012 (issue #7) from real job-log evidence: a green default-branch run that "
-        "saved nothing, and a restore stuck on a poisoned/empty archive",
+        help="CACHE-011/012/026 from real job-log evidence: a green default-branch run that "
+        "saved nothing, a restore stuck on a poisoned/empty archive, and a guard freezing cache writes",
     )
     p_cache_save_check.add_argument(
         "--log",
@@ -1520,6 +1521,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_cache_save_check.add_argument(
         "--unusable-threshold", type=int, default=2,
         help="CACHE-012: consecutive unusable-restore logs required to fire (default: 2)",
+    )
+    p_cache_save_check.add_argument(
+        "--guard-freeze-threshold", type=int, default=3,
+        help="CACHE-026: consecutive default-branch logs whose cache guard disabled writes "
+        "required to fire (default: 3; pass default-branch logs only, oldest-first)",
     )
     p_cache_save_check.add_argument("--json", action="store_true")
     p_cache_save_check.set_defaults(func=_cmd_cache_save_check)
