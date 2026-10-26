@@ -33,6 +33,7 @@ from ci_lint.rules.ci_pre import check_group12
 from ci_lint.rules.contract import check_ct_006, check_tag_001, check_tag_002
 from ci_lint.rules.layout import check_group6
 from ci_lint.rules.m2_22 import check_group_m2_22
+from ci_lint.rules.cook_cache import check_group_cook_cache
 from ci_lint.rules.packaging import NATIVE_WHEEL_PROFILES, check_group8
 from ci_lint.rules.wheel_soldr_only import check_pkg_010
 from ci_lint.rules.profile_required import check_group13
@@ -128,6 +129,7 @@ GROUP_LABELS: dict[int, str] = {
     19: "function-complexity ratchet: clippy and ruff ceilings, per-function expect/noqa only (RUST-018, PY-004)",
     20: "GitHub API budget: no unbounded GitHub re-read loops in run:, ci/ or skill/tool scripts (GHAPI-001)",
     21: "async guard lints: workspace deny + member inheritance + clippy.toml well-formed (RUST-019)",
+    22: "cook cache interim: env after cook, hand-rolled cook caches, PR-only cooks (RUST-024/025, CACHE-018)",
 }
 
 
@@ -185,6 +187,7 @@ def run_precheck(repo_root: Path, *, title: str = "", local: bool = False, live:
         gen_010_findings, _gen_010_claims = check_gen_010_static(repo_root)
         all_findings.extend(gen_010_findings)
         all_findings.extend(check_group_m2_22(ci, repo_root))
+        all_findings.extend(check_group_cook_cache(ci, repo_root))
         all_findings.extend(check_rust_017(repo_root))
         all_findings.extend(check_cpp_001(repo_root))
         all_findings.extend(check_rust_015(repo_root))
