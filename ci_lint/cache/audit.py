@@ -978,11 +978,19 @@ def _check_family_live_excess(
         oversized = [
             c for c in live if entry_ceiling is not None and c.entry.size_in_bytes > entry_ceiling
         ]
-        if len(live) <= declared_count and not oversized:
-            continue
         live_bytes = sum(c.entry.size_in_bytes for c in live)
+        count_excess = len(live) > declared_count
+        if count_excess and fam.evict == "lru" and not fam.shapes and max_bytes is not None:
+            # An `evict = "lru"` family is bounded in BYTES, not entries: the
+            # janitor LRU-evicts it to `max x cardinality` and its keys may be
+            # content-addressed (#421, the CACHE-006 exemption). Many small
+            # entries inside that footprint keep the static proof intact
+            # (kernal-api's soldr-verdict: 225 entries, 106 KB vs 1 MB).
+            count_excess = live_bytes > declared_count * max_bytes
+        if not count_excess and not oversized:
+            continue
         problems: list[str] = []
-        if len(live) > declared_count:
+        if count_excess:
             peak = ", x2 lockfile peak" if fam.lockfile else ""
             problems.append(
                 f"{len(live)} live entries on {default_ref} but the model allows {declared_count} "
