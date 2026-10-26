@@ -1,0 +1,10 @@
+name: ci
+on: [pull_request]
+jobs:
+  docs:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: soldr cargo doc --workspace --no-deps
+      - run: python ci/lint.py
+      - run: soldr cargo test --doc
+      - run: RUSTDOCFLAGS=-Zsanitizer=address soldr cargo test

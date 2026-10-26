@@ -1,0 +1,5 @@
+[package]
+name = "a"
+version = "0.1.0"
+[target.'cfg(unix)'.dependencies]
+libudev-sys = "0.1"

@@ -1,0 +1,26 @@
+name: ci
+on: [pull_request]
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: sudo apt-get install -y libgtk-3-dev xvfb jq
+      - run: sudo apt-get install -y libwebkit2gtk-4.1-dev  # ci-lint: allow RUST-028 needed by e2e smoke
+      - if: matrix.mode == 'full'
+        run: sudo apt-get install -y libsoup-3.0-dev
+      - run: soldr cargo test --features json
+  full:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: sudo apt-get install -y libgtk-3-dev
+      - run: soldr cargo test --all-features
+  py:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: sudo apt-get install -y libffi-dev
+      - run: uv run pytest
+  optsys:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: sudo apt-get install -y libglib2.0-dev
+      - run: soldr cargo build --features glib-sys
