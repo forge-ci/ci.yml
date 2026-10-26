@@ -96,7 +96,27 @@ class LintCacheTest(unittest.TestCase):
             "on: [push]\nconcurrency:\n  group: ci\n  cancel-in-progress: ${{ github.event_name == 'pull_request' }}\n"
             "jobs:\n" + _job("lint")
         )
-        self.assertEqual(self._check(wf), [("CACHE-016", "needs_review"), ("CACHE-016", "needs_review")])
+        # false on every push/schedule run: only the missing-nightly review remains
+        self.assertEqual(self._check(wf), [("CACHE-016", "needs_review")])
+
+    @requires_yaml_tooling
+    def test_cache_016_pr_only_cancel_expression(self) -> None:
+        def wf(expr: str) -> str:
+            return f"on: [push, schedule]\nconcurrency:\n  group: ci\n  cancel-in-progress: {expr}\njobs:\n" + _job("lint")
+
+        for expr in (
+            "${{ github.event_name == 'pull_request' }}",
+            "${{ github.event_name == 'pull_request' || github.event_name == 'merge_group' }}",
+            "${{ github.event_name == 'pull_request' && github.ref != 'refs/heads/main' }}",
+        ):
+            self.assertEqual(self._check(wf(expr)), [], expr)
+        for expr in (
+            "${{ github.event_name != 'pull_request' }}",
+            "${{ github.event_name == 'push' }}",
+            "${{ github.event_name == 'pull_request' || github.ref == 'refs/heads/main' }}",
+            "${{ !(github.event_name == 'pull_request') }}",
+        ):
+            self.assertEqual(self._check(wf(expr)), [("CACHE-016", "needs_review")], expr)
 
     @requires_yaml_tooling
     def test_cache_016_missing_nightly(self) -> None:
