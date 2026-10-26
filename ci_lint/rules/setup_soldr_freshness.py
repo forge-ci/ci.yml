@@ -63,12 +63,16 @@ needs_review, never a silent pass" discipline as `ci_lint.settings_audit`.
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from pathlib import Path
+
+from ci_lint.cargo_messages import JsonValue
 
 from ci_lint.finding import Finding, Status
 from ci_lint.github_api import FetchStatusFn, GitHubApiError
 from ci_lint.rules.tools import _iter_uses_with
 from ci_lint.workflow_scan import as_dict, load_composite_actions, load_workflows
+from ci_lint.yaml_io import YamlValue
 from ci_lint.yaml_io import LoadStatus
 
 SETUP_SOLDR_REPO = "zackees/setup-soldr"
@@ -87,42 +91,76 @@ _CRITICAL_RE = re.compile(r"\bcritical\b", re.IGNORECASE)
 MAX_RELEASES_BEHIND = 5
 
 
-def _find_sha_pins(repo_root: Path) -> dict[str, list[tuple[str, str]]]:
-    """Returns {sha: [(path, loc), ...]} for every distinct pinned SHA."""
+@dataclass(frozen=True)
+class PinSite:
+    """One `uses:` site of a SHA-pinned setup-soldr action."""
 
-    pins: dict[str, list[tuple[str, str]]] = {}
-    files: list[tuple[str, bool, dict[str, object]]] = []
+    path: str
+    loc: str
+
+
+@dataclass(frozen=True)
+class ShaPin:
+    """A distinct pinned SHA and every site that pins it."""
+
+    sha: str
+    sites: tuple[PinSite, ...]
+
+
+@dataclass(frozen=True)
+class _ScannedFile:
+    path: str
+    is_composite: bool
+    doc: dict[str, YamlValue]
+
+
+@dataclass(frozen=True)
+class ApiReply:
+    status: int
+    body: JsonValue
+
+
+@dataclass(frozen=True)
+class _Release:
+    tag_name: str
+    name: str
+    body: str
+
+
+def _find_sha_pins(repo_root: Path) -> tuple[ShaPin, ...]:
+    """Returns one ShaPin per distinct pinned SHA, in first-seen order."""
+
+    pins: dict[str, list[PinSite]] = {}
+    files: list[_ScannedFile] = []
     for wf in load_workflows(repo_root):
         if wf.status == LoadStatus.OK:
-            files.append((wf.path, False, as_dict(wf.document)))
+            files.append(_ScannedFile(wf.path, False, as_dict(wf.document)))
     for act in load_composite_actions(repo_root):
         if act.status == LoadStatus.OK:
-            files.append((act.path, True, as_dict(act.document)))
+            files.append(_ScannedFile(act.path, True, as_dict(act.document)))
 
-    for path, is_composite, doc in files:
-        for use_step in _iter_uses_with(doc, is_composite=is_composite):
-            uses = use_step.uses
-            loc = use_step.loc
-            _with = use_step.with_
-            m = _SHA_PIN_RE.match(uses)
+    for scanned in files:
+        for use_step in _iter_uses_with(scanned.doc, is_composite=scanned.is_composite):
+            m = _SHA_PIN_RE.match(use_step.uses)
             if m is None:
                 continue
-            pins.setdefault(m.group(1), []).append((path, loc))
-    return pins
+            pins.setdefault(m.group(1), []).append(PinSite(scanned.path, use_step.loc))
+    return tuple(ShaPin(sha, tuple(sites)) for sha, sites in pins.items())
 
 
-def _get(fetch_status: FetchStatusFn, token: str, url: str) -> tuple[int, object] | None:
+def _get(fetch_status: FetchStatusFn, token: str, url: str) -> ApiReply | None:
     try:
-        return fetch_status(url, token)
+        status, body = fetch_status(url, token)
+        return ApiReply(status, body)
     except GitHubApiError:
         return None
 
 
-def _sites(locations: list[tuple[str, str]]) -> str:
-    return ", ".join(f"{p}:{loc}" for p, loc in locations)
+def _sites(locations: tuple[PinSite, ...]) -> str:
+    return ", ".join(f"{site.path}:{site.loc}" for site in locations)
 
 
-def _network_finding(locations: list[tuple[str, str]], sha: str, url: str) -> Finding:
+def _network_finding(locations: tuple[PinSite, ...], sha: str, url: str) -> Finding:
     return Finding(
         rule="RUST-014",
         status=Status.NEEDS_REVIEW,
@@ -133,7 +171,7 @@ def _network_finding(locations: list[tuple[str, str]], sha: str, url: str) -> Fi
     )
 
 
-def _forbidden_finding(locations: list[tuple[str, str]], sha: str) -> Finding:
+def _forbidden_finding(locations: tuple[PinSite, ...], sha: str) -> Finding:
     return Finding(
         rule="RUST-014",
         status=Status.NEEDS_REVIEW,
@@ -144,7 +182,7 @@ def _forbidden_finding(locations: list[tuple[str, str]], sha: str) -> Finding:
     )
 
 
-def _unresolvable_finding(locations: list[tuple[str, str]], sha: str) -> Finding:
+def _unresolvable_finding(locations: tuple[PinSite, ...], sha: str) -> Finding:
     return Finding(
         rule="RUST-014",
         status=Status.NEEDS_REVIEW,
@@ -157,13 +195,13 @@ def _unresolvable_finding(locations: list[tuple[str, str]], sha: str) -> Finding
 
 
 def _check_one_sha(  # noqa: C901
-    fetch_status: FetchStatusFn, token: str, sha: str, locations: list[tuple[str, str]]
+    fetch_status: FetchStatusFn, token: str, sha: str, locations: tuple[PinSite, ...]
 ) -> list[Finding]:
     commit_url = f"{API_ROOT}/repos/{SETUP_SOLDR_REPO}/commits/{sha}"
     commit_result = _get(fetch_status, token, commit_url)
     if commit_result is None:
         return [_network_finding(locations, sha, commit_url)]
-    c_status, c_body = commit_result
+    c_status, c_body = commit_result.status, commit_result.body
     if c_status == 403:
         return [_forbidden_finding(locations, sha)]
     if c_status == 404:
@@ -196,7 +234,7 @@ def _check_one_sha(  # noqa: C901
     releases_result = _get(fetch_status, token, releases_url)
     if releases_result is None:
         return [_network_finding(locations, sha, releases_url)]
-    r_status, r_body = releases_result
+    r_status, r_body = releases_result.status, releases_result.body
     if r_status == 403:
         return [_forbidden_finding(locations, sha)]
     if r_status != 200 or not isinstance(r_body, list):
@@ -210,7 +248,7 @@ def _check_one_sha(  # noqa: C901
             )
         ]
 
-    missing: list[dict[str, object]] = []
+    missing: list[_Release] = []
     for rel in r_body:
         if not isinstance(rel, dict):
             continue
@@ -220,7 +258,13 @@ def _check_one_sha(  # noqa: C901
         if not isinstance(published_at, str):
             continue
         if published_at > pinned_date:
-            missing.append(rel)
+            missing.append(
+                _Release(
+                    tag_name=str(rel.get("tag_name") or ""),
+                    name=str(rel.get("name") or ""),
+                    body=str(rel.get("body") or ""),
+                )
+            )
 
     if not missing:
         return []
@@ -228,12 +272,12 @@ def _check_one_sha(  # noqa: C901
     critical = [
         rel
         for rel in missing
-        if _CRITICAL_RE.search(str(rel.get("name") or "")) or _CRITICAL_RE.search(str(rel.get("body") or ""))
+        if _CRITICAL_RE.search(rel.name) or _CRITICAL_RE.search(rel.body)
     ]
     latest_tag = str(r_body[0].get("tag_name")) if r_body and isinstance(r_body[0], dict) else "latest"
 
     if critical:
-        names = ", ".join(str(rel.get("tag_name") or rel.get("name")) for rel in critical)
+        names = ", ".join(rel.tag_name or rel.name or "None" for rel in critical)
         return [
             Finding(
                 rule="RUST-014",
@@ -266,6 +310,6 @@ def _check_one_sha(  # noqa: C901
 
 def check_rust_014(fetch_status: FetchStatusFn, token: str, repo_root: Path) -> list[Finding]:
     findings: list[Finding] = []
-    for sha, locations in _find_sha_pins(repo_root).items():
-        findings.extend(_check_one_sha(fetch_status, token, sha, locations))
+    for pin in _find_sha_pins(repo_root):
+        findings.extend(_check_one_sha(fetch_status, token, pin.sha, pin.sites))
     return findings

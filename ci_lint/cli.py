@@ -1075,11 +1075,12 @@ def _cmd_cache_janitor(args: argparse.Namespace) -> int:
         return 1
     token, repo_slug = creds
     delete_fn = None if args.dry_run else default_delete
-    result, table = cache_janitor(
+    janitor_report = cache_janitor(
         ci, fetch=default_fetch, graphql=default_graphql, delete=delete_fn, token=token, repo=repo_slug,
         max_deletes=args.max_deletes, dry_run=args.dry_run, stale_days=args.stale_days,
         default_branch=args.default_branch, enforce_budget=args.enforce_budget,
     )
+    result, table = janitor_report.result, janitor_report.text
     if args.json:
         payload = result.to_json_dict()
         payload["table"] = table
@@ -1144,11 +1145,12 @@ def _cmd_cache_preprune(args: argparse.Namespace) -> int:
         return 1
     token, repo_slug = creds
     delete_fn = None if args.dry_run else default_delete
-    result, summary = cache_preprune(
+    preprune_report = cache_preprune(
         ci, fetch=default_fetch, graphql=default_graphql, delete=delete_fn, token=token, repo=repo_slug,
         lockfile_changed=args.lockfile_changed, max_deletes=args.max_deletes, dry_run=args.dry_run,
         default_branch=args.default_branch,
     )
+    result, summary = preprune_report.result, preprune_report.text
     if args.json:
         payload = result.to_json_dict()
         payload["summary"] = summary
