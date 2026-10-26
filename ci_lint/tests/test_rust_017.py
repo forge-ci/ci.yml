@@ -6,6 +6,7 @@ import unittest
 
 from ci_lint.finding import Status
 from ci_lint.rules.rust_nocapture import check_rust_017
+from ci_lint.rules.test_invocations import with_yaml_comment
 from ci_lint.tests.helpers import fixture, requires_yaml_tooling
 
 
@@ -54,6 +55,21 @@ class Rust017Test(unittest.TestCase):
             [("ci/independent_spawn.py", 10, Status.NEEDS_REVIEW)],
             [(f.path, f.line, f.status) for f in findings],
         )
+
+    def test_short_command_does_not_borrow_another_steps_line(self) -> None:
+        # zccache test-action.yml: `fi` is a substring of `fingerprint-bin`, so the
+        # YAML-comment recovery used to hand the `fi` step the whole cargo test line
+        # and the one offender was reported once per such step.
+        findings = check_rust_017(fixture("RUST-017", "red-borrowed-comment"))
+        self.assertEqual(["jobs.t.steps[2]"], [f.message.split(":", 1)[0] for f in findings])
+
+    def test_with_yaml_comment_needs_whole_command(self) -> None:
+        raw = ["        run: cargo test --features fingerprint-bin  # ci-lint: allow X why"]
+        self.assertEqual("fi", with_yaml_comment("fi", raw))
+        self.assertEqual("exit 1", with_yaml_comment("exit 1", raw))
+        self.assertIn("allow X why", with_yaml_comment("cargo test --features fingerprint-bin", raw))
+        block = ["          cargo test  # ci-lint: allow X why"]
+        self.assertEqual("cargo test  # ci-lint: allow X why", with_yaml_comment("cargo test", block))
 
 
 if __name__ == "__main__":

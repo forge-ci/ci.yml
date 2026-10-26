@@ -1,0 +1,15 @@
+name: ci
+on: [pull_request]
+jobs:
+  t:
+    runs-on: ubuntu-latest
+    steps:
+      - name: probe
+        run: |
+          if [ -z "$X" ]; then
+            exit 1
+          fi
+      - name: other
+        run: echo ok
+      - name: tests
+        run: cargo test -p z --features fingerprint-bin -- --test-threads=1  # ci-lint: allow RUST-001 reason
