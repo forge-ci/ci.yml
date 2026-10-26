@@ -74,6 +74,25 @@ _CCACHE_SWITCHES: frozenset[str] = frozenset({"CCACHE_DISABLE"})
 _TRUTHY_STRINGS: frozenset[str] = frozenset({"1", "true", "yes", "on"})
 
 
+def pr_budget_bytes(ci: CiToml) -> int | None:
+    """[cache.pr]'s budget, derived when not written: an explicit `budget`
+    wins; `mode = "none"` allows no PR entries, so 0; otherwise
+    `max-per-pr` x `expected-open-prs` when both are given (the product
+    CACHE-014 checks an explicit budget against). None when unparseable or
+    underivable. A hand-written 0 beside mode "none" restated the mode and
+    left nothing to keep the two in step."""
+
+    pr = ci.cache.pr
+    if pr.budget:
+        return parse_size(pr.budget)
+    if pr.mode == "none":
+        return 0
+    per = parse_size(pr.max_per_pr) if pr.max_per_pr else None
+    if per is not None and pr.expected_open_prs:
+        return per * pr.expected_open_prs
+    return None
+
+
 def parse_size(text: str) -> int | None:
     m = SIZE_RE.match(text.strip())
     if not m:
@@ -232,6 +251,33 @@ def _setup_uv_save_cache_violation(actual: YamlValue) -> str | None:
     return None
 
 
+def _check_setup_uv_save_gate_implied(repo_root: Path) -> list[Finding]:
+    findings: list[Finding] = []
+    for loaded in _loaded_files(repo_root):
+        for use_step in _iter_uses_with(loaded.doc, is_composite=loaded.is_composite):
+            if use_step.uses.split("@", 1)[0] != "astral-sh/setup-uv":
+                continue
+            with_ = use_step.with_
+            enable = with_.get("enable-cache")
+            if enable is False or (isinstance(enable, str) and enable.strip().lower() == "false"):
+                continue  # YAML may hand back a bool or a string
+            reason = _setup_uv_save_cache_violation(with_.get("save-cache"))
+            if reason is None:
+                continue
+            findings.append(
+                Finding(
+                    rule="CACHE-003",
+                    path=loaded.path,
+                    message=f"{use_step.loc}: astral-sh/setup-uv input 'save-cache' {reason}, but "
+                    "[cache.pr].mode = \"none\" allows no PR cache entries",
+                    fix=f"at {use_step.loc} set 'save-cache' to an expression false on pull requests "
+                    "(e.g. '${{ github.event_name != 'pull_request' }}', or the precheck plan's "
+                    "cache_save output), or 'enable-cache: false'",
+                )
+            )
+    return findings
+
+
 def check_cache_003_setup_uv(ci: CiToml, repo_root: Path) -> list[Finding]:
     """Round-4B: every `astral-sh/setup-uv` use (no single wrapper location
     -- unlike setup-soldr, this action is meant to be called directly), for
@@ -241,6 +287,11 @@ def check_cache_003_setup_uv(ci: CiToml, repo_root: Path) -> list[Finding]:
     findings: list[Finding] = []
     require = ci.allow.setup_uv.require
     if not require:
+        # [cache.pr] mode "none" forbids PR cache entries, and an ungated
+        # setup-uv saves one on every PR push, so the save gate follows
+        # from the mode instead of waiting for a [allow].setup-uv opt-in.
+        if ci.cache.pr.mode == "none":
+            return _check_setup_uv_save_gate_implied(repo_root)
         return findings
     for loaded in _loaded_files(repo_root):
         path, is_composite, doc = loaded.path, loaded.is_composite, loaded.doc
@@ -381,7 +432,7 @@ def check_cache_004(ci: CiToml) -> CacheBudgetResult:  # noqa: C901
         if fam.lockfile:
             lockfile_total += steady
 
-    pr_budget = parse_size(ci.cache.pr.budget) if ci.cache.pr.budget else 0
+    pr_budget = pr_budget_bytes(ci)
     if ci.cache.pr.budget and pr_budget is None:
         findings.append(
             Finding(
@@ -392,6 +443,7 @@ def check_cache_004(ci: CiToml) -> CacheBudgetResult:  # noqa: C901
             )
         )
         pr_budget = 0
+    pr_budget = pr_budget or 0
 
     writer_flow_ids = [fid for fid, flow in ci.flows.items() if resolve_flow(ci, fid).cache == "write"]
     writer_flows_pre_pruned = [resolve_flow(ci, fid).pre_prune for fid in writer_flow_ids]

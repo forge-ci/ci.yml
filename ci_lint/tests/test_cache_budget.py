@@ -99,6 +99,8 @@ class BudgetVerdictTest(unittest.TestCase):
         )
         self.assertEqual("fail", v.verdict)
         self.assertEqual(40 * MB, v.own_bytes)
+        self.assertIn("setup-soldr-buildcache-v2-pr-3-b", v.reason)  # names the culprit
+        self.assertNotIn("pr-4-c", v.reason)
 
     def test_pr_own_additions_cause_the_breach_fail(self) -> None:
         v = self._run(

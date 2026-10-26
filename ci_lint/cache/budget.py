@@ -23,7 +23,7 @@ from ci_lint.cache.audit import _check_cache_003, _check_cache_006, classify
 from ci_lint.cargo_messages import JsonValue
 from ci_lint.cache.github_cache import CacheApiError, list_caches
 from ci_lint.github_api import FetchFn
-from ci_lint.rules.cache_static import parse_size
+from ci_lint.rules.cache_static import parse_size, pr_budget_bytes
 from ci_lint.schema import CiToml
 
 HARD_EVENTS: frozenset[str] = frozenset({"schedule", "workflow_dispatch"})
@@ -87,7 +87,7 @@ def evaluate(
     pr_number: int | None,
 ) -> BudgetVerdict:
     budget = parse_size(ci.cache.budget) if ci.cache.budget else None
-    pr_budget = parse_size(ci.cache.pr.budget) if ci.cache.pr.budget else None
+    pr_budget = pr_budget_bytes(ci)
     over = budget is not None and entries_total > budget
     fix = "run 'ci-lint cache janitor' (or wait for the next push sweep); if a family's steady state cannot fit, shrink its declared max/per (CACHE-004)"
     if hard:
@@ -136,6 +136,14 @@ def run_budget(
     verdict = evaluate(
         ci, total, own_bytes=own, hard=is_hard_context(event_name, ref, default_branch), pr_number=pr_number
     )
+    if verdict.verdict == "fail" and own:
+        # Name the entries: "save fewer PR entries" alone left the author
+        # hunting for which step saved them (FastLED #4921's ungated setup-uv).
+        mine = sorted(
+            (c for c in classified if c.pr == pr_number), key=lambda c: c.entry.size_in_bytes, reverse=True
+        )
+        listed = "; ".join(f"{c.entry.key} ({c.entry.size_in_bytes}B)" for c in mine[:5])
+        verdict = replace(verdict, reason=f"{verdict.reason}. This PR's entries: {listed}")
     contributing = list(_check_cache_003(classified, default_branch)) + list(_check_cache_006(ci, classified))
     if contributing:
         counts: dict[str, int] = {}

@@ -313,10 +313,10 @@ open question, and any normalization has to pick one rather than assume they alr
 | `write-on` | array of strings | Which flows may write base cache layers, e.g. `["main", "nightly"]`. Informational in round 1A (not yet cross-checked against `[flow.*].cache`). |
 | `never` | array of strings | Cache families that must never exist, e.g. `linked-tests`, `target-dir`. Informational in round 1A. |
 | `retired` | array of strings | Retired cache families. `CACHE-009` fails if any `zackees/setup-soldr` input enables one. |
-| `pr.mode` | string | e.g. `"delta"`. |
+| `pr.mode` | string | e.g. `"delta"`. `"none"` allows no PR cache entries: the PR budget is then 0 without writing one, and every `astral-sh/setup-uv` step must gate `save-cache` (`CACHE-003`, no `[allow].setup-uv` opt-in needed; `enable-cache: false` also satisfies it). |
 | `pr.families` | array of strings | Which families a PR may save a delta for. |
 | `pr.max-per-pr` | string (size) | Per-PR delta cap. |
-| `pr.budget` | string (size) | Counted once in `CACHE-004`'s worst-case sum. |
+| `pr.budget` | string (size, optional) | Counted once in `CACHE-004`'s worst-case sum and enforced by `ci-lint cache budget` on a PR's own entries (the failure lists those entries' keys). Omit it to derive it: `0` under `mode = "none"`, else `max-per-pr x expected-open-prs` when both are set. An explicit value wins. |
 | `pr.trim` | string | e.g. `"on-close"`. Informational in round 1A. |
 | `pr.expected-open-prs` | int (optional) | M2-17 (ci.yml#42): an estimate of how many PRs may hold an open, saved delta at once (a fleet-scale repository's steady PR count, not a hard cap). When set, `CACHE-014` fails if `max-per-pr x expected-open-prs > pr.budget` -- see "Sizing `[cache.pr]` for repository scale" below. Omit it and this half of `CACHE-014` is silent (no signal to check). |
 | `pr.measured-largest-delta` | string (size, optional) | M2-17 (ci.yml#42): the largest delta size actually observed, e.g. copied from a `ci-lint cache delta manifest` run against a real large PR. When set, `CACHE-014` fails if it exceeds `max-per-pr` (a cap sized below an already-observed delta silently truncates that PR's saved cache on every save). Omit it and this half of `CACHE-014` is silent. |
