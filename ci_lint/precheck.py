@@ -51,6 +51,7 @@ from ci_lint.rules.rust_async_guards import check_rust_019
 from ci_lint.rules.cache_stats_summary import check_gen_023
 from ci_lint.rules.rust_nocapture import check_rust_017
 from ci_lint.rules.lint_job_tests import check_gen_019
+from ci_lint.rules.rust_double_check import check_rust_023
 from ci_lint.rules.rust_test_selectors import check_rust_015
 from ci_lint.rules.rust_units import check_group7
 from ci_lint.rules.secrets_rules import check_group5
@@ -196,6 +197,7 @@ def run_precheck(repo_root: Path, *, title: str = "", local: bool = False, live:
         all_findings.extend(check_group_cook_cache(ci, repo_root))
         all_findings.extend(check_rust_017(repo_root))
         all_findings.extend(check_gen_019(repo_root))
+        all_findings.extend(check_rust_023(repo_root))
         all_findings.extend(check_cpp_001(repo_root))
         all_findings.extend(check_needs_graph(repo_root))
         all_findings.extend(check_rust_015(repo_root))
