@@ -112,6 +112,7 @@ from ci_lint.rules.cache_payload import (
     check_cache_007_manifest,
     load_manifest_paths,
 )
+from ci_lint.rules.cache_static import check_cache_003_setup_uv
 from ci_lint.rules.cache_static import parse_size as cache_parse_size
 from ci_lint.rules.complexity import register as register_complexity
 from ci_lint.rules.contract import extract_bracket_tokens
@@ -1263,8 +1264,19 @@ def _cmd_cache_budget(args: argparse.Namespace) -> int:
         ci, fetch=default_fetch, token=token, repo=repo_slug, event_name=event_name, ref=ref,
         pr_number=pr_number, default_branch=default_branch,
     )
-    print(json.dumps(verdict.to_json_dict(), indent=2) if args.json else verdict.render())
-    return 1 if verdict.failed else 0
+    # [cache.pr] mode "none": an ungated setup-uv saves a PR entry on every
+    # push. Report the cause from the workflow files, not just the live
+    # symptom (FastLED #4921); a workflow scan, no extra API call.
+    gate_findings = check_cache_003_setup_uv(ci, repo_root) if ci.cache.pr.mode == "none" else []
+    if args.json:
+        payload = verdict.to_json_dict()
+        payload["save_gate_findings"] = [{"path": f.path, "message": f.message, "fix": f.fix} for f in gate_findings]
+        print(json.dumps(payload, indent=2))
+    else:
+        print(verdict.render())
+        for f in gate_findings:
+            print(f"  {f.rule} {f.path}: {f.message}\n    fix: {f.fix}")
+    return 1 if verdict.failed or gate_findings else 0
 
 
 def _cmd_cache_heal(args: argparse.Namespace) -> int:
