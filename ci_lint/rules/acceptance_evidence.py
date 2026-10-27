@@ -26,10 +26,16 @@ The static check scans Python sources on a release-acceptance evidence path
 ``evidence``, ``release_gate``, ``public_release`` or ``public_catalog``) and
 flags:
 
-- **clause A** (``violation``): the probe suppresses its evidence row -- a
-  bare ``pytest.skip(...)``, ``raise unittest.SkipTest``/``raise SkipTest``,
-  ``pytest.importorskip(...)``, or a ``sys.exit(0)`` in a file that also
-  writes an evidence row. ``pytest.skip.Exception`` (and a
+- **clause A** (``violation``): a probe that names and emits the evidence row
+  suppresses it -- a bare ``pytest.skip(...)``,
+  ``raise unittest.SkipTest``/``raise SkipTest``,
+  ``pytest.importorskip(...)``, or a ``sys.exit(0)``. The gate is that the file
+  must *name* the evidence document it writes (an ``*_EVIDENCE`` env path,
+  ``require_evidence``, ``REQUIRED_TARGETS``) *and* serialise a row; a file
+  matching the acceptance path by name alone is not a probe, and an ordinary
+  installer test's fixture ``write_text`` is never scanned. A file that names
+  evidence but writes the row through a helper the static check cannot follow
+  is ``needs_review``, not a violation. ``pytest.skip.Exception`` (and a
   ``pytest.raises(pytest.skip.Exception)`` match) is *not* a suppression and
   is not flagged.
 - **clause A, workflow input** (``needs_review``): a
@@ -91,9 +97,30 @@ _ACCEPTANCE_PATH = re.compile(
 # The house escape hatch: a reason is required, a bare comment is not an excuse.
 _ALLOW = re.compile(rf"ci-lint:\s*allow\s+{re.escape(RULE)}\s+\S")
 
-# A file "writes an evidence row" when it serialises a row or a document.
+# A file participates in evidence production when it names the evidence document
+# it is handed or emits: the env-var path it is given (`CLUD_PUBLIC_EVIDENCE`), the
+# aggregate that consumes the row (`require_evidence`), or the target set the rows
+# are required for (`REQUIRED_TARGETS`). Deliberately not word-bounded --
+# `CLUD_PUBLIC_EVIDENCE` carries no word boundary before `EVIDENCE`. Without this
+# gate every `pytest.skip` in a file whose *name* merely matches the acceptance
+# path is a violation: talos-hq/clud's `tests/test_installer_native_entry.py` has
+# seven `pytest.skip` calls, emits no evidence row at all, and was flagged.
+_EVIDENCE_TOKEN = re.compile(r"evidence|REQUIRED_TARGETS", re.IGNORECASE)
+
+# A file serialises something when it dumps JSON or writes a document. Together
+# with the token above, this says the row is emitted *here* rather than through a
+# helper the static check cannot follow.
 _EVIDENCE_WRITE = re.compile(r"json\.dumps?\s*\(|write_text\s*\(|\.write\s*\(")
-_EVIDENCE_WORD = re.compile(r"\bevidence\b|\brows?\b", re.IGNORECASE)
+
+
+def _names_evidence(source: str) -> bool:
+    """True when the file names the evidence document it is handed or emits."""
+    return _EVIDENCE_TOKEN.search(source) is not None
+
+
+def _writes_row(source: str) -> bool:
+    """True when the file names an evidence document *and* serialises a row."""
+    return _names_evidence(source) and _EVIDENCE_WRITE.search(source) is not None
 
 # A skipif `reason=` that names a workflow-provided input.
 _ENV_INPUT = re.compile(r"os\.environ|os\.getenv|\b(?:CLUD|CLUED|CI)_[A-Z0-9_]+")
@@ -186,7 +213,13 @@ def _sys_exit_zero(call: ast.Call) -> bool:
 
 
 def _clause_a_offenses(tree: ast.AST, source: str, lines: list[str]) -> list[_Offense]:
-    writes_row = bool(_EVIDENCE_WRITE.search(source) and _EVIDENCE_WORD.search(source))
+    # A file that never names the evidence document it writes is not a probe and
+    # cannot lose a row; gating here is what keeps REL-008 off ordinary installer
+    # tests (an arbitrary `write_text` plus the word "rows" is fixture setup, not
+    # an evidence row).
+    if not _names_evidence(source):
+        return []
+    writes_row = _writes_row(source)
     offenses: list[_Offense] = []
     for node in ast.walk(tree):
         what: str | None = None
@@ -229,7 +262,9 @@ def _skipif_reason_offense(tree: ast.AST, source: str, lines: list[str]) -> _Off
     return None
 
 
-def _clause_a_findings(rel: str, offenses: list[_Offense]) -> list[Finding]:
+def _clause_a_findings(
+    rel: str, offenses: list[_Offense], status: Status
+) -> list[Finding]:
     if not offenses:
         return []
     first = min(offenses, key=lambda o: o.line)
@@ -242,6 +277,7 @@ def _clause_a_findings(rel: str, offenses: list[_Offense]) -> list[Finding]:
             rule=RULE,
             path=rel,
             line=first.line,
+            status=status,
             message=f"release-acceptance probe {rel}:{first.line} {detail}. An aggregate that "
             "requires exactly one evidence row per declared target then either fails closed and "
             f"rolls back a healthy release, or passes vacuously ({INCIDENT})",
@@ -296,7 +332,13 @@ def _scan_file(rel: str, source: str) -> list[Finding]:
     except (SyntaxError, ValueError):
         tree = None
     if tree is not None:
-        findings.extend(_clause_a_findings(rel, _clause_a_offenses(tree, source, lines)))
+        # A skip in a file that demonstrably emits a row is a violation; one in a
+        # file that only *names* evidence, with the write elsewhere, is suspect
+        # but unfollowable statically -- report it for review rather than as fact.
+        status = Status.VIOLATION if _writes_row(source) else Status.NEEDS_REVIEW
+        findings.extend(
+            _clause_a_findings(rel, _clause_a_offenses(tree, source, lines), status)
+        )
         input_offense = _skipif_reason_offense(tree, source, lines)
         if input_offense is not None:
             findings.append(_clause_a_input_finding(rel, input_offense))

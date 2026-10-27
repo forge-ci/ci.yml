@@ -88,12 +88,24 @@ class Rel008ClauseATest(unittest.TestCase):
         self.assertEqual([], _run({PROBE_PATH: text}))
 
     def test_importorskip_is_violation(self) -> None:
-        text = "import pytest\n\n\ndef test_probe() -> None:\n    pytest.importorskip('clud')\n"
+        text = (
+            "import json\nimport pytest\n\n\n"
+            "def test_probe() -> None:\n"
+            "    pytest.importorskip('clud')\n"
+            "    with open('public-evidence/row.json', 'w') as fh:\n"
+            "        json.dump({'evidence': []}, fh)\n"
+        )
         findings = _run({PROBE_PATH: text})
         self.assertEqual([Status.VIOLATION], [f.status for f in findings])
 
     def test_raise_skiptest_is_violation(self) -> None:
-        text = "import unittest\n\n\ndef test_probe() -> None:\n    raise unittest.SkipTest('nope')\n"
+        text = (
+            "import json\nimport unittest\n\n\n"
+            "def test_probe() -> None:\n"
+            "    raise unittest.SkipTest('nope')\n"
+            "    with open('public-evidence/row.json', 'w') as fh:\n"
+            "        json.dump({'evidence': []}, fh)\n"
+        )
         findings = _run({PROBE_PATH: text})
         self.assertEqual([Status.VIOLATION], [f.status for f in findings])
 
@@ -115,17 +127,21 @@ class Rel008ClauseATest(unittest.TestCase):
 
     def test_allow_comment_with_reason_excuses_the_line(self) -> None:
         text = (
-            "import pytest\n\n\n"
+            "import json\nimport pytest\n\n\n"
             "def test_probe() -> None:\n"
             "    pytest.skip('manual-only host')  # ci-lint: allow REL-008 an arm64 board we cannot run in CI\n"
+            "    with open('public-evidence/row.json', 'w') as fh:\n"
+            "        json.dump({'evidence': []}, fh)\n"
         )
         self.assertEqual([], _run({PROBE_PATH: text}))
 
     def test_bare_allow_comment_without_reason_is_not_an_excuse(self) -> None:
         text = (
-            "import pytest\n\n\n"
+            "import json\nimport pytest\n\n\n"
             "def test_probe() -> None:\n"
             "    pytest.skip('manual-only host')  # ci-lint: allow REL-008\n"
+            "    with open('public-evidence/row.json', 'w') as fh:\n"
+            "        json.dump({'evidence': []}, fh)\n"
         )
         self.assertEqual([Status.VIOLATION], [f.status for f in _run({PROBE_PATH: text})])
 
@@ -159,6 +175,82 @@ class Rel008SkipifInputTest(unittest.TestCase):
             "    pass\n"
         )
         self.assertEqual([], _run({PROBE_PATH: text}))
+
+
+class Rel008EvidenceTokenTest(unittest.TestCase):
+    """A skip is only a violation in a file that actually emits an evidence row.
+
+    ``talos-hq/clud``'s ``tests/test_installer_native_entry.py`` has seven
+    ``pytest.skip`` calls and emits no evidence row at all. Before the token gate
+    it was reported as a violation: the path match ("installer") plus an
+    incidental ``write_text`` on a fixture and the word "rows" was taken for an
+    evidence probe, which is exactly the noise the rule must not produce.
+    """
+
+    ORDINARY_INSTALLER_TEST = '''\
+"""The native clud installer entry must gate writes and restore its terminal."""
+
+import os
+
+import pytest
+
+
+def clud_binary() -> str:
+    candidate = os.environ.get("CLUD_TEST_BINARY")
+    if not candidate:
+        pytest.skip("compiled clud bundle is required")
+    return candidate
+
+
+def test_writes_a_profile(tmp_path) -> None:
+    rows = "settings"
+    (tmp_path / "profile").write_text(rows)
+'''
+
+    ROW_WRITTEN_ELSEWHERE = '''\
+"""Released-mode acceptance: prove the promoted installer for one host."""
+
+import os
+
+import pytest
+
+
+def assert_older_installer_discovery() -> None:
+    if not os.environ.get("CLUD_PUBLIC_EVIDENCE"):
+        pytest.skip("no evidence output declared")
+    write_public_evidence_row(os.environ["CLUD_PUBLIC_EVIDENCE"])
+'''
+
+    ROW_WRITTEN_HERE = '''\
+"""Released-mode acceptance: prove the promoted installer for one host."""
+
+import json
+import os
+
+import pytest
+
+
+def assert_older_installer_discovery() -> None:
+    if not os.environ.get("CLUD_PUBLIC_EVIDENCE"):
+        pytest.skip("no evidence output declared")
+    with open(os.environ["CLUD_PUBLIC_EVIDENCE"], "w") as fh:
+        json.dump({"ok": True}, fh)
+'''
+
+    def test_plain_installer_test_writing_a_fixture_is_silent(self) -> None:
+        self.assertEqual(
+            [],
+            _run({"tests/test_installer_native_entry.py": self.ORDINARY_INSTALLER_TEST}),
+        )
+
+    def test_probe_that_names_evidence_and_writes_here_is_a_violation(self) -> None:
+        findings = _run({PROBE_PATH: self.ROW_WRITTEN_HERE})
+        self.assertEqual([Status.VIOLATION], [f.status for f in findings])
+        self.assertEqual(PROBE_PATH, findings[0].path)
+
+    def test_probe_naming_evidence_with_the_write_elsewhere_is_needs_review(self) -> None:
+        findings = _run({PROBE_PATH: self.ROW_WRITTEN_ELSEWHERE})
+        self.assertEqual([Status.NEEDS_REVIEW], [f.status for f in findings])
 
 
 class Rel008ClauseBTest(unittest.TestCase):
