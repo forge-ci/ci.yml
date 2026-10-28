@@ -89,7 +89,8 @@ def _cmd_run(args: argparse.Namespace) -> int:
     config = _config(repo, "run")
     if config is None:
         return 2
-    outcome = run_gate(repo, config, stamp=not args.no_stamp, force=args.force, use_cache=not args.no_cache)
+    outcome = run_gate(repo, config, stamp=not args.no_stamp, force=args.force,
+                       use_cache=not args.no_cache, serial_heavy=args.serial_heavy)
     print(outcome.message, file=sys.stderr if outcome.exit_code else sys.stdout)
     return outcome.exit_code
 
@@ -331,6 +332,8 @@ def register(sub: argparse._SubParsersAction) -> None:  # type: ignore[type-arg]
     run.add_argument("--no-stamp", action="store_true", help="run only; do not amend HEAD")
     run.add_argument("--force", action="store_true", help="run even when HEAD is already attested")
     run.add_argument("--no-cache", action="store_true", help="GATE-007: run every lane, ignoring cached passes")
+    run.add_argument("--serial-heavy", action="store_true",
+                     help="run heavy lane groups sequentially; requires declared lanes")
     run.set_defaults(func=_cmd_run)
 
     push = lg.add_parser("push", help="validate and publish an exact stamped head; updates its existing PR")
