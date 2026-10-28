@@ -91,6 +91,14 @@ class AttestationTest(unittest.TestCase):
 
 
 class ConfigTest(TempRepoCase):
+    def test_mode_defaults_to_shadow(self) -> None:
+        """A declaration with no `mode` must not fail a PR: the GATE-003 default
+        is report-only, so an unattested head runs the full remote suite."""
+        (self.tmp / "local-gate.toml").write_text(
+            '[gate]\nrun = ["python3", "ci/local_gate.py"]\n', encoding="utf-8"
+        )
+        self.assertEqual(self.config(self.tmp).mode, "shadow")
+
     def test_absent_means_not_opted_in(self) -> None:
         loaded = load_gate_config(self.tmp)
         self.assertIsNone(loaded.config)
@@ -189,9 +197,16 @@ class VerifyAndHookTest(TempRepoCase):
         self.assertEqual(
             verify(repo, config, sha=head, event="pull_request", author="dependabot[bot]").state, "exempt"
         )
-        self.assertEqual(verify(repo, config, sha=head, event="pull_request", author="dev").exit_code, 1)
-        shadow = config.__class__(**{**config.__dict__, "mode": "shadow"})
-        self.assertEqual(verify(repo, shadow, sha=head, event="pull_request", author="dev").exit_code, 0)
+        # The default mode is `shadow`: an unattested head is reported, not failed,
+        # so nothing is skipped and the PR runs the full remote suite instead of
+        # going red for a forgotten local gate.
+        default_outcome = verify(repo, config, sha=head, event="pull_request", author="dev")
+        self.assertEqual(default_outcome.exit_code, 0)
+        self.assertFalse(default_outcome.attested)
+        self.assertEqual(default_outcome.state, "missing")
+        self.assertIn("full remote suite runs", default_outcome.message)
+        enforced = config.__class__(**{**config.__dict__, "mode": "enforce"})
+        self.assertEqual(verify(repo, enforced, sha=head, event="pull_request", author="dev").exit_code, 1)
         run_gate(repo, config)
         head = _git(repo, "rev-parse", "HEAD")
         self.assertTrue(verify(repo, config, sha=head, event="pull_request", author="dev").attested)

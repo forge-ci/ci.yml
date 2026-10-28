@@ -813,7 +813,7 @@ repo-root `local-gate.toml`; declaring both is `GATE-001`. Parsed strictly
 | `verify` | `"<workflow file>:<job id>"` | The PR entry job that runs `ci-lint local-gate verify`; every other job in that workflow must transitively `needs:` it. `GATE-002`. |
 | `verify-exempt` | array of strings | Job ids in the verify workflow allowed to run before/without it (e.g. `ci-pre`). |
 | `exempt-authors` | array of strings | PR authors verify passes without a trailer. Default `["dependabot[bot]", "renovate[bot]", "github-actions[bot]"]`. |
-| `mode` | `"enforce"` (default) or `"shadow"` | `shadow`: verify reports a missing/stale attestation but exits 0. |
+| `mode` | `"shadow"` (default) or `"enforce"` | `shadow`: verify reports a missing/stale attestation and exits 0, so no job is skipped and the PR runs the full remote suite — a missing attestation costs CI time, never a red PR. `enforce` opts a repository back into failing the PR run on `missing`/`stale`. |
 | `isolation.marker` | string (env var name) | `GATE-005`: set only by the isolated test environment, e.g. `SOLDR_TEST_ISOLATED`. |
 | `isolation.runner` | array of strings | `GATE-005`: how the local gate runs the suite isolated, e.g. `["bosn", "run", "--task", "test"]`. A `bosn` runner's task must exist in `bosn.toml`, and its command or stack Dockerfile (`ENV <marker>=1`) must set the marker; the gate's script (a repository file named in `run`) must invoke the runner. |
 | `isolation.guard` | path | `GATE-005`: the file every test process passes through (soldr: its nextest run-wrapper), which must check both `CI` and the marker and refuse otherwise. |
