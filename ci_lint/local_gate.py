@@ -187,7 +187,7 @@ def parse_gate_table(raw: dict[str, TomlValue], *, path: str, source: str, findi
     verify_raw = sub.str_("verify", required=False)
     verify_exempt = sub.list_str("verify-exempt", required=False)
     exempt_authors = sub.list_str("exempt-authors", required=False, default=DEFAULT_EXEMPT_AUTHORS)
-    mode = sub.str_("mode", required=False, default="enforce") or "enforce"
+    mode = sub.str_("mode", required=False, default="shadow") or "shadow"
     isolation_raw = sub.table_("isolation", required=False)
     lanes_raw = sub.table_("lanes", required=False)
     full_run_raw = sub.table_("full-run", required=False)
@@ -224,7 +224,7 @@ def parse_gate_table(raw: dict[str, TomlValue], *, path: str, source: str, findi
         return None
     if mode not in MODES:
         bad(f"'mode' is {mode!r}", f"set 'mode' to one of {', '.join(MODES)}")
-        mode = "enforce"
+        mode = "shadow"
     if full_run is not None and sum(not lane.optional for lane in lanes) < 2:
         bad("full-run receipts require at least two non-optional lanes",
             "declare two or more required lanes, or remove [gate.full-run]")
@@ -1042,7 +1042,12 @@ def verify(
     )
     message = f"[GATE-003] {sha[:12]} not attested ({result.state}): {result.detail}\n    fix:   {fix}"
     if config.mode == "shadow":
-        return VerifyOutcome(0, False, result.state, message + "\n    (mode = shadow: reported, not enforced)")
+        return VerifyOutcome(
+            0,
+            False,
+            result.state,
+            message + "\n    (mode = shadow: not enforced — the full remote suite runs instead of skipping)",
+        )
     return VerifyOutcome(1, False, result.state, message)
 
 
