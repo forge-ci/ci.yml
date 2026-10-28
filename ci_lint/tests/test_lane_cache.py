@@ -7,8 +7,11 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
 
@@ -31,6 +34,7 @@ from ci_lint.lane_cache import (
 )
 from ci_lint.local_gate import (
     Attestation,
+    LaneOutcome,
     check_commit,
     load_gate_config,
     parse_attestation,
@@ -313,6 +317,99 @@ class HeavyGroupTest(LanedRepo):
         self.write("sleep", "1.5")
         self.commit("grouped lanes")
 
+    def test_serial_heavy_groups_never_overlap_and_both_run(self) -> None:
+        self._lanes({"rust": None, "tests": "isolated"})
+        head = _git(self.repo, "rev-parse", "HEAD")
+        tree = _git(self.repo, "rev-parse", "HEAD^{tree}")
+        first_started = threading.Event()
+        second_started = threading.Event()
+        release = threading.Event()
+
+        def run_lane(repo, lane, key, log_dir, config, head, tree):
+            log = log_dir / f"{lane.id}.log"
+            log.write_text("ok\n", encoding="utf-8")
+            if lane.id == "rust":
+                first_started.set()
+                if not release.wait(5):
+                    raise AssertionError("test did not release first lane")
+            else:
+                second_started.set()
+            return LaneOutcome(lane, key, 0, 0, log)
+
+        with patch("ci_lint.local_gate._run_lane", side_effect=run_lane):
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(run_lanes, self.repo, self.config(), head, tree,
+                                     use_cache=False, serial_heavy=True)
+                try:
+                    self.assertTrue(first_started.wait(5))
+                    self.assertFalse(second_started.wait(0.2), "heavy groups overlapped")
+                finally:
+                    release.set()
+                result = future.result(timeout=5)
+        self.assertTrue(second_started.is_set())
+        self.assertEqual(result.exit_code, 0)
+        self.assertEqual(result.provenance, ["rust:run", "tests:run"])
+        with patch("ci_lint.local_gate._run_lane", side_effect=AssertionError("cache missed")):
+            cached = run_lanes(self.repo, self.config(), head, tree, use_cache=True, serial_heavy=True)
+        self.assertEqual(cached.exit_code, 0)
+        self.assertTrue(all(":reused@" in value for value in cached.provenance))
+
+    def test_default_heavy_groups_can_overlap(self) -> None:
+        self._lanes({"rust": None, "tests": "isolated"})
+        head = _git(self.repo, "rev-parse", "HEAD")
+        tree = _git(self.repo, "rev-parse", "HEAD^{tree}")
+        both_started = threading.Barrier(2)
+
+        def run_lane(repo, lane, key, log_dir, config, head, tree):
+            log = log_dir / f"{lane.id}.log"
+            log.write_text("ok\n", encoding="utf-8")
+            both_started.wait(timeout=5)
+            return LaneOutcome(lane, key, 0, 0, log)
+
+        with patch("ci_lint.local_gate._run_lane", side_effect=run_lane):
+            result = run_lanes(self.repo, self.config(), head, tree, use_cache=False)
+        self.assertEqual(result.exit_code, 0)
+        self.assertEqual(result.provenance, ["rust:run", "tests:run"])
+
+    def test_cli_forwards_serial_heavy(self) -> None:
+        from ci_lint.cli import main
+        from ci_lint.local_gate import RunOutcome
+
+        with patch("ci_lint.local_gate_cli.run_gate", return_value=RunOutcome(0, "passed")) as gate:
+            self.assertEqual(main(["local-gate", "run", "--repo", str(self.repo), "--serial-heavy"]), 0)
+        self.assertTrue(gate.call_args.kwargs["serial_heavy"])
+
+    def test_serial_heavy_rejects_undeclared_lanes(self) -> None:
+        outcome = run_gate(self.repo, replace(self.config(), lanes=()), serial_heavy=True)
+        self.assertEqual(outcome.exit_code, 2)
+        self.assertIn("requires declared lanes", outcome.message)
+
+    def test_serial_failure_still_runs_the_other_group_and_does_not_attest(self) -> None:
+        self._lanes({"rust": None, "cross": None, "tests": "isolated"})
+        self.write("sleep", "0")
+        self.write("fail-rust", "")
+        self.commit("fail rust lane")
+        outcome = run_gate(self.repo, self.config(), serial_heavy=True)
+        self.assertNotEqual(outcome.exit_code, 0)
+        self.assertEqual(self.runs(), ["rust", "tests"])
+        self.assertNotEqual(check_commit(self.repo, _git(self.repo, "rev-parse", "HEAD")).state, "attested")
+
+    def test_serial_startup_failure_does_not_skip_other_groups(self) -> None:
+        self._lanes({"rust": None, "cross": None, "tests": "isolated"})
+        gate = self.repo / "local-gate.toml"
+        text = gate.read_text(encoding="utf-8")
+        command = f'run = ["{sys.executable}", "gate.py", "--lane", "rust", "--log", "{self.log}"]'
+        self.assertIn(command, text)
+        gate.write_text(text.replace(command, 'run = ["__ci_lint_missing_504__"]'), encoding="utf-8")
+        self.write("sleep", "0")
+        self.commit("missing rust executable")
+        outcome = run_gate(self.repo, self.config(), serial_heavy=True)
+        self.assertNotEqual(outcome.exit_code, 0)
+        self.assertEqual(self.runs(), ["tests"])
+        self.assertNotEqual(check_commit(self.repo, _git(self.repo, "rev-parse", "HEAD")).state, "attested")
+        self.assertTrue(list((cache_dir(self.repo) / "tests").glob("*.json")))
+        self.assertFalse(list((cache_dir(self.repo) / "rust").glob("*.json")))
+
     def test_independent_groups_overlap(self) -> None:
         self._lanes({"rust": None, "tests": "isolated"})
         start = time.monotonic()
@@ -408,6 +505,12 @@ if not pathlib.Path("no-receipt").exists():
         self.assertEqual(result.provenance, ["lint:run", "tests:run", "winvm:n/a"])
         self.assertEqual(tuple(p.lane for p in result.passed), ("lint", "tests"))
         self.assertEqual(list((cache_dir(self.repo) / "winvm").glob("*.json")), [])
+
+    def test_serial_heavy_uses_individual_lanes_instead_of_full_shortcut(self) -> None:
+        outcome = run_gate(self.repo, self.config(), serial_heavy=True)
+        self.assertEqual(outcome.exit_code, 0)
+        self.assertEqual(self.runs(), ["lint", "tests"])
+        self.assertNotIn("full", self.runs())
 
     def test_one_miss_runs_only_that_lane(self) -> None:
         self.gate()

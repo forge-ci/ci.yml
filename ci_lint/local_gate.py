@@ -570,9 +570,16 @@ def _run_lane(repo: Path, lane: LaneConfig, key: str, log_dir: Path,
     log = log_dir / f"{lane.id}.log"
     start = time.monotonic()
     with open(log, "wb") as fh:
-        proc = _gate_command(repo, lane.run, config, head, tree, lane=lane.id, stdout=fh)
-        _command_error(proc, fh)
-    return LaneOutcome(lane, key, proc.returncode, int(round(time.monotonic() - start)), log)
+        try:
+            proc = _gate_command(repo, lane.run, config, head, tree, lane=lane.id, stdout=fh)
+            _command_error(proc, fh)
+            returncode = proc.returncode
+        except (OSError, subprocess.SubprocessError) as error:
+            # A launch failure is a failed lane, not an exception that prevents
+            # independent groups from running and recording their results.
+            fh.write(f"lane could not start ({type(error).__name__})\n".encode("utf-8"))
+            returncode = 127
+    return LaneOutcome(lane, key, returncode, int(round(time.monotonic() - start)), log)
 
 
 @dataclass(frozen=True)
@@ -594,6 +601,15 @@ def _heavy_chain(repo: Path, chain: list[_Pending], log_dir: Path,
         out.append(outcome)
         if outcome.exit_code != 0 and not _not_applicable(outcome):
             break
+    return out
+
+
+def _serial_heavy_chains(repo: Path, chains: list[list[_Pending]], log_dir: Path,
+                         config: GateConfig, head: str, tree: str) -> list[LaneOutcome]:
+    """Run groups sequentially while preserving each group's failure boundary."""
+    out: list[LaneOutcome] = []
+    for chain in chains:
+        out.extend(_heavy_chain(repo, chain, log_dir, config, head, tree))
     return out
 
 
@@ -694,7 +710,9 @@ def _execute_full_lanes(repo: Path, config: GateConfig, head: str, tree: str, re
     return LaneRun(0, provenance, secs, tuple(passed))
 
 
-def run_lanes(repo: Path, config: GateConfig, head: str, tree: str, *, use_cache: bool) -> LaneRun:  # noqa: C901
+def run_lanes(  # noqa: C901
+    repo: Path, config: GateConfig, head: str, tree: str, *, use_cache: bool, serial_heavy: bool = False,
+) -> LaneRun:
     """Run (or reuse) every declared lane (GATE-007). Cache hits are
     resolved first; then `light` lanes run concurrently alongside the
     `heavy` chains: one per heavy-lane `group` (#399), each running its
@@ -725,7 +743,7 @@ def run_lanes(repo: Path, config: GateConfig, head: str, tree: str, *, use_cache
             reused[lane.id] = key.key
         else:
             pending.append(_Pending(lane, key.key))
-    if config.full_run is not None and len(pending) >= config.full_run.min_misses:
+    if not serial_heavy and config.full_run is not None and len(pending) >= config.full_run.min_misses:
         return _run_full_lanes(repo, config, head, tree, reused, pending, log_dir)
     light = [p for p in pending if p.lane.weight == "light"]
     groups: dict[str, list[_Pending]] = {}
@@ -738,7 +756,10 @@ def run_lanes(repo: Path, config: GateConfig, head: str, tree: str, *, use_cache
         for p in light:
             print(f"local-gate: lane {p.lane.id}: started (light)", file=sys.stderr, flush=True)
             futures.append(pool.submit(_run_lane, repo, p.lane, p.key, log_dir, config, head, tree))
-        chains = [pool.submit(_heavy_chain, repo, chain, log_dir, config, head, tree) for chain in groups.values()]
+        if serial_heavy and groups:
+            chains = [pool.submit(_serial_heavy_chains, repo, list(groups.values()), log_dir, config, head, tree)]
+        else:
+            chains = [pool.submit(_heavy_chain, repo, chain, log_dir, config, head, tree) for chain in groups.values()]
         for future in as_completed(futures):
             outcome = future.result()
             _report(outcome)
@@ -802,12 +823,13 @@ def _retain_lane_logs(repo: Path) -> None:
 
 
 def run_gate(
-    repo: Path, config: GateConfig, *, stamp: bool = True, force: bool = False, use_cache: bool = True
+    repo: Path, config: GateConfig, *, stamp: bool = True, force: bool = False,
+    use_cache: bool = True, serial_heavy: bool = False,
 ) -> RunOutcome:
     try:
         with hold_gate_run_lock(run_lock_path(repo)):
             try:
-                return _run_gate(repo, config, stamp=stamp, force=force, use_cache=use_cache)
+                return _run_gate(repo, config, stamp=stamp, force=force, use_cache=use_cache, serial_heavy=serial_heavy)
             finally:
                 _retain_lane_logs(repo)
     except (OSError, GitError, ValueError, subprocess.SubprocessError) as error:
@@ -815,7 +837,8 @@ def run_gate(
 
 
 def _run_gate(  # noqa: C901
-    repo: Path, config: GateConfig, *, stamp: bool = True, force: bool = False, use_cache: bool = True
+    repo: Path, config: GateConfig, *, stamp: bool = True, force: bool = False,
+    use_cache: bool = True, serial_heavy: bool = False,
 ) -> RunOutcome:
     try:
         dirty = tracked_changes(repo)
@@ -828,6 +851,8 @@ def _run_gate(  # noqa: C901
             "local-gate run: tracked files have uncommitted changes; the gate attests a commit's tree, "
             "so commit (or stash) them first:\n  " + "\n  ".join(dirty[:20]),
         )
+    if serial_heavy and not config.lanes:
+        return RunOutcome(2, "local-gate run: --serial-heavy requires declared lanes")
     replay_problem = _replay_coverage_problem(config, repo)
     if replay_problem:
         return RunOutcome(1, replay_problem)
@@ -840,7 +865,7 @@ def _run_gate(  # noqa: C901
     tree = tree_of(repo, head)
     if config.lanes:
         start = time.monotonic()
-        lane_run = run_lanes(repo, config, head, tree, use_cache=use_cache)
+        lane_run = run_lanes(repo, config, head, tree, use_cache=use_cache, serial_heavy=serial_heavy)
         secs = int(round(time.monotonic() - start))
         lanes_field = ",".join(lane_run.provenance)
         if lane_run.exit_code != 0:
