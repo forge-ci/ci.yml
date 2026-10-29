@@ -261,6 +261,10 @@ def _cmd_check_push(args: argparse.Namespace) -> int:
     for head in push.wip:
         print(f"ci-lint local-gate: WIP push of an unattested head ({WIP_PUSH_ENV}="
               f"{os.environ[WIP_PUSH_ENV].strip()!r}): {head}", file=sys.stderr)
+    if push.mode_defaulted:
+        print("ci-lint local-gate: notice: this repository's gate policy sets no `mode`, so it defaults to "
+              "shadow and this hook only warns about unattested heads; set mode = \"enforce\" in "
+              "local-gate.toml to refuse them", file=sys.stderr)
     for head in push.shadow:
         print(f"ci-lint local-gate: warning: unattested head pushed (mode = shadow; hosted CI runs the "
               f"full suite): {head}", file=sys.stderr)
@@ -364,19 +368,17 @@ def register(sub: argparse._SubParsersAction) -> None:  # type: ignore[type-arg]
     hook.add_argument("hook_args", nargs="*", help="git's <remote> <url> (ignored)")
     hook.set_defaults(func=_cmd_check_push)
 
-    inst = lg.add_parser("install-hook", help="install the pre-push hook")
-    inst.add_argument("--repo", default=".")
-    inst.add_argument("--launcher", help="command that runs ci-lint (default: this interpreter + this checkout)")
-    inst.add_argument("--force", action="store_true", help="replace a custom pre-push hook (kept as pre-push.pre-ci-lint); a ci-lint hook is always refreshed")
-    inst.set_defaults(func=_cmd_install_hook)
+    def add_install_args(parser: argparse.ArgumentParser) -> None:
+        parser.add_argument("--repo", default=".")
+        parser.add_argument("--launcher", help="command that runs ci-lint (default: this interpreter + this checkout)")
+        parser.add_argument("--force", action="store_true",
+                            help="replace an edited or custom pre-push hook (kept as pre-push.pre-ci-lint); "
+                                 "an unedited ci-lint hook is always refreshed")
+        parser.set_defaults(func=_cmd_install_hook)
 
+    add_install_args(lg.add_parser("install-hook", help="install or refresh the pre-push hook"))
     hook_grp = lg.add_parser("hook", help="manage the pre-push hook").add_subparsers(dest="hook_cmd", required=True)
-    inst2 = hook_grp.add_parser("install", help="install or refresh the pre-push hook (same as install-hook)")
-    inst2.add_argument("--repo", default=".")
-    inst2.add_argument("--launcher", help="command that runs ci-lint (default: this interpreter + this checkout)")
-    inst2.add_argument("--force", action="store_true",
-                       help="replace a custom pre-push hook (kept as pre-push.pre-ci-lint)")
-    inst2.set_defaults(func=_cmd_install_hook)
+    add_install_args(hook_grp.add_parser("install", help="same as install-hook"))
 
     lanes = lg.add_parser("lanes", help="GATE-007: each lane's cache key and hit/miss for HEAD")
     lanes.add_argument("--repo", default=".")

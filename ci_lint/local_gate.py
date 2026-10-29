@@ -142,6 +142,8 @@ class GateConfig:
     exempt_authors: frozenset[str]
     mode: str
     source: str
+    # False when `mode` was not written in the declaration (the shadow default).
+    mode_explicit: bool = True
     # GATE-005 (zackees/ci.yml#168): how a self-hosted tool's suite runs isolated.
     isolation: IsolationConfig | None = None
     # GATE-007 (zackees/ci.yml#177): the gate split into cacheable lanes, in
@@ -250,6 +252,7 @@ def parse_gate_table(raw: dict[str, TomlValue], *, path: str, source: str, findi
         exempt_authors=frozenset(exempt_authors),
         mode=mode,
         source=source,
+        mode_explicit="mode" in raw,
         isolation=isolation,
         lanes=lanes,
         full_run=full_run,
@@ -927,6 +930,8 @@ class PushCheck:
     wip: list[str] = field(default_factory=list)
     # Unattested heads let through because the pushed policy is `mode = "shadow"`.
     shadow: list[str] = field(default_factory=list)
+    # True when a checked head's policy leaves `mode` to the shadow default.
+    mode_defaulted: bool = False
 
 
 def _publication_problems(repo: Path, sha: str, config: GateConfig) -> tuple[str, ...]:
@@ -949,6 +954,39 @@ def _publication_problems(repo: Path, sha: str, config: GateConfig) -> tuple[str
                             if status.state != VALID and (status.gate in required or status.state != MISSING))
 
 
+def _remote_base(repo: Path, remote_sha: str) -> str | None:
+    """The commit whose policy the push is judged against besides its own: the
+    remote tip when it exists, else the merge-base with origin's default branch."""
+
+    if remote_sha != ZERO_SHA:
+        try:
+            return _git(repo, "rev-parse", "--verify", "--quiet", f"{remote_sha}^{{commit}}").strip() or None
+        except GitError:
+            return None
+    try:
+        default = _git(repo, "symbolic-ref", "--short", "refs/remotes/origin/HEAD").strip()
+    except GitError:
+        default = "origin/main"
+    try:
+        return _git(repo, "merge-base", default, "HEAD").strip() or None
+    except GitError:
+        return None
+
+
+def _strictest_mode(repo: Path, local_sha: str, remote_sha: str, local_mode: str) -> str:
+    """`enforce` anywhere wins, so a branch cannot escape the hook by flipping
+    its own `mode` to shadow in the pushed commit."""
+
+    if local_mode == "enforce":
+        return local_mode
+    base = _remote_base(repo, remote_sha)
+    if base is not None and base != local_sha:
+        remote = load_gate_config_at(repo, base)
+        if remote.config is not None and remote.config.mode == "enforce":
+            return "enforce"
+    return local_mode
+
+
 def check_push(repo: Path, stdin_text: str, *, wip_reason: str | None = None) -> PushCheck:
     """git's pre-push stdin: `<local ref> <local sha> <remote ref> <remote sha>`
     per line. Every pushed branch head must be attested; tags and deletes
@@ -963,11 +1001,12 @@ def check_push(repo: Path, stdin_text: str, *, wip_reason: str | None = None) ->
     problems: list[str] = []
     wip: list[str] = []
     shadow: list[str] = []
+    defaulted = False
     for line in stdin_text.splitlines():
         parts = line.split()
         if len(parts) != 4:
             continue
-        local_ref, local_sha, remote_ref, _remote_sha = parts
+        local_ref, local_sha, remote_ref, remote_sha = parts
         if local_sha == ZERO_SHA or remote_ref.startswith("refs/tags/"):
             continue
         loaded = load_gate_config_at(repo, local_sha)
@@ -977,19 +1016,20 @@ def check_push(repo: Path, stdin_text: str, *, wip_reason: str | None = None) ->
             continue
         if loaded.config is None:
             continue
+        defaulted = defaulted or not loaded.config.mode_explicit
         result = check_commit(repo, local_sha)
         if not result.ok:
             detail = f"{local_ref} -> {remote_ref}: {result.detail}"
             if wip_reason:
                 wip.append(detail)
-            elif loaded.config.mode == "shadow":
+            elif _strictest_mode(repo, local_sha, remote_sha, loaded.config.mode) == "shadow":
                 shadow.append(detail)
             else:
                 problems.append(detail)
         else:
             problems.extend(f"{local_ref} -> {remote_ref}: {problem}"
                             for problem in _publication_problems(repo, local_sha, loaded.config))
-    return PushCheck(exit_code=1 if problems else 0, problems=problems, wip=wip, shadow=shadow)
+    return PushCheck(exit_code=1 if problems else 0, problems=problems, wip=wip, shadow=shadow, mode_defaulted=defaulted)
 
 
 def hook_script(launcher: str) -> str:
@@ -1032,6 +1072,34 @@ class HookInstall:
     message: str
 
 
+_HOOK_TAIL = ' local-gate check-push "$@"'
+
+
+def _is_managed_header(text: str) -> bool:
+    """The ci-lint marker must be a header line (the first few lines), not a
+    comment or string further down some other tool's hook."""
+
+    return any(line.startswith(HOOK_MARKER_PREFIX) for line in text.splitlines()[:3])
+
+
+def _is_pristine(text: str) -> bool:
+    """True when `text` is exactly what `hook_script` generates for the
+    launcher it names."""
+
+    for line in text.splitlines():
+        if line.startswith("exec ") and line.endswith(_HOOK_TAIL):
+            return text == hook_script(line[len("exec "):-len(_HOOK_TAIL)])
+    return False
+
+
+def _backup(hook: Path, existing: str) -> str:
+    backup = hook.with_name(hook.name + CUSTOM_BACKUP_SUFFIX)
+    note = f"; replaced an earlier backup at {backup}" if backup.exists() else f"; saved the old hook as {backup}"
+    backup.write_text(existing, encoding="utf-8")
+    backup.chmod(0o755)
+    return note
+
+
 def install_hook(repo: Path, launcher: str, *, force: bool = False) -> HookInstall:
     try:
         hooks_dir = Path(_git(repo, "rev-parse", "--git-path", "hooks").strip())
@@ -1041,26 +1109,24 @@ def install_hook(repo: Path, launcher: str, *, force: bool = False) -> HookInsta
         hooks_dir = repo / hooks_dir
     hook = hooks_dir / "pre-push"
     existing = hook.read_text(encoding="utf-8", errors="replace") if hook.exists() else None
-    managed = existing is not None and HOOK_MARKER_PREFIX in existing
-    if existing is not None and not managed and not force:
+    managed = existing is not None and _is_managed_header(existing)
+    edited = managed and existing is not None and not _is_pristine(existing)
+    if existing is not None and (not managed or edited) and not force:
+        what = "was edited after ci-lint installed it" if managed else "was not installed by ci-lint"
         return HookInstall(
             1,
-            f"local-gate hook install: {hook} already exists and was not installed by ci-lint; "
-            "call `local-gate check-push` from it yourself, or pass --force to replace it "
-            f"(the old hook is kept as {hook.name}{CUSTOM_BACKUP_SUFFIX})",
+            f"local-gate hook install: {hook} {what}; call `local-gate check-push` from it yourself, "
+            f"or pass --force to replace it (with --force, the old hook is kept as {hook.name}{CUSTOM_BACKUP_SUFFIX})",
         )
     script = hook_script(launcher)
     if existing == script:
         return HookInstall(0, f"local-gate hook install: {hook} is already current")
     hooks_dir.mkdir(parents=True, exist_ok=True)
-    if existing is not None and not managed:
-        backup = hook.with_name(hook.name + CUSTOM_BACKUP_SUFFIX)
-        backup.write_text(existing, encoding="utf-8")
-        backup.chmod(0o755)
+    note = _backup(hook, existing) if existing is not None and (not managed or edited) else ""
     hook.write_text(script, encoding="utf-8")
     hook.chmod(0o755)
     verb = "refreshed" if managed else "wrote"
-    return HookInstall(0, f"local-gate hook install: {verb} {hook}")
+    return HookInstall(0, f"local-gate hook install: {verb} {hook}{note}")
 
 
 # ── CI-side verify (GATE-003) ────────────────────────────────────────────────

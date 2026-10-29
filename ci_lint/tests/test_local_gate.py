@@ -48,11 +48,12 @@ def _git(repo: Path, *args: str) -> str:
 def _repo(tmp: Path, gate_body: str, mode: str | None = None) -> Path:
     """A git repo whose gate is `python3 gate.py`; `gate.py` runs `gate_body`."""
 
+    mode_line = f'mode = "{mode}"\n' if mode else ""
     _git(tmp, "init", "-q", "-b", "main")
     _git(tmp, "config", "user.email", "t@example.com")
     _git(tmp, "config", "user.name", "t")
     (tmp / "local-gate.toml").write_text(
-        f'[gate]\n{f"mode = {chr(34)}{mode}{chr(34)}" + chr(10) if mode else ""}run = ["{sys.executable}", "gate.py"]\nmirrors = ["ci.yml:lint"]\nverify = "ci.yml:verify"\n',
+        f'[gate]\n{mode_line}run = ["{sys.executable}", "gate.py"]\nmirrors = ["ci.yml:lint"]\nverify = "ci.yml:verify"\n',
         encoding="utf-8",
     )
     (tmp / "gate.py").write_text(gate_body, encoding="utf-8")
@@ -257,7 +258,7 @@ class VerifyAndHookTest(TempRepoCase):
     def test_install_hook_refreshes_managed_hook_idempotently(self) -> None:
         repo = _repo(self.tmp, "print('ok')\n")
         hook = repo / ".git" / "hooks" / "pre-push"
-        old = hook_script("uvx old-pin ci-lint").replace(HOOK_MARKER, "# installed by: ci-lint local-gate hook install (old)")
+        old = hook_script("uvx old-pin ci-lint")
         hook.parent.mkdir(parents=True, exist_ok=True)
         hook.write_text(old, encoding="utf-8")
         first = install_hook(repo, "new-launcher")
@@ -281,6 +282,68 @@ class VerifyAndHookTest(TempRepoCase):
         self.assertEqual(install_hook(repo, "ci-lint", force=True).exit_code, 0)
         self.assertEqual((hook.parent / "pre-push.pre-ci-lint").read_text(encoding="utf-8"), "#!/bin/sh\necho mine\n")
         self.assertIn(HOOK_MARKER, hook.read_text(encoding="utf-8"))
+
+    def test_check_push_flipping_enforce_to_shadow_is_still_refused(self) -> None:
+        repo = _repo(self.tmp, "print('ok')\n", mode="enforce")
+        base = _git(repo, "rev-parse", "HEAD")
+        (repo / "local-gate.toml").write_text(
+            (repo / "local-gate.toml").read_text(encoding="utf-8").replace('mode = "enforce"', 'mode = "shadow"'),
+            encoding="utf-8")
+        _git(repo, "commit", "-qam", "flip to shadow")
+        head = _git(repo, "rev-parse", "HEAD")
+        push = check_push(repo, f"refs/heads/x {head} refs/heads/x {base}\n")
+        self.assertEqual(push.exit_code, 1)
+        # A new branch is judged against the merge-base with origin's default branch.
+        _git(repo, "update-ref", "refs/remotes/origin/main", base)
+        new_branch = check_push(repo, f"refs/heads/y {head} refs/heads/y {'0' * 40}\n")
+        self.assertEqual(new_branch.exit_code, 1)
+
+    def test_check_push_defaulted_mode_is_flagged(self) -> None:
+        repo = _repo(self.tmp, "print('ok')\n")
+        head = _git(repo, "rev-parse", "HEAD")
+        self.assertTrue(check_push(repo, f"refs/heads/x {head} refs/heads/x {'0' * 40}\n").mode_defaulted)
+        with tempfile.TemporaryDirectory() as raw:
+            explicit = _repo(Path(raw), "print('ok')\n", mode="shadow")
+            sha = _git(explicit, "rev-parse", "HEAD")
+            self.assertFalse(check_push(explicit, f"refs/heads/x {sha} refs/heads/x {'0' * 40}\n").mode_defaulted)
+
+    def test_check_push_shadow_still_refuses_policy_findings(self) -> None:
+        repo = _repo(self.tmp, "print('ok')\n", mode="shadow")
+        (repo / "local-gate.toml").write_text('[gate]\nmode = "shadow"\nrun = []\n', encoding="utf-8")
+        _git(repo, "commit", "-qam", "break policy")
+        head = _git(repo, "rev-parse", "HEAD")
+        push = check_push(repo, f"refs/heads/x {head} refs/heads/x {'0' * 40}\n")
+        self.assertEqual(push.exit_code, 1)
+        self.assertIn("outgoing gate policy", push.problems[0])
+
+    def test_install_hook_preserves_edited_managed_hook(self) -> None:
+        repo = _repo(self.tmp, "print('ok')\n")
+        hook = repo / ".git" / "hooks" / "pre-push"
+        self.assertEqual(install_hook(repo, "ci-lint").exit_code, 0)
+        edited = hook.read_text(encoding="utf-8") + "echo extra step\n"
+        hook.write_text(edited, encoding="utf-8")
+        self.assertEqual(install_hook(repo, "ci-lint").exit_code, 1)
+        self.assertEqual(hook.read_text(encoding="utf-8"), edited)
+        self.assertEqual(install_hook(repo, "ci-lint", force=True).exit_code, 0)
+        self.assertEqual((hook.parent / "pre-push.pre-ci-lint").read_text(encoding="utf-8"), edited)
+
+    def test_install_hook_marker_in_a_comment_is_not_managed(self) -> None:
+        repo = _repo(self.tmp, "print('ok')\n")
+        hook = repo / ".git" / "hooks" / "pre-push"
+        hook.parent.mkdir(parents=True, exist_ok=True)
+        custom = "#!/bin/sh\n# mine\n# note\n# a comment: installed by: ci-lint is how others do it\n"
+        hook.write_text(custom, encoding="utf-8")
+        self.assertEqual(install_hook(repo, "ci-lint").exit_code, 1)
+        self.assertEqual(hook.read_text(encoding="utf-8"), custom)
+
+    def test_install_hook_force_warns_when_replacing_a_backup(self) -> None:
+        repo = _repo(self.tmp, "print('ok')\n")
+        hook = repo / ".git" / "hooks" / "pre-push"
+        hook.parent.mkdir(parents=True, exist_ok=True)
+        hook.write_text("#!/bin/sh\necho one\n", encoding="utf-8")
+        self.assertNotIn("replaced an earlier backup", install_hook(repo, "ci-lint", force=True).message)
+        hook.write_text("#!/bin/sh\necho two\n", encoding="utf-8")
+        self.assertIn("replaced an earlier backup", install_hook(repo, "ci-lint", force=True).message)
 
     def test_install_hook_refuses_foreign_hook(self) -> None:
         repo = _repo(self.tmp, "print('ok')\n")
