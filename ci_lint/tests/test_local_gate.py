@@ -310,7 +310,8 @@ class VerifyAndHookTest(TempRepoCase):
     def test_check_push_without_a_remote_base_fails_closed(self) -> None:
         repo = _repo(self.tmp, "print('ok')\n", mode="shadow")
         head = _git(repo, "rev-parse", "HEAD")
-        push = check_push(repo, f"refs/heads/x {head} refs/heads/x {'0' * 40}\n")
+        # The remote has a tip we never fetched and nothing resolves a base.
+        push = check_push(repo, f"refs/heads/x {head} refs/heads/x {'c' * 40}\n")
         self.assertEqual(push.exit_code, 1)
         self.assertIn("no remote base commit", push.problems[0])
         self.assertIn("git fetch", push.problems[0])
@@ -353,6 +354,44 @@ class VerifyAndHookTest(TempRepoCase):
         self.assertEqual(check_push(repo, line).exit_code, 1)
         _git(repo, "checkout", "-q", "-b", "elsewhere", base)
         self.assertEqual(check_push(repo, line).exit_code, 1)
+
+    def test_check_push_shadow_remote_tip_cannot_hide_enforcing_default_branch(self) -> None:
+        repo = _repo(self.tmp, "print('ok')\n", mode="enforce")
+        toml = repo / "local-gate.toml"
+        _git(repo, "update-ref", "refs/remotes/origin/main", _git(repo, "rev-parse", "HEAD"))
+        _git(repo, "checkout", "-q", "-b", "feature")
+        toml.write_text(toml.read_text(encoding="utf-8").replace("enforce", "shadow"), encoding="utf-8")
+        _git(repo, "commit", "-qam", "flip to shadow")
+        tip = _git(repo, "rev-parse", "HEAD")  # already on the remote branch
+        (repo / "src.txt").write_text("more\n", encoding="utf-8")
+        _git(repo, "commit", "-qam", "later")
+        pushed = _git(repo, "rev-parse", "HEAD")
+        push = check_push(repo, f"refs/heads/feature {pushed} refs/heads/feature {tip}\n")
+        self.assertEqual(push.exit_code, 1)
+        self.assertIn("mode = enforce", push.problems[0])
+
+    def test_check_push_first_push_of_a_new_repo_honours_shadow(self) -> None:
+        repo = _repo(self.tmp, "print('ok')\n")
+        head = _git(repo, "rev-parse", "HEAD")
+        push = check_push(repo, f"refs/heads/main {head} refs/heads/main {'0' * 40}\n", remote="https://example.invalid/r.git")
+        self.assertEqual(push.exit_code, 0)
+        self.assertEqual(len(push.shadow), 1)
+        self.assertTrue(push.mode_defaulted)
+
+    def test_check_push_unresolved_remote_refs_fail_closed(self) -> None:
+        repo = _repo(self.tmp, "print('ok')\n", mode="shadow")
+        head = _git(repo, "rev-parse", "HEAD")
+        _git(repo, "update-ref", "refs/remotes/origin/feature", head)  # remote refs, no default branch
+        push = check_push(repo, f"refs/heads/x {head} refs/heads/x {'0' * 40}\n")
+        self.assertEqual(push.exit_code, 1)
+
+    def test_check_push_escalated_push_does_not_print_defaulted_notice(self) -> None:
+        repo = _repo(self.tmp, "print('ok')\n")
+        head = _git(repo, "rev-parse", "HEAD")
+        _git(repo, "update-ref", "refs/remotes/origin/feature", head)
+        push = check_push(repo, f"refs/heads/x {head} refs/heads/x {'0' * 40}\n")
+        self.assertEqual(push.exit_code, 1)
+        self.assertFalse(push.mode_defaulted)
 
     def test_check_push_missing_remote_tip_falls_back_to_merge_base(self) -> None:
         repo, base = self._shadow_with_origin()

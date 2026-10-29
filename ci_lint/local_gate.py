@@ -974,19 +974,41 @@ def _default_branch_refs(repo: Path, remote: str | None) -> list[str]:
     return [ref for ref in refs if _commit_exists(repo, ref)]
 
 
-def _remote_base(repo: Path, local_sha: str, remote_sha: str, remote: str | None) -> str | None:
-    """The commit whose policy the push is judged against besides its own: the
-    remote tip when it is known locally, else the merge-base of the *pushed*
-    commit (not HEAD) with the remote's default branch. None: nothing found."""
+def _remote_bases(repo: Path, local_sha: str, remote_sha: str, remote: str | None) -> list[str]:
+    """Every commit whose policy the push is judged against besides its own:
+    the remote tip when it is known locally, AND the merge-base of the
+    *pushed* commit (not HEAD) with the remote's default branch. Both are
+    needed: a tip that already flipped to shadow must not hide an enforcing
+    default branch."""
 
+    bases: list[str] = []
     if remote_sha != ZERO_SHA and _commit_exists(repo, remote_sha):
-        return remote_sha
+        bases.append(remote_sha)
     for ref in _default_branch_refs(repo, remote):
         try:
-            return _git(repo, "merge-base", ref, local_sha).strip() or None
+            merge_base = _git(repo, "merge-base", ref, local_sha).strip()
         except GitError:
             continue
-    return None
+        if merge_base:
+            bases.append(merge_base)
+            break
+    return bases
+
+
+def _unresolved_base_is_unsafe(repo: Path, remote_sha: str) -> bool:
+    """With no base found, honour the local mode only when there is nothing to
+    compare against at all (a brand-new repository, or a URL remote with no
+    tracking refs). A shallow clone, a remote tip we lack, or tracking refs
+    that do not resolve mean a base exists but is out of reach: fail closed."""
+
+    try:
+        if _git(repo, "rev-parse", "--is-shallow-repository").strip() == "true":
+            return True
+        if remote_sha != ZERO_SHA:
+            return True
+        return bool(_git(repo, "for-each-ref", "--count=1", "refs/remotes").strip())
+    except GitError:
+        return True
 
 
 @dataclass(frozen=True)
@@ -997,25 +1019,30 @@ class EffectiveMode:
 
 def _strictest_mode(repo: Path, local_sha: str, remote_sha: str, local_mode: str,
                     remote: str | None = None) -> EffectiveMode:
-    """(mode, why). `enforce` anywhere wins, so a branch cannot escape the hook
-    by flipping `mode` to shadow in the pushed commit. Fails closed: a shadow
-    push whose base cannot be found or read is treated as `enforce`, with the
-    reason in `why`."""
+    """`enforce` in the pushed policy or any base policy wins, so a branch
+    cannot escape the hook by flipping `mode` to shadow. A base commit with no
+    gate policy at all counts as shadow. Fails closed (reason in `why`) when a
+    base policy is unreadable or a base exists but cannot be reached."""
 
     if local_mode == "enforce":
         return EffectiveMode(local_mode)
     fix = ("fetch the remote (`git fetch origin`, `git fetch --unshallow` for a shallow clone) or set "
            "`mode` explicitly on the default branch")
-    base = _remote_base(repo, local_sha, remote_sha, remote)
-    if base is None:
-        return EffectiveMode("enforce", f"mode = shadow cannot be trusted: no remote base commit to compare against; {fix}")
-    if base == local_sha:
+    bases = _remote_bases(repo, local_sha, remote_sha, remote)
+    if not bases:
+        if _unresolved_base_is_unsafe(repo, remote_sha):
+            return EffectiveMode(
+                "enforce", f"mode = shadow cannot be trusted: no remote base commit to compare against; {fix}")
         return EffectiveMode(local_mode)
-    remote_policy = load_gate_config_at(repo, base)
-    if remote_policy.findings:
-        return EffectiveMode("enforce", f"mode = shadow cannot be trusted: the base policy at {base[:12]} is unreadable; {fix}")
-    if remote_policy.config is not None and remote_policy.config.mode == "enforce":
-        return EffectiveMode("enforce", f"the remote policy at {base[:12]} sets mode = enforce")
+    for base in dict.fromkeys(bases):
+        if base == local_sha:
+            continue
+        remote_policy = load_gate_config_at(repo, base)
+        if remote_policy.findings:
+            return EffectiveMode(
+                "enforce", f"mode = shadow cannot be trusted: the base policy at {base[:12]} is unreadable; {fix}")
+        if remote_policy.config is not None and remote_policy.config.mode == "enforce":
+            return EffectiveMode("enforce", f"the remote policy at {base[:12]} sets mode = enforce")
     return EffectiveMode(local_mode)
 
 
@@ -1049,19 +1076,22 @@ def check_push(repo: Path, stdin_text: str, *, wip_reason: str | None = None,
             continue
         if loaded.config is None:
             continue
-        defaulted = defaulted or not loaded.config.mode_explicit
+        not_explicit = not loaded.config.mode_explicit
         result = check_commit(repo, local_sha)
         if not result.ok:
             detail = f"{local_ref} -> {remote_ref}: {result.detail}"
             if wip_reason:
                 wip.append(detail)
+                defaulted = defaulted or not_explicit
             else:
                 effective = _strictest_mode(repo, local_sha, remote_sha, loaded.config.mode, remote)
                 if effective.mode == "shadow":
                     shadow.append(detail)
+                    defaulted = defaulted or not_explicit
                 else:
                     problems.append(f"{detail} ({effective.why})" if effective.why else detail)
         else:
+            defaulted = defaulted or not_explicit
             problems.extend(f"{local_ref} -> {remote_ref}: {problem}"
                             for problem in _publication_problems(repo, local_sha, loaded.config))
     return PushCheck(exit_code=1 if problems else 0, problems=problems, wip=wip, shadow=shadow, mode_defaulted=defaulted)
