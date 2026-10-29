@@ -915,8 +915,10 @@ def _run_gate(  # noqa: C901
 
 ZERO_SHA = "0" * 40
 HOOK_MARKER = "# installed by: ci-lint local-gate hook install (zackees/ci.yml#166)"
-# Matches any managed hook, including ones written by an older ci-lint, so a
-# header change never strands a hook that `hook install` could refresh.
+# A managed hook is recognised by this header prefix on one of its first lines.
+# Only a body identical to the current template counts as unedited; an older
+# ci-lint template is therefore treated as edited and needs `--force`, which
+# saves it as the .pre-ci-lint backup before refreshing.
 HOOK_MARKER_PREFIX = "# installed by: ci-lint"
 CUSTOM_BACKUP_SUFFIX = ".pre-ci-lint"
 WIP_PUSH_ENV = "CI_LINT_GATE_WIP_PUSH"
@@ -954,40 +956,71 @@ def _publication_problems(repo: Path, sha: str, config: GateConfig) -> tuple[str
                             if status.state != VALID and (status.gate in required or status.state != MISSING))
 
 
-def _remote_base(repo: Path, remote_sha: str) -> str | None:
+def _commit_exists(repo: Path, sha: str) -> bool:
+    try:
+        _git(repo, "rev-parse", "--verify", "--quiet", f"{sha}^{{commit}}")
+    except GitError:
+        return False
+    return True
+
+
+def _default_branch_refs(repo: Path, remote: str | None) -> list[str]:
+    """Candidate refs for the remote's default branch: origin/HEAD, then the
+    pushed-to remote's HEAD/main/master, then origin's main/master."""
+
+    names = ["origin"] + ([remote] if remote and remote != "origin" else [])
+    refs = [f"refs/remotes/{name}/HEAD" for name in names]
+    refs += [f"refs/remotes/{name}/{branch}" for name in names for branch in ("main", "master")]
+    return [ref for ref in refs if _commit_exists(repo, ref)]
+
+
+def _remote_base(repo: Path, local_sha: str, remote_sha: str, remote: str | None) -> str | None:
     """The commit whose policy the push is judged against besides its own: the
-    remote tip when it exists, else the merge-base with origin's default branch."""
+    remote tip when it is known locally, else the merge-base of the *pushed*
+    commit (not HEAD) with the remote's default branch. None: nothing found."""
 
-    if remote_sha != ZERO_SHA:
+    if remote_sha != ZERO_SHA and _commit_exists(repo, remote_sha):
+        return remote_sha
+    for ref in _default_branch_refs(repo, remote):
         try:
-            return _git(repo, "rev-parse", "--verify", "--quiet", f"{remote_sha}^{{commit}}").strip() or None
+            return _git(repo, "merge-base", ref, local_sha).strip() or None
         except GitError:
-            return None
-    try:
-        default = _git(repo, "symbolic-ref", "--short", "refs/remotes/origin/HEAD").strip()
-    except GitError:
-        default = "origin/main"
-    try:
-        return _git(repo, "merge-base", default, "HEAD").strip() or None
-    except GitError:
-        return None
+            continue
+    return None
 
 
-def _strictest_mode(repo: Path, local_sha: str, remote_sha: str, local_mode: str) -> str:
-    """`enforce` anywhere wins, so a branch cannot escape the hook by flipping
-    its own `mode` to shadow in the pushed commit."""
+@dataclass(frozen=True)
+class EffectiveMode:
+    mode: str
+    why: str | None = None
+
+
+def _strictest_mode(repo: Path, local_sha: str, remote_sha: str, local_mode: str,
+                    remote: str | None = None) -> EffectiveMode:
+    """(mode, why). `enforce` anywhere wins, so a branch cannot escape the hook
+    by flipping `mode` to shadow in the pushed commit. Fails closed: a shadow
+    push whose base cannot be found or read is treated as `enforce`, with the
+    reason in `why`."""
 
     if local_mode == "enforce":
-        return local_mode
-    base = _remote_base(repo, remote_sha)
-    if base is not None and base != local_sha:
-        remote = load_gate_config_at(repo, base)
-        if remote.config is not None and remote.config.mode == "enforce":
-            return "enforce"
-    return local_mode
+        return EffectiveMode(local_mode)
+    fix = ("fetch the remote (`git fetch origin`, `git fetch --unshallow` for a shallow clone) or set "
+           "`mode` explicitly on the default branch")
+    base = _remote_base(repo, local_sha, remote_sha, remote)
+    if base is None:
+        return EffectiveMode("enforce", f"mode = shadow cannot be trusted: no remote base commit to compare against; {fix}")
+    if base == local_sha:
+        return EffectiveMode(local_mode)
+    remote_policy = load_gate_config_at(repo, base)
+    if remote_policy.findings:
+        return EffectiveMode("enforce", f"mode = shadow cannot be trusted: the base policy at {base[:12]} is unreadable; {fix}")
+    if remote_policy.config is not None and remote_policy.config.mode == "enforce":
+        return EffectiveMode("enforce", f"the remote policy at {base[:12]} sets mode = enforce")
+    return EffectiveMode(local_mode)
 
 
-def check_push(repo: Path, stdin_text: str, *, wip_reason: str | None = None) -> PushCheck:
+def check_push(repo: Path, stdin_text: str, *, wip_reason: str | None = None,
+               remote: str | None = None) -> PushCheck:
     """git's pre-push stdin: `<local ref> <local sha> <remote ref> <remote sha>`
     per line. Every pushed branch head must be attested; tags and deletes
     pass. A non-blank `wip_reason` admits unattested heads only (a paused
@@ -1022,10 +1055,12 @@ def check_push(repo: Path, stdin_text: str, *, wip_reason: str | None = None) ->
             detail = f"{local_ref} -> {remote_ref}: {result.detail}"
             if wip_reason:
                 wip.append(detail)
-            elif _strictest_mode(repo, local_sha, remote_sha, loaded.config.mode) == "shadow":
-                shadow.append(detail)
             else:
-                problems.append(detail)
+                effective = _strictest_mode(repo, local_sha, remote_sha, loaded.config.mode, remote)
+                if effective.mode == "shadow":
+                    shadow.append(detail)
+                else:
+                    problems.append(f"{detail} ({effective.why})" if effective.why else detail)
         else:
             problems.extend(f"{local_ref} -> {remote_ref}: {problem}"
                             for problem in _publication_problems(repo, local_sha, loaded.config))

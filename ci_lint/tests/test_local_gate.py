@@ -243,6 +243,7 @@ class VerifyAndHookTest(TempRepoCase):
             with tempfile.TemporaryDirectory() as raw:
                 repo = _repo(Path(raw), "print('ok')\n", mode=mode)
                 head = _git(repo, "rev-parse", "HEAD")
+                _git(repo, "update-ref", "refs/remotes/origin/main", head)
                 push = check_push(repo, f"refs/heads/x {head} refs/heads/x {'0' * 40}\n")
                 self.assertEqual(push.exit_code, 0)
                 self.assertEqual(push.problems, [])
@@ -298,17 +299,102 @@ class VerifyAndHookTest(TempRepoCase):
         new_branch = check_push(repo, f"refs/heads/y {head} refs/heads/y {'0' * 40}\n")
         self.assertEqual(new_branch.exit_code, 1)
 
+    def _shadow_with_origin(self) -> tuple[Path, str]:
+        repo = _repo(self.tmp, "print('ok')\n", mode="shadow")
+        base = _git(repo, "rev-parse", "HEAD")
+        _git(repo, "update-ref", "refs/remotes/origin/main", base)
+        (repo / "src.txt").write_text("two\n", encoding="utf-8")
+        _git(repo, "commit", "-qam", "two")
+        return repo, base
+
+    def test_check_push_without_a_remote_base_fails_closed(self) -> None:
+        repo = _repo(self.tmp, "print('ok')\n", mode="shadow")
+        head = _git(repo, "rev-parse", "HEAD")
+        push = check_push(repo, f"refs/heads/x {head} refs/heads/x {'0' * 40}\n")
+        self.assertEqual(push.exit_code, 1)
+        self.assertIn("no remote base commit", push.problems[0])
+        self.assertIn("git fetch", push.problems[0])
+
+    def test_check_push_in_a_shallow_clone_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            origin = _repo(Path(raw) / "o", "print('ok')\n", mode="shadow") if (Path(raw) / "o").mkdir() is None else None
+            assert origin is not None
+            (origin / "src.txt").write_text("two\n", encoding="utf-8")
+            _git(origin, "commit", "-qam", "two")
+            clone = Path(raw) / "c"
+            proc = run_captured(["git", "clone", "-q", "--depth", "1", origin.as_uri(), str(clone)])
+            self.assertTrue(proc.ok, proc.stderr)
+            _git(clone, "config", "user.email", "t@example.com")
+            _git(clone, "config", "user.name", "t")
+            (clone / "src.txt").write_text("three\n", encoding="utf-8")
+            _git(clone, "commit", "-qam", "three")
+            _git(clone, "update-ref", "-d", "refs/remotes/origin/HEAD")
+            head = _git(clone, "rev-parse", "HEAD")
+            # Unrelated-history stand-in for a missing base: the default ref is gone.
+            _git(clone, "update-ref", "-d", "refs/remotes/origin/main")
+            push = check_push(clone, f"refs/heads/x {head} refs/heads/x {'0' * 40}\n", remote="origin")
+            self.assertEqual(push.exit_code, 1)
+            self.assertIn("cannot be trusted", push.problems[0])
+
+    def test_check_push_judges_the_pushed_sha_not_head(self) -> None:
+        repo = _repo(self.tmp, "print('ok')\n", mode="shadow")
+        base = _git(repo, "rev-parse", "HEAD")
+        toml = repo / "local-gate.toml"
+        toml.write_text(toml.read_text(encoding="utf-8").replace("shadow", "enforce"), encoding="utf-8")
+        _git(repo, "commit", "-qam", "enforce")
+        _git(repo, "update-ref", "refs/remotes/origin/main", _git(repo, "rev-parse", "HEAD"))
+        toml.write_text(toml.read_text(encoding="utf-8").replace("enforce", "shadow"), encoding="utf-8")
+        _git(repo, "commit", "-qam", "flip to shadow")
+        pushed = _git(repo, "rev-parse", "HEAD")
+        line = f"refs/heads/x {pushed} refs/heads/x {'0' * 40}\n"
+        # A non-checked-out branch, and a detached HEAD at the old shadow commit:
+        # the merge-base must come from the pushed sha, not from HEAD.
+        _git(repo, "checkout", "-q", "--detach", base)
+        self.assertEqual(check_push(repo, line).exit_code, 1)
+        _git(repo, "checkout", "-q", "-b", "elsewhere", base)
+        self.assertEqual(check_push(repo, line).exit_code, 1)
+
+    def test_check_push_missing_remote_tip_falls_back_to_merge_base(self) -> None:
+        repo, base = self._shadow_with_origin()
+        head = _git(repo, "rev-parse", "HEAD")
+        push = check_push(repo, f"refs/heads/x {head} refs/heads/x {'b' * 40}\n")
+        self.assertEqual(push.exit_code, 0)
+        self.assertEqual(len(push.shadow), 1)
+        # And an enforce policy at the merge-base is honored, not skipped.
+        (repo / "local-gate.toml").write_text(
+            (repo / "local-gate.toml").read_text(encoding="utf-8").replace("shadow", "enforce"), encoding="utf-8")
+        _git(repo, "commit", "-qam", "enforce")
+        tip = _git(repo, "rev-parse", "HEAD")
+        _git(repo, "update-ref", "refs/remotes/origin/main", tip)
+        (repo / "local-gate.toml").write_text(
+            (repo / "local-gate.toml").read_text(encoding="utf-8").replace("enforce", "shadow"), encoding="utf-8")
+        _git(repo, "commit", "-qam", "flip")
+        flipped = _git(repo, "rev-parse", "HEAD")
+        refused = check_push(repo, f"refs/heads/x {flipped} refs/heads/x {'b' * 40}\n")
+        self.assertEqual(refused.exit_code, 1)
+        self.assertIn("mode = enforce", refused.problems[0])
+
+    def test_check_push_resolves_default_branch_from_the_pushed_remote(self) -> None:
+        repo = _repo(self.tmp, "print('ok')\n", mode="shadow")
+        head = _git(repo, "rev-parse", "HEAD")
+        _git(repo, "update-ref", "refs/remotes/upstream/master", head)
+        push = check_push(repo, f"refs/heads/x {head} refs/heads/x {'0' * 40}\n", remote="upstream")
+        self.assertEqual(push.exit_code, 0)
+
     def test_check_push_defaulted_mode_is_flagged(self) -> None:
         repo = _repo(self.tmp, "print('ok')\n")
         head = _git(repo, "rev-parse", "HEAD")
+        _git(repo, "update-ref", "refs/remotes/origin/main", head)
         self.assertTrue(check_push(repo, f"refs/heads/x {head} refs/heads/x {'0' * 40}\n").mode_defaulted)
         with tempfile.TemporaryDirectory() as raw:
             explicit = _repo(Path(raw), "print('ok')\n", mode="shadow")
             sha = _git(explicit, "rev-parse", "HEAD")
+            _git(explicit, "update-ref", "refs/remotes/origin/main", sha)
             self.assertFalse(check_push(explicit, f"refs/heads/x {sha} refs/heads/x {'0' * 40}\n").mode_defaulted)
 
     def test_check_push_shadow_still_refuses_policy_findings(self) -> None:
         repo = _repo(self.tmp, "print('ok')\n", mode="shadow")
+        _git(repo, "update-ref", "refs/remotes/origin/main", _git(repo, "rev-parse", "HEAD"))
         (repo / "local-gate.toml").write_text('[gate]\nmode = "shadow"\nrun = []\n', encoding="utf-8")
         _git(repo, "commit", "-qam", "break policy")
         head = _git(repo, "rev-parse", "HEAD")

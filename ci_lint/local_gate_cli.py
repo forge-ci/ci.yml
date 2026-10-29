@@ -256,7 +256,8 @@ def _show_lane_cache(repo: Path, config: GateConfig) -> int:
 
 def _cmd_check_push(args: argparse.Namespace) -> int:
     repo = Path(args.repo).resolve()
-    push = check_push(repo, sys.stdin.read(), wip_reason=os.environ.get(WIP_PUSH_ENV))
+    push = check_push(repo, sys.stdin.read(), wip_reason=os.environ.get(WIP_PUSH_ENV),
+                      remote=args.hook_args[0] if args.hook_args else None)
     code, problems = push.exit_code, push.problems
     for head in push.wip:
         print(f"ci-lint local-gate: WIP push of an unattested head ({WIP_PUSH_ENV}="
@@ -365,7 +366,7 @@ def register(sub: argparse._SubParsersAction) -> None:  # type: ignore[type-arg]
 
     hook = lg.add_parser("check-push", help="pre-push hook body: refuse unattested branch heads")
     hook.add_argument("--repo", default=".")
-    hook.add_argument("hook_args", nargs="*", help="git's <remote> <url> (ignored)")
+    hook.add_argument("hook_args", nargs="*", help="git's <remote> <url>")
     hook.set_defaults(func=_cmd_check_push)
 
     def add_install_args(parser: argparse.ArgumentParser) -> None:
