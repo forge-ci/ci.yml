@@ -912,6 +912,10 @@ def _run_gate(  # noqa: C901
 
 ZERO_SHA = "0" * 40
 HOOK_MARKER = "# installed by: ci-lint local-gate hook install (zackees/ci.yml#166)"
+# Matches any managed hook, including ones written by an older ci-lint, so a
+# header change never strands a hook that `hook install` could refresh.
+HOOK_MARKER_PREFIX = "# installed by: ci-lint"
+CUSTOM_BACKUP_SUFFIX = ".pre-ci-lint"
 WIP_PUSH_ENV = "CI_LINT_GATE_WIP_PUSH"
 
 
@@ -921,6 +925,8 @@ class PushCheck:
     problems: list[str]
     # Unattested heads admitted by an explicit WIP reason (ci.yml#406).
     wip: list[str] = field(default_factory=list)
+    # Unattested heads let through because the pushed policy is `mode = "shadow"`.
+    shadow: list[str] = field(default_factory=list)
 
 
 def _publication_problems(repo: Path, sha: str, config: GateConfig) -> tuple[str, ...]:
@@ -948,11 +954,15 @@ def check_push(repo: Path, stdin_text: str, *, wip_reason: str | None = None) ->
     per line. Every pushed branch head must be attested; tags and deletes
     pass. A non-blank `wip_reason` admits unattested heads only (a paused
     handoff branch, ci.yml#406); gate-policy and publication problems still
-    refuse, and hosted `local-gate verify` still fails the unattested PR."""
+    refuse, and hosted `local-gate verify` still fails the unattested PR.
+    Under the pushed policy's `mode = "shadow"` an unattested head is reported
+    in `PushCheck.shadow` and the push passes (talos-hq/clud#2265); `enforce`
+    refuses it."""
 
     wip_reason = (wip_reason or "").strip() or None
     problems: list[str] = []
     wip: list[str] = []
+    shadow: list[str] = []
     for line in stdin_text.splitlines():
         parts = line.split()
         if len(parts) != 4:
@@ -969,11 +979,17 @@ def check_push(repo: Path, stdin_text: str, *, wip_reason: str | None = None) ->
             continue
         result = check_commit(repo, local_sha)
         if not result.ok:
-            (wip if wip_reason else problems).append(f"{local_ref} -> {remote_ref}: {result.detail}")
+            detail = f"{local_ref} -> {remote_ref}: {result.detail}"
+            if wip_reason:
+                wip.append(detail)
+            elif loaded.config.mode == "shadow":
+                shadow.append(detail)
+            else:
+                problems.append(detail)
         else:
             problems.extend(f"{local_ref} -> {remote_ref}: {problem}"
                             for problem in _publication_problems(repo, local_sha, loaded.config))
-    return PushCheck(exit_code=1 if problems else 0, problems=problems, wip=wip)
+    return PushCheck(exit_code=1 if problems else 0, problems=problems, wip=wip, shadow=shadow)
 
 
 def hook_script(launcher: str) -> str:
@@ -1024,16 +1040,27 @@ def install_hook(repo: Path, launcher: str, *, force: bool = False) -> HookInsta
     if not hooks_dir.is_absolute():
         hooks_dir = repo / hooks_dir
     hook = hooks_dir / "pre-push"
-    if hook.exists() and HOOK_MARKER not in hook.read_text(encoding="utf-8", errors="replace") and not force:
+    existing = hook.read_text(encoding="utf-8", errors="replace") if hook.exists() else None
+    managed = existing is not None and HOOK_MARKER_PREFIX in existing
+    if existing is not None and not managed and not force:
         return HookInstall(
             1,
             f"local-gate hook install: {hook} already exists and was not installed by ci-lint; "
-            "call `local-gate check-push` from it yourself, or pass --force to replace it",
+            "call `local-gate check-push` from it yourself, or pass --force to replace it "
+            f"(the old hook is kept as {hook.name}{CUSTOM_BACKUP_SUFFIX})",
         )
+    script = hook_script(launcher)
+    if existing == script:
+        return HookInstall(0, f"local-gate hook install: {hook} is already current")
     hooks_dir.mkdir(parents=True, exist_ok=True)
-    hook.write_text(hook_script(launcher), encoding="utf-8")
+    if existing is not None and not managed:
+        backup = hook.with_name(hook.name + CUSTOM_BACKUP_SUFFIX)
+        backup.write_text(existing, encoding="utf-8")
+        backup.chmod(0o755)
+    hook.write_text(script, encoding="utf-8")
     hook.chmod(0o755)
-    return HookInstall(0, f"local-gate hook install: wrote {hook}")
+    verb = "refreshed" if managed else "wrote"
+    return HookInstall(0, f"local-gate hook install: {verb} {hook}")
 
 
 # ── CI-side verify (GATE-003) ────────────────────────────────────────────────

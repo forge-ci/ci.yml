@@ -261,6 +261,9 @@ def _cmd_check_push(args: argparse.Namespace) -> int:
     for head in push.wip:
         print(f"ci-lint local-gate: WIP push of an unattested head ({WIP_PUSH_ENV}="
               f"{os.environ[WIP_PUSH_ENV].strip()!r}): {head}", file=sys.stderr)
+    for head in push.shadow:
+        print(f"ci-lint local-gate: warning: unattested head pushed (mode = shadow; hosted CI runs the "
+              f"full suite): {head}", file=sys.stderr)
     if code:
         print("ci-lint local-gate: push refused -- these heads have not passed the local gate (GATE-003):", file=sys.stderr)
         for problem in problems:
@@ -364,8 +367,16 @@ def register(sub: argparse._SubParsersAction) -> None:  # type: ignore[type-arg]
     inst = lg.add_parser("install-hook", help="install the pre-push hook")
     inst.add_argument("--repo", default=".")
     inst.add_argument("--launcher", help="command that runs ci-lint (default: this interpreter + this checkout)")
-    inst.add_argument("--force", action="store_true", help="replace an existing non-ci-lint pre-push hook")
+    inst.add_argument("--force", action="store_true", help="replace a custom pre-push hook (kept as pre-push.pre-ci-lint); a ci-lint hook is always refreshed")
     inst.set_defaults(func=_cmd_install_hook)
+
+    hook_grp = lg.add_parser("hook", help="manage the pre-push hook").add_subparsers(dest="hook_cmd", required=True)
+    inst2 = hook_grp.add_parser("install", help="install or refresh the pre-push hook (same as install-hook)")
+    inst2.add_argument("--repo", default=".")
+    inst2.add_argument("--launcher", help="command that runs ci-lint (default: this interpreter + this checkout)")
+    inst2.add_argument("--force", action="store_true",
+                       help="replace a custom pre-push hook (kept as pre-push.pre-ci-lint)")
+    inst2.set_defaults(func=_cmd_install_hook)
 
     lanes = lg.add_parser("lanes", help="GATE-007: each lane's cache key and hit/miss for HEAD")
     lanes.add_argument("--repo", default=".")
