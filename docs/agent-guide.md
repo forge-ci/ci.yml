@@ -56,6 +56,33 @@ For implementation changes to the checker, use focused regression fixtures from 
 - **Admin-merge only after the quick gate is green**, even for a change that looks docs-only: running-process#1230 carried a line-length violation into `main`.
 - **Stage explicit paths in automation, never `git add -A`** after local test runs: tests can write build artifacts (`<crate>-<hash>.d`) into source directories, and a shared checkout can hold another workstream's files.
 
+## Landing through the merge queue: workers end at enqueue, chaperones own the merge (GEN-033)
+
+**Decision (candidate `GEN-033`):** in a queue-live repository (`GEN-022`), an agent that writes a change hands it off at **enqueue** and frees its checkout. A separate, checkout-free **chaperone** owns the PR from enqueue to merge. Measured on talos-hq/clud (2026-10-29): 70-80% of a worker's wall time was idle waiting on hosted PR CI plus the queue's `merge_group` run (about 15-17 min of a 21-24 min fix) while it held the only checkout, so one checkout produced one merge per 20+ minutes and a native-lane PR (`ci-windows`) stalled the whole pipeline for 45+ minutes.
+
+**One checkout per worker.** Each worker owns exactly one checkout of one repository for the duration of its edit, test and push. Parallelism comes from chaperones, which hold no checkout, not from extra worktrees. This keeps the dev-host artifact budget (`GEN-030`) and avoids worktree/branch-claim collisions.
+
+**Worker contract.**
+
+1. Fix, run focused tests and lint, push. Apply native-coverage labels (`ci-windows`, `ci-macos`, `ci-full`) **at PR creation** (`gh pr create --label ...`), never afterwards: a later label starts a second run, cancels the first, and the cancelled run's failing aggregate can block the queue.
+2. Wait for the PR's required checks, enqueue with the repository's merge tool (for example `github/pr_merge.py --match-head-commit <sha>`), then return the checkout to the default branch, clean, and exit. A worker may hand off at push instead of at enqueue; the chaperone then also waits for PR CI and enqueues.
+3. The worker reports one line: PR, head SHA, state (`enqueued` or `pushed`). It never reports the change as landed.
+
+**Chaperone contract.** A chaperone is cheap by construction:
+
+- **No checkout, no build.** It uses only GitHub reads and the merge tool, so any number can run in parallel next to the workers and keep the queue's batch (`max_entries_to_build`) full.
+- **One blocking call, not a poll loop.** It waits with a watcher that has its own deadline and exits with a verdict code (for example `pr_merge_watch.py --until merged`: 0 merged, 13 ejected, 14 unmergeable, 4 timeout). A wait therefore costs one tool call, not a context-growing loop. Use the cheapest capable model; a chaperone does not reason about code.
+- **Self-service for non-code failures**, each at most once per PR: rerun failed jobs of a run that failed on infrastructure or a known flake (`gh run rerun --failed`); rerun the aggregate when a stale cancelled run's aggregate is the only red check; re-enqueue after an ejection caused by a batch-mate (`ALLGREEN` ejects every entry of a failing group).
+- **Hand back code failures.** Anything that needs a change to the tree goes back to the orchestrator as `NEEDS-FIXUP <PR> <job> <first error line>`. It never checks out the branch itself.
+- **Bounded.** At most two automatic retries per PR and a wall-clock cap (default 90 minutes); then report `STUCK <PR> <reason>` instead of retrying.
+- **Compact report.** Exactly one line: `MERGED <PR> <merge sha>`, `NEEDS-FIXUP ...` or `STUCK ...`. Never relay logs.
+
+**Orchestrator contract.** The agent that dispatches workers counts a change as done only on `MERGED`, never on `enqueued`. A `NEEDS-FIXUP` (or a review defect) is queued ahead of the next new item and runs as an ordinary worker after the current worker frees the checkout: rebase the PR branch on the current default branch, fix, push, and hand back to a chaperone. Code review of the diff may run in parallel with the chaperone; it reads the PR, not the checkout.
+
+**What keeps chaperoning cheap at the CI level.** The chaperone's wait is the PR run plus the queue run, so the fleet levers that shorten it are: queue-time verified reuse for single-PR groups with identical trees (the `GEN-021` extension above, including its run-evidence clause, still **Candidate**), an aggregate that ignores runs superseded on the same head instead of failing them, and sharded native test lanes (`TEST-003`) so a native PR is not a 30-minute serial build-then-test chain.
+
+Status: **Candidate -- decided policy, not enforced.** It is an agent-process rule; no workflow change is required to adopt it.
+
 ## Current limits
 
 The fleet inventory in issue #2 sampled repositories and PR history; it is not proof that uninspected repositories comply. The first central-scanner slice exists ([issue #38](https://github.com/zackees/ci.yml/issues/38)): `python3 -m ci_lint fleet scan` inventories repositories live and read-only (ci.toml adoption `FLEET-001`, PR entrypoints `GEN-001`/`GEN-008`, runner labels `RUN-001`, setup-soldr pin freshness `RUST-014`, settings `SEC-007`/`GEN-006`, cache usage `FLEET-002`) and ranks them, and `python3 -m ci_lint sync-issues --dry-run` prints the exact fingerprinted issue plan (one issue per repo + rule + subject, per the lifecycle above). `ci-lint sync-issues --apply` writes only to repositories that opt in with `[fleet].sync-issues = true`, and `python3 -m ci_lint fleet daily --out-dir <dir>` is the scheduler entry point (below). `ci.toml` schema 3 is adopted by the core Rust/Python repositories (template-python-rust-cmd, clud, soldr, zccache, kernal-api, running-process, reld, bosn, mimalloc-pprof, verified live 2026-10-26) but not yet by FastLED/fbuild, setup-soldr, llvm-ld or most of the remaining fleet, so an agent still reports the observed scope rather than claiming fleet-wide enforcement for anything the scan does not check (Dylint, cache families, timing).
