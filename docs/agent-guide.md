@@ -81,6 +81,8 @@ For implementation changes to the checker, use focused regression fixtures from 
 
 **What keeps chaperoning cheap at the CI level.** The chaperone's wait is the PR run plus the queue run, so the fleet levers that shorten it are: queue-time verified reuse for single-PR groups with identical trees (the `GEN-021` extension above, including its run-evidence clause, still **Candidate**), an aggregate that ignores runs superseded on the same head instead of failing them, and sharded native test lanes (`TEST-003`) so a native PR is not a 30-minute serial build-then-test chain.
 
+**Scope: queue-live repositories only.** Where the default branch has no merge queue, the worker merges by the repository's own policy and no chaperone is involved. If the repository runs no hosted required checks (its gate is the pre-push local gate, as in this repository), the worker merges directly once the local gate has passed. If it has hosted checks but no queue, the worker may still hand the PR to a chaperone at push; the chaperone then merges with the repository's normal merge mechanism instead of enqueueing. Native-coverage labels means the repository's own labels, if it defines any; a repository without them adds none. A label found to be needed after creation means a fresh push or a full rerun after labelling, never a merge on the narrower run.
+
 Status: **Candidate -- decided policy, not enforced.** It is an agent-process rule; no workflow change is required to adopt it.
 
 ## Current limits
