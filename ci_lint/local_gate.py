@@ -142,6 +142,8 @@ class GateConfig:
     exempt_authors: frozenset[str]
     mode: str
     source: str
+    # False when `mode` was not written in the declaration (the shadow default).
+    mode_explicit: bool = True
     # GATE-005 (zackees/ci.yml#168): how a self-hosted tool's suite runs isolated.
     isolation: IsolationConfig | None = None
     # GATE-007 (zackees/ci.yml#177): the gate split into cacheable lanes, in
@@ -250,6 +252,7 @@ def parse_gate_table(raw: dict[str, TomlValue], *, path: str, source: str, findi
         exempt_authors=frozenset(exempt_authors),
         mode=mode,
         source=source,
+        mode_explicit="mode" in raw,
         isolation=isolation,
         lanes=lanes,
         full_run=full_run,
@@ -912,6 +915,12 @@ def _run_gate(  # noqa: C901
 
 ZERO_SHA = "0" * 40
 HOOK_MARKER = "# installed by: ci-lint local-gate hook install (zackees/ci.yml#166)"
+# A managed hook is recognised by this header prefix on one of its first lines.
+# Only a body identical to the current template counts as unedited; an older
+# ci-lint template is therefore treated as edited and needs `--force`, which
+# saves it as the .pre-ci-lint backup before refreshing.
+HOOK_MARKER_PREFIX = "# installed by: ci-lint"
+CUSTOM_BACKUP_SUFFIX = ".pre-ci-lint"
 WIP_PUSH_ENV = "CI_LINT_GATE_WIP_PUSH"
 
 
@@ -921,6 +930,10 @@ class PushCheck:
     problems: list[str]
     # Unattested heads admitted by an explicit WIP reason (ci.yml#406).
     wip: list[str] = field(default_factory=list)
+    # Unattested heads let through because the pushed policy is `mode = "shadow"`.
+    shadow: list[str] = field(default_factory=list)
+    # True when a checked head's policy leaves `mode` to the shadow default.
+    mode_defaulted: bool = False
 
 
 def _publication_problems(repo: Path, sha: str, config: GateConfig) -> tuple[str, ...]:
@@ -943,21 +956,117 @@ def _publication_problems(repo: Path, sha: str, config: GateConfig) -> tuple[str
                             if status.state != VALID and (status.gate in required or status.state != MISSING))
 
 
-def check_push(repo: Path, stdin_text: str, *, wip_reason: str | None = None) -> PushCheck:
+def _commit_exists(repo: Path, sha: str) -> bool:
+    try:
+        _git(repo, "rev-parse", "--verify", "--quiet", f"{sha}^{{commit}}")
+    except GitError:
+        return False
+    return True
+
+
+def _default_branch_refs(repo: Path, remote: str | None) -> list[str]:
+    """Candidate refs for the remote's default branch: origin/HEAD, then the
+    pushed-to remote's HEAD/main/master, then origin's main/master."""
+
+    names = ["origin"] + ([remote] if remote and remote != "origin" else [])
+    refs = [f"refs/remotes/{name}/HEAD" for name in names]
+    refs += [f"refs/remotes/{name}/{branch}" for name in names for branch in ("main", "master")]
+    return [ref for ref in refs if _commit_exists(repo, ref)]
+
+
+def _remote_bases(repo: Path, local_sha: str, remote_sha: str, remote: str | None) -> list[str]:
+    """Every commit whose policy the push is judged against besides its own:
+    the remote tip when it is known locally, AND the merge-base of the
+    *pushed* commit (not HEAD) with the remote's default branch. Both are
+    needed: a tip that already flipped to shadow must not hide an enforcing
+    default branch."""
+
+    bases: list[str] = []
+    if remote_sha != ZERO_SHA and _commit_exists(repo, remote_sha):
+        bases.append(remote_sha)
+    for ref in _default_branch_refs(repo, remote):
+        try:
+            merge_base = _git(repo, "merge-base", ref, local_sha).strip()
+        except GitError:
+            continue
+        if merge_base:
+            bases.append(merge_base)
+            break
+    return bases
+
+
+def _unresolved_base_is_unsafe(repo: Path, remote_sha: str) -> bool:
+    """With no base found, honour the local mode only when there is nothing to
+    compare against at all (a brand-new repository, or a URL remote with no
+    tracking refs). A shallow clone, a remote tip we lack, or tracking refs
+    that do not resolve mean a base exists but is out of reach: fail closed."""
+
+    try:
+        if _git(repo, "rev-parse", "--is-shallow-repository").strip() == "true":
+            return True
+        if remote_sha != ZERO_SHA:
+            return True
+        return bool(_git(repo, "for-each-ref", "--count=1", "refs/remotes").strip())
+    except GitError:
+        return True
+
+
+@dataclass(frozen=True)
+class EffectiveMode:
+    mode: str
+    why: str | None = None
+
+
+def _strictest_mode(repo: Path, local_sha: str, remote_sha: str, local_mode: str,
+                    remote: str | None = None) -> EffectiveMode:
+    """`enforce` in the pushed policy or any base policy wins, so a branch
+    cannot escape the hook by flipping `mode` to shadow. A base commit with no
+    gate policy at all counts as shadow. Fails closed (reason in `why`) when a
+    base policy is unreadable or a base exists but cannot be reached."""
+
+    if local_mode == "enforce":
+        return EffectiveMode(local_mode)
+    fix = ("fetch the remote (`git fetch origin`, `git fetch --unshallow` for a shallow clone) or set "
+           "`mode` explicitly on the default branch")
+    bases = _remote_bases(repo, local_sha, remote_sha, remote)
+    if not bases:
+        if _unresolved_base_is_unsafe(repo, remote_sha):
+            return EffectiveMode(
+                "enforce", f"mode = shadow cannot be trusted: no remote base commit to compare against; {fix}")
+        return EffectiveMode(local_mode)
+    for base in dict.fromkeys(bases):
+        if base == local_sha:
+            continue
+        remote_policy = load_gate_config_at(repo, base)
+        if remote_policy.findings:
+            return EffectiveMode(
+                "enforce", f"mode = shadow cannot be trusted: the base policy at {base[:12]} is unreadable; {fix}")
+        if remote_policy.config is not None and remote_policy.config.mode == "enforce":
+            return EffectiveMode("enforce", f"the remote policy at {base[:12]} sets mode = enforce")
+    return EffectiveMode(local_mode)
+
+
+def check_push(repo: Path, stdin_text: str, *, wip_reason: str | None = None,
+               remote: str | None = None) -> PushCheck:
     """git's pre-push stdin: `<local ref> <local sha> <remote ref> <remote sha>`
     per line. Every pushed branch head must be attested; tags and deletes
     pass. A non-blank `wip_reason` admits unattested heads only (a paused
     handoff branch, ci.yml#406); gate-policy and publication problems still
-    refuse, and hosted `local-gate verify` still fails the unattested PR."""
+    refuse, and hosted `local-gate verify` still fails the unattested PR.
+    Under the pushed policy's `mode = "shadow"` an unattested head is reported
+    in `PushCheck.shadow` and the push passes (talos-hq/clud#2265); `enforce`
+    refuses it."""
 
     wip_reason = (wip_reason or "").strip() or None
     problems: list[str] = []
     wip: list[str] = []
+    shadow: list[str] = []
+    defaulted = False
     for line in stdin_text.splitlines():
         parts = line.split()
         if len(parts) != 4:
             continue
-        local_ref, local_sha, remote_ref, _remote_sha = parts
+        local_ref, local_sha, remote_ref, remote_sha = parts
         if local_sha == ZERO_SHA or remote_ref.startswith("refs/tags/"):
             continue
         loaded = load_gate_config_at(repo, local_sha)
@@ -967,13 +1076,25 @@ def check_push(repo: Path, stdin_text: str, *, wip_reason: str | None = None) ->
             continue
         if loaded.config is None:
             continue
+        not_explicit = not loaded.config.mode_explicit
         result = check_commit(repo, local_sha)
         if not result.ok:
-            (wip if wip_reason else problems).append(f"{local_ref} -> {remote_ref}: {result.detail}")
+            detail = f"{local_ref} -> {remote_ref}: {result.detail}"
+            if wip_reason:
+                wip.append(detail)
+                defaulted = defaulted or not_explicit
+            else:
+                effective = _strictest_mode(repo, local_sha, remote_sha, loaded.config.mode, remote)
+                if effective.mode == "shadow":
+                    shadow.append(detail)
+                    defaulted = defaulted or not_explicit
+                else:
+                    problems.append(f"{detail} ({effective.why})" if effective.why else detail)
         else:
+            defaulted = defaulted or not_explicit
             problems.extend(f"{local_ref} -> {remote_ref}: {problem}"
                             for problem in _publication_problems(repo, local_sha, loaded.config))
-    return PushCheck(exit_code=1 if problems else 0, problems=problems, wip=wip)
+    return PushCheck(exit_code=1 if problems else 0, problems=problems, wip=wip, shadow=shadow, mode_defaulted=defaulted)
 
 
 def hook_script(launcher: str) -> str:
@@ -1016,6 +1137,34 @@ class HookInstall:
     message: str
 
 
+_HOOK_TAIL = ' local-gate check-push "$@"'
+
+
+def _is_managed_header(text: str) -> bool:
+    """The ci-lint marker must be a header line (the first few lines), not a
+    comment or string further down some other tool's hook."""
+
+    return any(line.startswith(HOOK_MARKER_PREFIX) for line in text.splitlines()[:3])
+
+
+def _is_pristine(text: str) -> bool:
+    """True when `text` is exactly what `hook_script` generates for the
+    launcher it names."""
+
+    for line in text.splitlines():
+        if line.startswith("exec ") and line.endswith(_HOOK_TAIL):
+            return text == hook_script(line[len("exec "):-len(_HOOK_TAIL)])
+    return False
+
+
+def _backup(hook: Path, existing: str) -> str:
+    backup = hook.with_name(hook.name + CUSTOM_BACKUP_SUFFIX)
+    note = f"; replaced an earlier backup at {backup}" if backup.exists() else f"; saved the old hook as {backup}"
+    backup.write_text(existing, encoding="utf-8")
+    backup.chmod(0o755)
+    return note
+
+
 def install_hook(repo: Path, launcher: str, *, force: bool = False) -> HookInstall:
     try:
         hooks_dir = Path(_git(repo, "rev-parse", "--git-path", "hooks").strip())
@@ -1024,16 +1173,25 @@ def install_hook(repo: Path, launcher: str, *, force: bool = False) -> HookInsta
     if not hooks_dir.is_absolute():
         hooks_dir = repo / hooks_dir
     hook = hooks_dir / "pre-push"
-    if hook.exists() and HOOK_MARKER not in hook.read_text(encoding="utf-8", errors="replace") and not force:
+    existing = hook.read_text(encoding="utf-8", errors="replace") if hook.exists() else None
+    managed = existing is not None and _is_managed_header(existing)
+    edited = managed and existing is not None and not _is_pristine(existing)
+    if existing is not None and (not managed or edited) and not force:
+        what = "was edited after ci-lint installed it" if managed else "was not installed by ci-lint"
         return HookInstall(
             1,
-            f"local-gate hook install: {hook} already exists and was not installed by ci-lint; "
-            "call `local-gate check-push` from it yourself, or pass --force to replace it",
+            f"local-gate hook install: {hook} {what}; call `local-gate check-push` from it yourself, "
+            f"or pass --force to replace it (with --force, the old hook is kept as {hook.name}{CUSTOM_BACKUP_SUFFIX})",
         )
+    script = hook_script(launcher)
+    if existing == script:
+        return HookInstall(0, f"local-gate hook install: {hook} is already current")
     hooks_dir.mkdir(parents=True, exist_ok=True)
-    hook.write_text(hook_script(launcher), encoding="utf-8")
+    note = _backup(hook, existing) if existing is not None and (not managed or edited) else ""
+    hook.write_text(script, encoding="utf-8")
     hook.chmod(0o755)
-    return HookInstall(0, f"local-gate hook install: wrote {hook}")
+    verb = "refreshed" if managed else "wrote"
+    return HookInstall(0, f"local-gate hook install: {verb} {hook}{note}")
 
 
 # ── CI-side verify (GATE-003) ────────────────────────────────────────────────
