@@ -154,6 +154,34 @@ class OptionalLaneTest(LanedRepo):
         self.assertEqual(run_gate(self.repo, self.config()).exit_code, 75)
 
 
+class StampTargetTest(LanedRepo):
+    """zackees/ci.yml#515: stamp exactly the HEAD the lanes ran against."""
+
+    def test_head_moved_during_lanes_fails_and_stamps_nothing(self) -> None:
+        base = _git(self.repo, "rev-parse", "HEAD")
+        # The tests lane rebuilds the branch mid-run: HEAD goes back to base.
+        self.write("gate.py", GATE_PY + (
+            "if lane == 'tests' and pathlib.Path('move-head').exists():\n"
+            "    import subprocess  # noqa: S404 -- test fixture only\n"
+            f"    subprocess.run(['git', 'reset', '-q', '--hard', '{base}'], check=True)\n"))
+        self.write("move-head", "")
+        self.commit("feature")
+        ran_against = _git(self.repo, "rev-parse", "HEAD")
+        outcome = run_gate(self.repo, self.config())
+        self.assertNotEqual(outcome.exit_code, 0, outcome.message)
+        self.assertIn("HEAD moved", outcome.message)
+        self.assertIn(ran_against[:12], outcome.message)
+        self.assertEqual(_git(self.repo, "rev-parse", "HEAD"), base)  # base was never amended
+        self.assertIsNone(parse_attestation(_git(self.repo, "log", "-1", "--format=%B")))
+
+    def test_message_names_the_stamped_head(self) -> None:
+        outcome = run_gate(self.repo, self.config())
+        self.assertEqual(outcome.exit_code, 0, outcome.message)
+        head = _git(self.repo, "rev-parse", "HEAD")
+        self.assertEqual(outcome.head, head)
+        self.assertIn(f"stamped {head[:12]} (HEAD)", outcome.message)
+
+
 class LaneRunTest(LanedRepo):
     def test_reusing_pass_preserves_execution_time_in_trailer(self) -> None:
         self.write("ci-attestations.yml", "version: 1\ngates:\n  general/all/static: {lane: lint}\njobs: {}\n")
