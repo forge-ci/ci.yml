@@ -1,0 +1,4 @@
+{"v":1,"ts":"2026-10-26T11:28:12.392Z","elapsed_sec":0.0,"event":"START","repo":"forge-ci/zccache","pr":1998,"log_path":".clud/logs/pr-merge-watch/20261026T112812.392Z-pr-1998.jsonl"}
+{"v":1,"elapsed_sec":1.44,"event":"subscription","outcome":"available"}
+{"v":1,"elapsed_sec":3.25,"event":"checks","checks":{"total":0,"pending":0,"failed":0,"succeeded":0,"skipped":0},"note":"rollup_empty","mergeable":"CONFLICTING","merge_state_status":"DIRTY"}
+{"v":1,"elapsed_sec":4.43,"event":"EXIT","code":9,"reason":"conflict","mergeable":"CONFLICTING","merge_state_status":"DIRTY"}

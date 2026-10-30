@@ -1,0 +1,17 @@
+{"v":1,"ts":"2026-10-26T14:07:51.789Z","elapsed_sec":0.0,"event":"START","repo":"forge-ci/kernal-api","pr":466,"log_path":".clud/logs/pr-merge-watch/20261026T140751.789Z-pr-466.jsonl"}
+{"v":1,"elapsed_sec":1.95,"event":"subscription","outcome":"available"}
+{"v":1,"elapsed_sec":4.1,"event":"checks","checks":{"total":11,"pending":0,"failed":0,"succeeded":11,"skipped":0},"mergeable":"MERGEABLE","merge_state_status":"CLEAN"}
+{"v":1,"elapsed_sec":4.1,"event":"coderabbit","coderabbit":{"state":"not_detected","sampled_merged_prs":5}}
+{"v":1,"elapsed_sec":4.73,"event":"queue","state":"OPEN","entry":"QUEUED","position":1,"queue_sha":null,"auto_merge":false}
+{"v":1,"elapsed_sec":27.3,"event":"queue","state":"OPEN","entry":"AWAITING_CHECKS","position":1,"queue_sha":"056c5b8d7da39ffc3b34f1fa820d4dd354225a30","auto_merge":false}
+{"v":1,"elapsed_sec":46.49,"event":"queue","state":"OPEN","entry":"AWAITING_CHECKS","position":1,"queue_sha":"056c5b8d7da39ffc3b34f1fa820d4dd354225a30","auto_merge":false}
+{"v":1,"elapsed_sec":66.25,"event":"queue","state":"OPEN","entry":"AWAITING_CHECKS","position":1,"queue_sha":"056c5b8d7da39ffc3b34f1fa820d4dd354225a30","auto_merge":false}
+{"v":1,"elapsed_sec":86.25,"event":"queue","state":"OPEN","entry":"AWAITING_CHECKS","position":1,"queue_sha":"056c5b8d7da39ffc3b34f1fa820d4dd354225a30","auto_merge":false}
+{"v":1,"elapsed_sec":106.27,"event":"queue","state":"OPEN","entry":"AWAITING_CHECKS","position":1,"queue_sha":"056c5b8d7da39ffc3b34f1fa820d4dd354225a30","auto_merge":false}
+{"v":1,"elapsed_sec":126.46,"event":"queue","state":"OPEN","entry":"AWAITING_CHECKS","position":1,"queue_sha":"056c5b8d7da39ffc3b34f1fa820d4dd354225a30","auto_merge":false}
+{"v":1,"elapsed_sec":146.16,"event":"queue","state":"OPEN","entry":"AWAITING_CHECKS","position":1,"queue_sha":"056c5b8d7da39ffc3b34f1fa820d4dd354225a30","auto_merge":false}
+{"v":1,"elapsed_sec":167.62,"event":"queue","state":"OPEN","entry":"AWAITING_CHECKS","position":1,"queue_sha":"056c5b8d7da39ffc3b34f1fa820d4dd354225a30","auto_merge":false}
+{"v":1,"elapsed_sec":187.08,"event":"queue","state":"OPEN","entry":"AWAITING_CHECKS","position":1,"queue_sha":"056c5b8d7da39ffc3b34f1fa820d4dd354225a30","auto_merge":false}
+{"v":1,"elapsed_sec":206.65,"event":"queue","state":"OPEN","entry":"AWAITING_CHECKS","position":1,"queue_sha":"056c5b8d7da39ffc3b34f1fa820d4dd354225a30","auto_merge":false}
+{"v":1,"elapsed_sec":225.02,"event":"queue","state":"MERGED","entry":null,"position":null,"queue_sha":null,"auto_merge":false}
+{"v":1,"elapsed_sec":225.05,"event":"EXIT","code":0,"reason":"merged"}

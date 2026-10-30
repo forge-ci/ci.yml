@@ -1,0 +1,6 @@
+{"v":1,"ts":"2026-10-26T07:50:59.140Z","elapsed_sec":0.0,"event":"START","repo":"forge-ci/ghd","pr":5,"log_path":".clud/logs/pr-merge-watch/20261026T075059.140Z-pr-5.jsonl"}
+{"v":1,"elapsed_sec":1.78,"event":"subscription","outcome":"available"}
+{"v":1,"elapsed_sec":4.09,"event":"checks","checks":{"total":19,"pending":1,"failed":1,"succeeded":17,"skipped":0},"mergeable":"MERGEABLE","merge_state_status":"UNSTABLE"}
+{"v":1,"elapsed_sec":4.74,"event":"required_failure","check":{"name":"dylint [95e08b035188]","state":"failure","link":"https://github.com/forge-ci/ghd/actions/runs/40287717320/job/121455368549","workflow":".github/workflows/ci.yml"}}
+{"v":1,"elapsed_sec":6.14,"event":"failure_diagnostic","check_name":"dylint [95e08b035188]","first_error":"error: failed to run custom build command for `ring v0.17.14`","classifier":null}
+{"v":1,"elapsed_sec":6.14,"event":"EXIT","code":1,"reason":"fail"}

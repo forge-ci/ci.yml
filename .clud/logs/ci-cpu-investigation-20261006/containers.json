@@ -1,0 +1,1257 @@
+[
+  {
+    "id": "195318e12bfd30a7087f01c8c3ac19f0ef28504639a3bd5fc92c4d5717ae1994",
+    "name": "/bosn-act-37e03719-07c3-41c7-8687-de9c29349fab",
+    "pid": 309784,
+    "created": "2026-10-07T02:18:43.908559025Z",
+    "labels": {
+      "com.zackees.bosn.act.act-image": "sha256:2e6ed85cd71f17d8f27aa9b66a7c5d338c9927b14b884cf8eeed489c7e707df8",
+      "com.zackees.bosn.act.act-version": "0.2.89-act2.10",
+      "com.zackees.bosn.act.cache-coordination": "shared-legacy-lease-v1",
+      "com.zackees.bosn.act.candidate-sha": "0000000000000000000000000000000000000000",
+      "com.zackees.bosn.act.creation-profile-sha256": "c6bc5e9e895b014f37b5dcc1c6ba4b70516aa32baa018b3ed9c1cb3632dbec79",
+      "com.zackees.bosn.act.engine-image": "sha256:6acc6aaf783ac1c1100822e542534c3dab3f1d38782760b0bdcb688280574d9e",
+      "com.zackees.bosn.act.init-command-sha256": "b2561fb97938d247355048f973d89d2d113f718bec99e94bc3998b5beb8d8079",
+      "com.zackees.bosn.act.namespace": "act-engine-v1",
+      "com.zackees.bosn.act.payload-sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "com.zackees.bosn.act.run-id": "37e03719-07c3-41c7-8687-de9c29349fab",
+      "com.zackees.bosn.act.runner-image": "sha256:4f2d5083a9d10d018c1c511eb8665cd480553c11975e78fd903a46daa830768b",
+      "com.zackees.bosn.act.snapshot-sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "com.zackees.bosn.act.spare": "true",
+      "com.zackees.bosn.created": "1791339523.1800735",
+      "com.zackees.bosn.generation": "37e03719-07c3-41c7-8687-de9c29349fab",
+      "com.zackees.bosn.kind": "container",
+      "com.zackees.bosn.registry": "0f3c5706-153e-455e-b0c4-d7d532037a0b",
+      "com.zackees.bosn.retention": "warm",
+      "com.zackees.bosn.scope": "spec",
+      "com.zackees.bosn.stack": "act",
+      "com.zackees.bosn.workspace": "/home/niteris/.local/state/bosn"
+    },
+    "mounts": [
+      {
+        "Type": "volume",
+        "Name": "bosn-act-storage-37e03719-07c3-41c7-8687-de9c29349fab",
+        "Source": "/var/lib/docker/volumes/bosn-act-storage-37e03719-07c3-41c7-8687-de9c29349fab/_data",
+        "Destination": "/var/lib/docker",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "volume",
+        "Name": "bosn-ci-cache-v1",
+        "Source": "/var/lib/docker/volumes/bosn-ci-cache-v1/_data",
+        "Destination": "/bosn/cache",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      }
+    ],
+    "cpu": {
+      "NanoCpus": 0,
+      "CpuQuota": 800000,
+      "CpuPeriod": 100000,
+      "CpusetCpus": "",
+      "Memory": 51539607552
+    }
+  },
+  {
+    "id": "009b47df76f1734cbcc309039f671e17b271ffa62593141832b1963cf2aa17dc",
+    "name": "/bosn-act-237f5002-4968-4148-85c7-778c4e9df265",
+    "pid": 305216,
+    "created": "2026-10-07T02:18:19.868904961Z",
+    "labels": {
+      "com.zackees.bosn.act.act-image": "sha256:2e6ed85cd71f17d8f27aa9b66a7c5d338c9927b14b884cf8eeed489c7e707df8",
+      "com.zackees.bosn.act.act-version": "0.2.89-act2.10",
+      "com.zackees.bosn.act.cache-coordination": "shared-legacy-lease-v1",
+      "com.zackees.bosn.act.candidate-sha": "0000000000000000000000000000000000000000",
+      "com.zackees.bosn.act.creation-profile-sha256": "c6bc5e9e895b014f37b5dcc1c6ba4b70516aa32baa018b3ed9c1cb3632dbec79",
+      "com.zackees.bosn.act.engine-image": "sha256:6acc6aaf783ac1c1100822e542534c3dab3f1d38782760b0bdcb688280574d9e",
+      "com.zackees.bosn.act.init-command-sha256": "b2561fb97938d247355048f973d89d2d113f718bec99e94bc3998b5beb8d8079",
+      "com.zackees.bosn.act.namespace": "act-engine-v1",
+      "com.zackees.bosn.act.payload-sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "com.zackees.bosn.act.run-id": "237f5002-4968-4148-85c7-778c4e9df265",
+      "com.zackees.bosn.act.runner-image": "sha256:4f2d5083a9d10d018c1c511eb8665cd480553c11975e78fd903a46daa830768b",
+      "com.zackees.bosn.act.snapshot-sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "com.zackees.bosn.act.spare": "true",
+      "com.zackees.bosn.created": "1791339499.4619775",
+      "com.zackees.bosn.generation": "237f5002-4968-4148-85c7-778c4e9df265",
+      "com.zackees.bosn.kind": "container",
+      "com.zackees.bosn.registry": "0f3c5706-153e-455e-b0c4-d7d532037a0b",
+      "com.zackees.bosn.retention": "warm",
+      "com.zackees.bosn.scope": "spec",
+      "com.zackees.bosn.stack": "act",
+      "com.zackees.bosn.workspace": "/home/niteris/.local/state/bosn"
+    },
+    "mounts": [
+      {
+        "Type": "volume",
+        "Name": "bosn-act-storage-237f5002-4968-4148-85c7-778c4e9df265",
+        "Source": "/var/lib/docker/volumes/bosn-act-storage-237f5002-4968-4148-85c7-778c4e9df265/_data",
+        "Destination": "/var/lib/docker",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "volume",
+        "Name": "bosn-ci-cache-v1",
+        "Source": "/var/lib/docker/volumes/bosn-ci-cache-v1/_data",
+        "Destination": "/bosn/cache",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      }
+    ],
+    "cpu": {
+      "NanoCpus": 0,
+      "CpuQuota": 800000,
+      "CpuPeriod": 100000,
+      "CpusetCpus": "",
+      "Memory": 51539607552
+    }
+  },
+  {
+    "id": "80171e09e5c64d40e65ff21c7de610526db8196f908601a052c7fb337d406615",
+    "name": "/bosn-act-cb8d3e2c-5882-4302-960c-037fc220aad2",
+    "pid": 208601,
+    "created": "2026-10-07T02:10:20.939150766Z",
+    "labels": {
+      "com.zackees.bosn.act.act-image": "sha256:2e6ed85cd71f17d8f27aa9b66a7c5d338c9927b14b884cf8eeed489c7e707df8",
+      "com.zackees.bosn.act.act-version": "0.2.89-act2.10",
+      "com.zackees.bosn.act.cache-coordination": "shared-legacy-lease-v1",
+      "com.zackees.bosn.act.candidate-sha": "0000000000000000000000000000000000000000",
+      "com.zackees.bosn.act.creation-profile-sha256": "c6bc5e9e895b014f37b5dcc1c6ba4b70516aa32baa018b3ed9c1cb3632dbec79",
+      "com.zackees.bosn.act.engine-image": "sha256:6acc6aaf783ac1c1100822e542534c3dab3f1d38782760b0bdcb688280574d9e",
+      "com.zackees.bosn.act.init-command-sha256": "b2561fb97938d247355048f973d89d2d113f718bec99e94bc3998b5beb8d8079",
+      "com.zackees.bosn.act.namespace": "act-engine-v1",
+      "com.zackees.bosn.act.payload-sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "com.zackees.bosn.act.run-id": "cb8d3e2c-5882-4302-960c-037fc220aad2",
+      "com.zackees.bosn.act.runner-image": "sha256:4f2d5083a9d10d018c1c511eb8665cd480553c11975e78fd903a46daa830768b",
+      "com.zackees.bosn.act.snapshot-sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "com.zackees.bosn.act.spare": "true",
+      "com.zackees.bosn.created": "1791339019.7352214",
+      "com.zackees.bosn.generation": "cb8d3e2c-5882-4302-960c-037fc220aad2",
+      "com.zackees.bosn.kind": "container",
+      "com.zackees.bosn.registry": "0f3c5706-153e-455e-b0c4-d7d532037a0b",
+      "com.zackees.bosn.retention": "warm",
+      "com.zackees.bosn.scope": "spec",
+      "com.zackees.bosn.stack": "act",
+      "com.zackees.bosn.workspace": "/home/niteris/.local/state/bosn"
+    },
+    "mounts": [
+      {
+        "Type": "volume",
+        "Name": "bosn-ci-cache-v1",
+        "Source": "/var/lib/docker/volumes/bosn-ci-cache-v1/_data",
+        "Destination": "/bosn/cache",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "volume",
+        "Name": "bosn-act-storage-cb8d3e2c-5882-4302-960c-037fc220aad2",
+        "Source": "/var/lib/docker/volumes/bosn-act-storage-cb8d3e2c-5882-4302-960c-037fc220aad2/_data",
+        "Destination": "/var/lib/docker",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      }
+    ],
+    "cpu": {
+      "NanoCpus": 0,
+      "CpuQuota": 800000,
+      "CpuPeriod": 100000,
+      "CpusetCpus": "",
+      "Memory": 51539607552
+    }
+  },
+  {
+    "id": "61f8a2c4e5dd03d994fcd7559415c5e48b1610a2ced3ea630fdc6d98589eda4d",
+    "name": "/bosn-act-9b38bcc8-6535-4f13-a241-7ab20d679b09",
+    "pid": 197088,
+    "created": "2026-10-07T02:09:34.332187957Z",
+    "labels": {
+      "com.zackees.bosn.act.act-image": "sha256:2e6ed85cd71f17d8f27aa9b66a7c5d338c9927b14b884cf8eeed489c7e707df8",
+      "com.zackees.bosn.act.act-version": "0.2.89-act2.10",
+      "com.zackees.bosn.act.cache-coordination": "shared-legacy-lease-v1",
+      "com.zackees.bosn.act.candidate-sha": "0000000000000000000000000000000000000000",
+      "com.zackees.bosn.act.creation-profile-sha256": "c6bc5e9e895b014f37b5dcc1c6ba4b70516aa32baa018b3ed9c1cb3632dbec79",
+      "com.zackees.bosn.act.engine-image": "sha256:6acc6aaf783ac1c1100822e542534c3dab3f1d38782760b0bdcb688280574d9e",
+      "com.zackees.bosn.act.init-command-sha256": "b2561fb97938d247355048f973d89d2d113f718bec99e94bc3998b5beb8d8079",
+      "com.zackees.bosn.act.namespace": "act-engine-v1",
+      "com.zackees.bosn.act.payload-sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "com.zackees.bosn.act.run-id": "9b38bcc8-6535-4f13-a241-7ab20d679b09",
+      "com.zackees.bosn.act.runner-image": "sha256:4f2d5083a9d10d018c1c511eb8665cd480553c11975e78fd903a46daa830768b",
+      "com.zackees.bosn.act.snapshot-sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "com.zackees.bosn.act.spare": "true",
+      "com.zackees.bosn.created": "1791338972.6507459",
+      "com.zackees.bosn.generation": "9b38bcc8-6535-4f13-a241-7ab20d679b09",
+      "com.zackees.bosn.kind": "container",
+      "com.zackees.bosn.registry": "0f3c5706-153e-455e-b0c4-d7d532037a0b",
+      "com.zackees.bosn.retention": "warm",
+      "com.zackees.bosn.scope": "spec",
+      "com.zackees.bosn.stack": "act",
+      "com.zackees.bosn.workspace": "/home/niteris/.local/state/bosn"
+    },
+    "mounts": [
+      {
+        "Type": "volume",
+        "Name": "bosn-act-storage-9b38bcc8-6535-4f13-a241-7ab20d679b09",
+        "Source": "/var/lib/docker/volumes/bosn-act-storage-9b38bcc8-6535-4f13-a241-7ab20d679b09/_data",
+        "Destination": "/var/lib/docker",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "volume",
+        "Name": "bosn-ci-cache-v1",
+        "Source": "/var/lib/docker/volumes/bosn-ci-cache-v1/_data",
+        "Destination": "/bosn/cache",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      }
+    ],
+    "cpu": {
+      "NanoCpus": 0,
+      "CpuQuota": 800000,
+      "CpuPeriod": 100000,
+      "CpusetCpus": "",
+      "Memory": 51539607552
+    }
+  },
+  {
+    "id": "2fb5d5aa5cd634fd4fece4f2d7fb2bc851f596282e05d565ad6654eea8d47074",
+    "name": "/bosn-act-0593d2d9-e661-4339-8b11-30db3ef5fff4",
+    "pid": 3947737,
+    "created": "2026-10-07T01:41:23.687086165Z",
+    "labels": {
+      "com.zackees.bosn.act.act-image": "sha256:7fa5bb0bea4cb01fe2cba2c31b14ad6e30e5f62c9934904487965c0af39fec9b",
+      "com.zackees.bosn.act.act-version": "0.2.89-act2.4",
+      "com.zackees.bosn.act.candidate-sha": "0000000000000000000000000000000000000000",
+      "com.zackees.bosn.act.creation-profile-sha256": "250d83cb7f62203028095ccd492f2da0630fcefe0b17df7e0b2214edd7715704",
+      "com.zackees.bosn.act.engine-image": "sha256:6acc6aaf783ac1c1100822e542534c3dab3f1d38782760b0bdcb688280574d9e",
+      "com.zackees.bosn.act.init-command-sha256": "435f2b9813685fa481ae34a8b954f78740fa68f87c462c72cf1ddcf3fef4b515",
+      "com.zackees.bosn.act.namespace": "act-engine-v1",
+      "com.zackees.bosn.act.payload-sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "com.zackees.bosn.act.run-id": "0593d2d9-e661-4339-8b11-30db3ef5fff4",
+      "com.zackees.bosn.act.runner-image": "sha256:4f2d5083a9d10d018c1c511eb8665cd480553c11975e78fd903a46daa830768b",
+      "com.zackees.bosn.act.snapshot-sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "com.zackees.bosn.act.spare": "true",
+      "com.zackees.bosn.created": "1791337277.459115",
+      "com.zackees.bosn.generation": "0593d2d9-e661-4339-8b11-30db3ef5fff4",
+      "com.zackees.bosn.kind": "container",
+      "com.zackees.bosn.registry": "6f047fa3-bd0c-4565-b01b-26cd5b66c958",
+      "com.zackees.bosn.retention": "warm",
+      "com.zackees.bosn.scope": "spec",
+      "com.zackees.bosn.stack": "act",
+      "com.zackees.bosn.workspace": "/tmp/zccache-1779-audit/bosn-kernel"
+    },
+    "mounts": [
+      {
+        "Type": "volume",
+        "Name": "eb3648d16f3a38500d01ac4cd8b04552b2edabbbaaa12172f0717853e7aaef84",
+        "Source": "/var/lib/docker/volumes/eb3648d16f3a38500d01ac4cd8b04552b2edabbbaaa12172f0717853e7aaef84/_data",
+        "Destination": "/var/lib/docker",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "volume",
+        "Name": "bosn-ci-cache-v1",
+        "Source": "/var/lib/docker/volumes/bosn-ci-cache-v1/_data",
+        "Destination": "/bosn/cache",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      }
+    ],
+    "cpu": {
+      "NanoCpus": 0,
+      "CpuQuota": 800000,
+      "CpuPeriod": 100000,
+      "CpusetCpus": "",
+      "Memory": 51539607552
+    }
+  },
+  {
+    "id": "bbeaab792b294da60e6a0f2a51282b621a15d6c08db7ee694fd933181534f650",
+    "name": "/bosn-setup-v2-b44ba9b2cd0ac17eed1624535c67dd9a1a3521bc33de8fde3198e82c0f58f58d",
+    "pid": 3792585,
+    "created": "2026-10-07T01:27:18.845955937Z",
+    "labels": {
+      "com.zackees.bosn.setup-container": "bosn-setup-v2-b44ba9b2cd0ac17eed1624535c67dd9a1a3521bc33de8fde3198e82c0f58f58d",
+      "com.zackees.bosn.setup-content-sha256": "a3fbbce5f4abddb9c4a63870e0946f8035eacf40feecb7a2c462416df29f0f5d",
+      "com.zackees.bosn.setup-creation-profile": "v2:b44ba9b2cd0ac17eed1624535c67dd9a1a3521bc33de8fde3198e82c0f58f58d",
+      "com.zackees.bosn.setup-managed": "v1",
+      "org.opencontainers.image.source": "https://github.com/rust-lang/docker-rust"
+    },
+    "mounts": [
+      {
+        "Type": "volume",
+        "Name": "bosn-v-stack-1ba5169ce0f5390b614eaabf",
+        "Source": "/var/lib/docker/volumes/bosn-v-stack-1ba5169ce0f5390b614eaabf/_data",
+        "Destination": "/root/.soldr",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "volume",
+        "Name": "bosn-v-stack-c24edbc6ae2c963b7b81bdc8",
+        "Source": "/var/lib/docker/volumes/bosn-v-stack-c24edbc6ae2c963b7b81bdc8/_data",
+        "Destination": "/root/.soldr-dev",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "volume",
+        "Name": "bosn-v-stack-64ca9ed07d681a0af9d4e069",
+        "Source": "/var/lib/docker/volumes/bosn-v-stack-64ca9ed07d681a0af9d4e069/_data",
+        "Destination": "/target",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "volume",
+        "Name": "bosn-v-machine-d9b84ed7a5c3b5a9bfc8d506",
+        "Source": "/var/lib/docker/volumes/bosn-v-machine-d9b84ed7a5c3b5a9bfc8d506/_data",
+        "Destination": "/tools",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "bind",
+        "Source": "/home/niteris/dev/soldr",
+        "Destination": "/repo",
+        "Mode": "",
+        "RW": true,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "volume",
+        "Name": "bosn-v-machine-6e3e28a98015a88db2aea851",
+        "Source": "/var/lib/docker/volumes/bosn-v-machine-6e3e28a98015a88db2aea851/_data",
+        "Destination": "/artifact",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "volume",
+        "Name": "bosn-v-stack-fe86346347c15f5c3f018e41",
+        "Source": "/var/lib/docker/volumes/bosn-v-stack-fe86346347c15f5c3f018e41/_data",
+        "Destination": "/root/.cargo",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      }
+    ],
+    "cpu": {
+      "NanoCpus": 4000000000,
+      "CpuQuota": 0,
+      "CpuPeriod": 0,
+      "CpusetCpus": "",
+      "Memory": 0
+    }
+  },
+  {
+    "id": "bd5202b82f80182049acfc42cd9f2ce35d8850a3f78eb19f3b594b80a45b89ef",
+    "name": "/bosn-setup-v2-d292790a543e82736e4cecd98ea365f10e9016c135b9d02b771cc6750a3488e5",
+    "pid": 1804602,
+    "created": "2026-10-06T02:38:41.148809065Z",
+    "labels": {
+      "com.zackees.bosn.setup-container": "bosn-setup-v2-d292790a543e82736e4cecd98ea365f10e9016c135b9d02b771cc6750a3488e5",
+      "com.zackees.bosn.setup-content-sha256": "08d200ce271c7c3611c307a472ada7355e94089fa2ca2471768c524b524352ce",
+      "com.zackees.bosn.setup-creation-profile": "v2:d292790a543e82736e4cecd98ea365f10e9016c135b9d02b771cc6750a3488e5",
+      "com.zackees.bosn.setup-managed": "v1",
+      "org.opencontainers.image.version": "24.04"
+    },
+    "mounts": [
+      {
+        "Type": "volume",
+        "Name": "bosn-v-stack-89ad2c9791ef6667de8f59c3",
+        "Source": "/var/lib/docker/volumes/bosn-v-stack-89ad2c9791ef6667de8f59c3/_data",
+        "Destination": "/target",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "bind",
+        "Source": "/home/niteris/dev/zccache-wt-1926",
+        "Destination": "/work",
+        "Mode": "",
+        "RW": true,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "volume",
+        "Name": "bosn-v-stack-f2e131b2ff9f75c60487808f",
+        "Source": "/var/lib/docker/volumes/bosn-v-stack-f2e131b2ff9f75c60487808f/_data",
+        "Destination": "/home/gate/.soldr",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      }
+    ],
+    "cpu": {
+      "NanoCpus": 4000000000,
+      "CpuQuota": 0,
+      "CpuPeriod": 0,
+      "CpusetCpus": "",
+      "Memory": 0
+    }
+  },
+  {
+    "id": "dd934007aec04f8bec7ec1ee0127e0128554cf486f295106ce2d6d891d4767ce",
+    "name": "/bosn-setup-v2-33144bfa4d4e7e42ec86be67de35b9fc740e6b11d640c6c4466485d95e395e86",
+    "pid": 1444931,
+    "created": "2026-10-06T02:05:22.017285217Z",
+    "labels": {
+      "com.zackees.bosn.setup-container": "bosn-setup-v2-33144bfa4d4e7e42ec86be67de35b9fc740e6b11d640c6c4466485d95e395e86",
+      "com.zackees.bosn.setup-content-sha256": "a3fbbce5f4abddb9c4a63870e0946f8035eacf40feecb7a2c462416df29f0f5d",
+      "com.zackees.bosn.setup-creation-profile": "v2:33144bfa4d4e7e42ec86be67de35b9fc740e6b11d640c6c4466485d95e395e86",
+      "com.zackees.bosn.setup-managed": "v1",
+      "org.opencontainers.image.source": "https://github.com/rust-lang/docker-rust"
+    },
+    "mounts": [
+      {
+        "Type": "volume",
+        "Name": "bosn-v-stack-85296d32a41a6e2d440435bf",
+        "Source": "/var/lib/docker/volumes/bosn-v-stack-85296d32a41a6e2d440435bf/_data",
+        "Destination": "/root/.soldr-dev",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "volume",
+        "Name": "bosn-v-stack-0a1df4303ef60b8966286800",
+        "Source": "/var/lib/docker/volumes/bosn-v-stack-0a1df4303ef60b8966286800/_data",
+        "Destination": "/target",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "volume",
+        "Name": "bosn-v-machine-d9b84ed7a5c3b5a9bfc8d506",
+        "Source": "/var/lib/docker/volumes/bosn-v-machine-d9b84ed7a5c3b5a9bfc8d506/_data",
+        "Destination": "/tools",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "bind",
+        "Source": "/home/niteris/dev/soldr2",
+        "Destination": "/repo",
+        "Mode": "",
+        "RW": true,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "volume",
+        "Name": "bosn-v-machine-6e3e28a98015a88db2aea851",
+        "Source": "/var/lib/docker/volumes/bosn-v-machine-6e3e28a98015a88db2aea851/_data",
+        "Destination": "/artifact",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "volume",
+        "Name": "bosn-v-stack-fe0e766ffc1b7f13816a76d9",
+        "Source": "/var/lib/docker/volumes/bosn-v-stack-fe0e766ffc1b7f13816a76d9/_data",
+        "Destination": "/root/.cargo",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "volume",
+        "Name": "bosn-v-stack-5351bc55a1b0e7f4470209b1",
+        "Source": "/var/lib/docker/volumes/bosn-v-stack-5351bc55a1b0e7f4470209b1/_data",
+        "Destination": "/root/.soldr",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      }
+    ],
+    "cpu": {
+      "NanoCpus": 4000000000,
+      "CpuQuota": 0,
+      "CpuPeriod": 0,
+      "CpusetCpus": "",
+      "Memory": 0
+    }
+  },
+  {
+    "id": "1b6128f0235754a9299c2cef16f0769951aa037f91ed360f9edb2539c9d79049",
+    "name": "/bosn-setup-v2-ff7595127f3fe8b48e2bdf31821273aef12bf363ea1a5db4e828140fe126cc2f",
+    "pid": 990352,
+    "created": "2026-10-06T01:12:39.979438439Z",
+    "labels": {
+      "com.zackees.bosn.setup-container": "bosn-setup-v2-ff7595127f3fe8b48e2bdf31821273aef12bf363ea1a5db4e828140fe126cc2f",
+      "com.zackees.bosn.setup-content-sha256": "27f39f3e476c444bc1e046e73d90095e1a10eb2a284ed91fd1ac8c2e9c725fb9",
+      "com.zackees.bosn.setup-creation-profile": "v2:ff7595127f3fe8b48e2bdf31821273aef12bf363ea1a5db4e828140fe126cc2f",
+      "com.zackees.bosn.setup-managed": "v1"
+    },
+    "mounts": [
+      {
+        "Type": "volume",
+        "Name": "bosn-v-stack-98c23d30c81e1cdc1e8e8d49",
+        "Source": "/var/lib/docker/volumes/bosn-v-stack-98c23d30c81e1cdc1e8e8d49/_data",
+        "Destination": "/venv",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "bind",
+        "Source": "/home/niteris/dev/bosn",
+        "Destination": "/repo",
+        "Mode": "",
+        "RW": false,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "volume",
+        "Name": "bosn-v-machine-c3b08f5a45546e526da2bd7b",
+        "Source": "/var/lib/docker/volumes/bosn-v-machine-c3b08f5a45546e526da2bd7b/_data",
+        "Destination": "/root/.cache/ruff",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "volume",
+        "Name": "bosn-v-machine-24c3efe2d4086c9605b3a209",
+        "Source": "/var/lib/docker/volumes/bosn-v-machine-24c3efe2d4086c9605b3a209/_data",
+        "Destination": "/root/.cache/uv",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "volume",
+        "Name": "bosn-v-machine-1a9894e864165c9ee67892b8",
+        "Source": "/var/lib/docker/volumes/bosn-v-machine-1a9894e864165c9ee67892b8/_data",
+        "Destination": "/root/.cargo",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "volume",
+        "Name": "bosn-v-stack-6eec8a2f4638faa3b93d6693",
+        "Source": "/var/lib/docker/volumes/bosn-v-stack-6eec8a2f4638faa3b93d6693/_data",
+        "Destination": "/repo/.bosn-build",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "volume",
+        "Name": "bosn-v-machine-967f6b017c41e6a50f0649db",
+        "Source": "/var/lib/docker/volumes/bosn-v-machine-967f6b017c41e6a50f0649db/_data",
+        "Destination": "/root/.cache/pyright-python",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "volume",
+        "Name": "bosn-v-machine-cb978113b542b13aa96617ad",
+        "Source": "/var/lib/docker/volumes/bosn-v-machine-cb978113b542b13aa96617ad/_data",
+        "Destination": "/root/.rustup",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "volume",
+        "Name": "bosn-v-stack-f1f648ba9be053f2b43cfff3",
+        "Source": "/var/lib/docker/volumes/bosn-v-stack-f1f648ba9be053f2b43cfff3/_data",
+        "Destination": "/root/.soldr",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "volume",
+        "Name": "bosn-v-stack-4b295a29f7309605a2652266",
+        "Source": "/var/lib/docker/volumes/bosn-v-stack-4b295a29f7309605a2652266/_data",
+        "Destination": "/target",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      }
+    ],
+    "cpu": {
+      "NanoCpus": 4000000000,
+      "CpuQuota": 0,
+      "CpuPeriod": 0,
+      "CpusetCpus": "",
+      "Memory": 0
+    }
+  },
+  {
+    "id": "2d1ae5518e3af904dad0608220ecd4406d70e52f51b71816aec3818a690a0142",
+    "name": "/bosn-setup-v2-18cd56ed9f2d4ad4c94470a71af3502c66f14b2617a12f4331513a1d32a8d04e",
+    "pid": 663358,
+    "created": "2026-10-06T00:35:47.521827407Z",
+    "labels": {
+      "com.zackees.bosn.setup-container": "bosn-setup-v2-18cd56ed9f2d4ad4c94470a71af3502c66f14b2617a12f4331513a1d32a8d04e",
+      "com.zackees.bosn.setup-content-sha256": "a3fbbce5f4abddb9c4a63870e0946f8035eacf40feecb7a2c462416df29f0f5d",
+      "com.zackees.bosn.setup-creation-profile": "v2:18cd56ed9f2d4ad4c94470a71af3502c66f14b2617a12f4331513a1d32a8d04e",
+      "com.zackees.bosn.setup-managed": "v1",
+      "org.opencontainers.image.source": "https://github.com/rust-lang/docker-rust"
+    },
+    "mounts": [
+      {
+        "Type": "volume",
+        "Name": "bosn-v-machine-6e3e28a98015a88db2aea851",
+        "Source": "/var/lib/docker/volumes/bosn-v-machine-6e3e28a98015a88db2aea851/_data",
+        "Destination": "/artifact",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "volume",
+        "Name": "bosn-v-stack-ce4d9f47609fb0816dc3e0e4",
+        "Source": "/var/lib/docker/volumes/bosn-v-stack-ce4d9f47609fb0816dc3e0e4/_data",
+        "Destination": "/root/.cargo",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "volume",
+        "Name": "bosn-v-stack-166eb01ef33f94553d77b91c",
+        "Source": "/var/lib/docker/volumes/bosn-v-stack-166eb01ef33f94553d77b91c/_data",
+        "Destination": "/root/.soldr",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "volume",
+        "Name": "bosn-v-stack-a4876f9c920b2c98239b0e19",
+        "Source": "/var/lib/docker/volumes/bosn-v-stack-a4876f9c920b2c98239b0e19/_data",
+        "Destination": "/root/.soldr-dev",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "volume",
+        "Name": "bosn-v-stack-b1f00ca81e8e224a48bea603",
+        "Source": "/var/lib/docker/volumes/bosn-v-stack-b1f00ca81e8e224a48bea603/_data",
+        "Destination": "/target",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "volume",
+        "Name": "bosn-v-machine-d9b84ed7a5c3b5a9bfc8d506",
+        "Source": "/var/lib/docker/volumes/bosn-v-machine-d9b84ed7a5c3b5a9bfc8d506/_data",
+        "Destination": "/tools",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "bind",
+        "Source": "/home/niteris/dev/soldr-extern/fix-3437",
+        "Destination": "/repo",
+        "Mode": "",
+        "RW": true,
+        "Propagation": "rprivate"
+      }
+    ],
+    "cpu": {
+      "NanoCpus": 4000000000,
+      "CpuQuota": 0,
+      "CpuPeriod": 0,
+      "CpusetCpus": "",
+      "Memory": 0
+    }
+  },
+  {
+    "id": "569c2e14094b638d7b1af4e1f621a1787888f513cd71bc1d1835e305773b3dbd",
+    "name": "/bosn-setup-v2-2b0bcfe7f10ce889e035439fb0a351768254dde455ad9863bee95e5ff9fd2ef5",
+    "pid": 431119,
+    "created": "2026-10-06T00:09:02.200205336Z",
+    "labels": {
+      "com.zackees.bosn.setup-container": "bosn-setup-v2-2b0bcfe7f10ce889e035439fb0a351768254dde455ad9863bee95e5ff9fd2ef5",
+      "com.zackees.bosn.setup-content-sha256": "a3fbbce5f4abddb9c4a63870e0946f8035eacf40feecb7a2c462416df29f0f5d",
+      "com.zackees.bosn.setup-creation-profile": "v2:2b0bcfe7f10ce889e035439fb0a351768254dde455ad9863bee95e5ff9fd2ef5",
+      "com.zackees.bosn.setup-managed": "v1",
+      "org.opencontainers.image.source": "https://github.com/rust-lang/docker-rust"
+    },
+    "mounts": [
+      {
+        "Type": "bind",
+        "Source": "/tmp/soldr-gate-3583",
+        "Destination": "/repo",
+        "Mode": "",
+        "RW": true,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "volume",
+        "Name": "bosn-v-machine-6e3e28a98015a88db2aea851",
+        "Source": "/var/lib/docker/volumes/bosn-v-machine-6e3e28a98015a88db2aea851/_data",
+        "Destination": "/artifact",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "volume",
+        "Name": "bosn-v-stack-6b4f436939e7271e405e370d",
+        "Source": "/var/lib/docker/volumes/bosn-v-stack-6b4f436939e7271e405e370d/_data",
+        "Destination": "/root/.cargo",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "volume",
+        "Name": "bosn-v-stack-2e39957db99652abb679d7cd",
+        "Source": "/var/lib/docker/volumes/bosn-v-stack-2e39957db99652abb679d7cd/_data",
+        "Destination": "/root/.soldr",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "volume",
+        "Name": "bosn-v-stack-e18210231839414f01affe19",
+        "Source": "/var/lib/docker/volumes/bosn-v-stack-e18210231839414f01affe19/_data",
+        "Destination": "/root/.soldr-dev",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "volume",
+        "Name": "bosn-v-stack-106b2fedcba8e8ae1003ae6b",
+        "Source": "/var/lib/docker/volumes/bosn-v-stack-106b2fedcba8e8ae1003ae6b/_data",
+        "Destination": "/target",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "volume",
+        "Name": "bosn-v-machine-d9b84ed7a5c3b5a9bfc8d506",
+        "Source": "/var/lib/docker/volumes/bosn-v-machine-d9b84ed7a5c3b5a9bfc8d506/_data",
+        "Destination": "/tools",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      }
+    ],
+    "cpu": {
+      "NanoCpus": 4000000000,
+      "CpuQuota": 0,
+      "CpuPeriod": 0,
+      "CpusetCpus": "",
+      "Memory": 0
+    }
+  },
+  {
+    "id": "77790355f074ff951e8e9a426a80d2555497d676d366bb69e74b70fb4f22decd",
+    "name": "/bosn-setup-v2-ae14eaa5b0b1e2ca7e6bee28f3fcd844364ce0f4fd54b8d429cb9cac94a95d99",
+    "pid": 4105432,
+    "created": "2026-10-05T22:44:56.917278483Z",
+    "labels": {
+      "com.zackees.bosn.setup-container": "bosn-setup-v2-ae14eaa5b0b1e2ca7e6bee28f3fcd844364ce0f4fd54b8d429cb9cac94a95d99",
+      "com.zackees.bosn.setup-content-sha256": "a3fbbce5f4abddb9c4a63870e0946f8035eacf40feecb7a2c462416df29f0f5d",
+      "com.zackees.bosn.setup-creation-profile": "v2:ae14eaa5b0b1e2ca7e6bee28f3fcd844364ce0f4fd54b8d429cb9cac94a95d99",
+      "com.zackees.bosn.setup-managed": "v1",
+      "org.opencontainers.image.source": "https://github.com/rust-lang/docker-rust"
+    },
+    "mounts": [
+      {
+        "Type": "volume",
+        "Name": "bosn-v-stack-55b351537e6362544b3d090b",
+        "Source": "/var/lib/docker/volumes/bosn-v-stack-55b351537e6362544b3d090b/_data",
+        "Destination": "/root/.soldr-dev",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "volume",
+        "Name": "bosn-v-stack-9bcfd06c3b499a031210979b",
+        "Source": "/var/lib/docker/volumes/bosn-v-stack-9bcfd06c3b499a031210979b/_data",
+        "Destination": "/target",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "volume",
+        "Name": "bosn-v-machine-d9b84ed7a5c3b5a9bfc8d506",
+        "Source": "/var/lib/docker/volumes/bosn-v-machine-d9b84ed7a5c3b5a9bfc8d506/_data",
+        "Destination": "/tools",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "bind",
+        "Source": "/home/niteris/dev/soldr-extern/burndown-r2",
+        "Destination": "/repo",
+        "Mode": "",
+        "RW": true,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "volume",
+        "Name": "bosn-v-machine-6e3e28a98015a88db2aea851",
+        "Source": "/var/lib/docker/volumes/bosn-v-machine-6e3e28a98015a88db2aea851/_data",
+        "Destination": "/artifact",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "volume",
+        "Name": "bosn-v-stack-f36fb6282c5a9fd826e63deb",
+        "Source": "/var/lib/docker/volumes/bosn-v-stack-f36fb6282c5a9fd826e63deb/_data",
+        "Destination": "/root/.cargo",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "volume",
+        "Name": "bosn-v-stack-f8b9d17d9568bded3d08d75d",
+        "Source": "/var/lib/docker/volumes/bosn-v-stack-f8b9d17d9568bded3d08d75d/_data",
+        "Destination": "/root/.soldr",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      }
+    ],
+    "cpu": {
+      "NanoCpus": 4000000000,
+      "CpuQuota": 0,
+      "CpuPeriod": 0,
+      "CpusetCpus": "",
+      "Memory": 0
+    }
+  },
+  {
+    "id": "4467aea42995ecefdab189cfc813d84aa5a65cf27f422a9836f458d5712fae41",
+    "name": "/bosn-act-3fd7627c-bffb-4e34-b0ca-87ad2ce4fb3d",
+    "pid": 3997819,
+    "created": "2026-10-05T13:22:34.114599511Z",
+    "labels": {
+      "com.zackees.bosn.act.act-image": "sha256:2e6ed85cd71f17d8f27aa9b66a7c5d338c9927b14b884cf8eeed489c7e707df8",
+      "com.zackees.bosn.act.act-version": "0.2.89-act2.10",
+      "com.zackees.bosn.act.cache-coordination": "shared-legacy-lease-v1",
+      "com.zackees.bosn.act.candidate-sha": "0000000000000000000000000000000000000000",
+      "com.zackees.bosn.act.creation-profile-sha256": "c6bc5e9e895b014f37b5dcc1c6ba4b70516aa32baa018b3ed9c1cb3632dbec79",
+      "com.zackees.bosn.act.engine-image": "sha256:6acc6aaf783ac1c1100822e542534c3dab3f1d38782760b0bdcb688280574d9e",
+      "com.zackees.bosn.act.init-command-sha256": "b2561fb97938d247355048f973d89d2d113f718bec99e94bc3998b5beb8d8079",
+      "com.zackees.bosn.act.namespace": "act-engine-v1",
+      "com.zackees.bosn.act.payload-sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "com.zackees.bosn.act.run-id": "3fd7627c-bffb-4e34-b0ca-87ad2ce4fb3d",
+      "com.zackees.bosn.act.runner-image": "sha256:4f2d5083a9d10d018c1c511eb8665cd480553c11975e78fd903a46daa830768b",
+      "com.zackees.bosn.act.snapshot-sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "com.zackees.bosn.act.spare": "true",
+      "com.zackees.bosn.created": "1791206553.9401226",
+      "com.zackees.bosn.generation": "3fd7627c-bffb-4e34-b0ca-87ad2ce4fb3d",
+      "com.zackees.bosn.kind": "container",
+      "com.zackees.bosn.registry": "c1d4a801-ad74-438b-8d6d-f80fa7bb5ad2",
+      "com.zackees.bosn.retention": "warm",
+      "com.zackees.bosn.scope": "spec",
+      "com.zackees.bosn.stack": "act",
+      "com.zackees.bosn.workspace": "/tmp/bosn-rp-mine"
+    },
+    "mounts": [
+      {
+        "Type": "volume",
+        "Name": "bosn-act-storage-3fd7627c-bffb-4e34-b0ca-87ad2ce4fb3d",
+        "Source": "/var/lib/docker/volumes/bosn-act-storage-3fd7627c-bffb-4e34-b0ca-87ad2ce4fb3d/_data",
+        "Destination": "/var/lib/docker",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "volume",
+        "Name": "bosn-ci-cache-v1",
+        "Source": "/var/lib/docker/volumes/bosn-ci-cache-v1/_data",
+        "Destination": "/bosn/cache",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      }
+    ],
+    "cpu": {
+      "NanoCpus": 0,
+      "CpuQuota": 800000,
+      "CpuPeriod": 100000,
+      "CpusetCpus": "",
+      "Memory": 51539607552
+    }
+  },
+  {
+    "id": "2992decc71778ca737ef4a9079c1b7c45a0293e03b7f10969e1afdd22c9eb9d6",
+    "name": "/act-Integration-CI-mode-7bbfe12e41ec7b96df6cf24cb5062c0a5bf3c7fe827753fc232188b7d9c54d0d",
+    "pid": 3739652,
+    "created": "2026-10-05T12:55:35.535211441Z",
+    "labels": {
+      "io.buildah.version": "1.35.0",
+      "org.opencontainers.image.authors": "https://github.com/catthehacker",
+      "org.opencontainers.image.created": "2026-08-15 12:55:12Z",
+      "org.opencontainers.image.description": "Special image built for using with https://github.com/nektos/act",
+      "org.opencontainers.image.documentation": "https://github.com/catthehacker/catthehacker/docker_images",
+      "org.opencontainers.image.revision": "e2f8efe464c82732f78e967ee709c00b6af53643",
+      "org.opencontainers.image.source": "https://github.com/catthehacker/catthehacker/docker_images",
+      "org.opencontainers.image.title": "act-24.04-amd64",
+      "org.opencontainers.image.url": "https://github.com/catthehacker/catthehacker/docker_images/tree/e2f8efe464c82732f78e967ee709c00b6af53643/linux/ubuntu/act/",
+      "org.opencontainers.image.vendor": "catthehacker",
+      "org.opencontainers.image.version": "20260815"
+    },
+    "mounts": [
+      {
+        "Type": "bind",
+        "Source": "/var/run/docker.sock",
+        "Destination": "/var/run/docker.sock",
+        "Mode": "",
+        "RW": true,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "volume",
+        "Name": "act-toolcache",
+        "Source": "/var/lib/docker/volumes/act-toolcache/_data",
+        "Destination": "/opt/hostedtoolcache",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "volume",
+        "Name": "act-Integration-CI-mode-7bbfe12e41ec7b96df6cf24cb5062c0a5bf3c7fe827753fc232188b7d9c54d0d-env",
+        "Source": "/var/lib/docker/volumes/act-Integration-CI-mode-7bbfe12e41ec7b96df6cf24cb5062c0a5bf3c7fe827753fc232188b7d9c54d0d-env/_data",
+        "Destination": "/var/run/act",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "volume",
+        "Name": "act-Integration-CI-mode-7bbfe12e41ec7b96df6cf24cb5062c0a5bf3c7fe827753fc232188b7d9c54d0d",
+        "Source": "/var/lib/docker/volumes/act-Integration-CI-mode-7bbfe12e41ec7b96df6cf24cb5062c0a5bf3c7fe827753fc232188b7d9c54d0d/_data",
+        "Destination": "/home/niteris/.clud/tmp-wt/zccache-wt-1909",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      }
+    ],
+    "cpu": {
+      "NanoCpus": 0,
+      "CpuQuota": 0,
+      "CpuPeriod": 0,
+      "CpusetCpus": "",
+      "Memory": 0
+    }
+  },
+  {
+    "id": "38af2259b082acbe73a6a6d6cef8fb73f70e38af957c86400f055c7a1005d335",
+    "name": "/bosn-act-975113f2-3de6-4027-bd6e-b4f94283d1af",
+    "pid": 3586811,
+    "created": "2026-10-05T12:46:01.43856218Z",
+    "labels": {
+      "com.zackees.bosn.act.act-image": "sha256:2e6ed85cd71f17d8f27aa9b66a7c5d338c9927b14b884cf8eeed489c7e707df8",
+      "com.zackees.bosn.act.act-version": "0.2.89-act2.10",
+      "com.zackees.bosn.act.cache-coordination": "shared-legacy-lease-v1",
+      "com.zackees.bosn.act.candidate-sha": "0000000000000000000000000000000000000000",
+      "com.zackees.bosn.act.creation-profile-sha256": "c6bc5e9e895b014f37b5dcc1c6ba4b70516aa32baa018b3ed9c1cb3632dbec79",
+      "com.zackees.bosn.act.engine-image": "sha256:6acc6aaf783ac1c1100822e542534c3dab3f1d38782760b0bdcb688280574d9e",
+      "com.zackees.bosn.act.init-command-sha256": "b2561fb97938d247355048f973d89d2d113f718bec99e94bc3998b5beb8d8079",
+      "com.zackees.bosn.act.namespace": "act-engine-v1",
+      "com.zackees.bosn.act.payload-sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "com.zackees.bosn.act.run-id": "975113f2-3de6-4027-bd6e-b4f94283d1af",
+      "com.zackees.bosn.act.runner-image": "sha256:4f2d5083a9d10d018c1c511eb8665cd480553c11975e78fd903a46daa830768b",
+      "com.zackees.bosn.act.snapshot-sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "com.zackees.bosn.act.spare": "true",
+      "com.zackees.bosn.created": "1791204361.0583153",
+      "com.zackees.bosn.generation": "975113f2-3de6-4027-bd6e-b4f94283d1af",
+      "com.zackees.bosn.kind": "container",
+      "com.zackees.bosn.registry": "9fe1105c-15e0-4317-9408-8a2d77b9a09f",
+      "com.zackees.bosn.retention": "warm",
+      "com.zackees.bosn.scope": "spec",
+      "com.zackees.bosn.stack": "act",
+      "com.zackees.bosn.workspace": "/tmp/bosn-rp-mine2"
+    },
+    "mounts": [
+      {
+        "Type": "volume",
+        "Name": "bosn-act-storage-975113f2-3de6-4027-bd6e-b4f94283d1af",
+        "Source": "/var/lib/docker/volumes/bosn-act-storage-975113f2-3de6-4027-bd6e-b4f94283d1af/_data",
+        "Destination": "/var/lib/docker",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "volume",
+        "Name": "bosn-ci-cache-v1",
+        "Source": "/var/lib/docker/volumes/bosn-ci-cache-v1/_data",
+        "Destination": "/bosn/cache",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      }
+    ],
+    "cpu": {
+      "NanoCpus": 0,
+      "CpuQuota": 800000,
+      "CpuPeriod": 100000,
+      "CpusetCpus": "",
+      "Memory": 51539607552
+    }
+  },
+  {
+    "id": "70ad01be2c0f1c3714106d62447df1f8d4e6827efc988fbaaa5405164a9d07c5",
+    "name": "/bosn-act-ccac9ddc-43ba-4884-8d66-3314aa7cedf1",
+    "pid": 2531626,
+    "created": "2026-10-05T10:30:26.064228387Z",
+    "labels": {
+      "com.zackees.bosn.act.act-image": "sha256:7fa5bb0bea4cb01fe2cba2c31b14ad6e30e5f62c9934904487965c0af39fec9b",
+      "com.zackees.bosn.act.act-version": "0.2.89-act2.4",
+      "com.zackees.bosn.act.candidate-sha": "0000000000000000000000000000000000000000",
+      "com.zackees.bosn.act.creation-profile-sha256": "250d83cb7f62203028095ccd492f2da0630fcefe0b17df7e0b2214edd7715704",
+      "com.zackees.bosn.act.engine-image": "sha256:6acc6aaf783ac1c1100822e542534c3dab3f1d38782760b0bdcb688280574d9e",
+      "com.zackees.bosn.act.init-command-sha256": "435f2b9813685fa481ae34a8b954f78740fa68f87c462c72cf1ddcf3fef4b515",
+      "com.zackees.bosn.act.namespace": "act-engine-v1",
+      "com.zackees.bosn.act.payload-sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "com.zackees.bosn.act.run-id": "ccac9ddc-43ba-4884-8d66-3314aa7cedf1",
+      "com.zackees.bosn.act.runner-image": "sha256:4f2d5083a9d10d018c1c511eb8665cd480553c11975e78fd903a46daa830768b",
+      "com.zackees.bosn.act.snapshot-sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "com.zackees.bosn.act.spare": "true",
+      "com.zackees.bosn.created": "1791196225.959253",
+      "com.zackees.bosn.generation": "ccac9ddc-43ba-4884-8d66-3314aa7cedf1",
+      "com.zackees.bosn.kind": "container",
+      "com.zackees.bosn.registry": "aafb76fe-26f6-426b-bd47-6c5ab560395e",
+      "com.zackees.bosn.retention": "warm",
+      "com.zackees.bosn.scope": "spec",
+      "com.zackees.bosn.stack": "act",
+      "com.zackees.bosn.workspace": "/tmp/bosn-fb"
+    },
+    "mounts": [
+      {
+        "Type": "volume",
+        "Name": "f6a89e97fdb4b0545314490597c5aa64f61d2a9ea685f571dc5530eab76cf382",
+        "Source": "/var/lib/docker/volumes/f6a89e97fdb4b0545314490597c5aa64f61d2a9ea685f571dc5530eab76cf382/_data",
+        "Destination": "/var/lib/docker",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "volume",
+        "Name": "bosn-ci-cache-v1",
+        "Source": "/var/lib/docker/volumes/bosn-ci-cache-v1/_data",
+        "Destination": "/bosn/cache",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      }
+    ],
+    "cpu": {
+      "NanoCpus": 0,
+      "CpuQuota": 800000,
+      "CpuPeriod": 100000,
+      "CpusetCpus": "",
+      "Memory": 51539607552
+    }
+  },
+  {
+    "id": "5ce5c806b570fdd9701c43aa6f37e588aed3d328ed64803e51e2a292fbfb3305",
+    "name": "/soldr-perf-local-soldr2-10886949",
+    "pid": 310511,
+    "created": "2026-10-05T01:45:04.201023644Z",
+    "labels": {
+      "io.soldr.perf-local.dockerfile-sha256": "00d1bd6e56d35c7a97e0ac89905e5a20dc693fb03217373ae93c0dda4fcd6f1d",
+      "io.soldr.perf-local.image-id": "sha256:92bb11010adc2a2a12556f1dca8febfd08cda68dca41ba555f99ec9cece0072d",
+      "io.soldr.perf-local.managed": "true",
+      "io.soldr.perf-local.ptrace": "0",
+      "io.soldr.perf-local.schema": "7",
+      "io.soldr.perf-local.source-root": "/home/niteris/dev/soldr2",
+      "org.opencontainers.image.source": "https://github.com/rust-lang/docker-rust"
+    },
+    "mounts": [
+      {
+        "Type": "bind",
+        "Source": "/home/niteris/dev/soldr2",
+        "Destination": "/repo",
+        "Mode": "",
+        "RW": false,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "volume",
+        "Name": "soldr-perf-venv-soldr2-10886949",
+        "Source": "/var/lib/docker/volumes/soldr-perf-venv-soldr2-10886949/_data",
+        "Destination": "/venv",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "volume",
+        "Name": "soldr-perf-target-soldr2-10886949",
+        "Source": "/var/lib/docker/volumes/soldr-perf-target-soldr2-10886949/_data",
+        "Destination": "/target",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "volume",
+        "Name": "soldr-perf-cargo-home-soldr2-10886949",
+        "Source": "/var/lib/docker/volumes/soldr-perf-cargo-home-soldr2-10886949/_data",
+        "Destination": "/root/.cargo",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "volume",
+        "Name": "soldr-perf-soldr-home-soldr2-10886949",
+        "Source": "/var/lib/docker/volumes/soldr-perf-soldr-home-soldr2-10886949/_data",
+        "Destination": "/root/.soldr",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      },
+      {
+        "Type": "volume",
+        "Name": "soldr-perf-uv-cache-soldr2-10886949",
+        "Source": "/var/lib/docker/volumes/soldr-perf-uv-cache-soldr2-10886949/_data",
+        "Destination": "/root/.cache/uv",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      }
+    ],
+    "cpu": {
+      "NanoCpus": 0,
+      "CpuQuota": 0,
+      "CpuPeriod": 0,
+      "CpusetCpus": "",
+      "Memory": 0
+    }
+  },
+  {
+    "id": "de68982d978a3c225bcf4e41b6d88490aaec63ceb8125d899fe03aeeda9f2453",
+    "name": "/buildx_buildkit_soldr-perf-local0",
+    "pid": 275430,
+    "created": "2026-10-05T01:42:50.734640318Z",
+    "labels": {},
+    "mounts": [
+      {
+        "Type": "volume",
+        "Name": "buildx_buildkit_soldr-perf-local0_state",
+        "Source": "/var/lib/docker/volumes/buildx_buildkit_soldr-perf-local0_state/_data",
+        "Destination": "/var/lib/buildkit",
+        "Driver": "local",
+        "Mode": "z",
+        "RW": true,
+        "Propagation": ""
+      }
+    ],
+    "cpu": {
+      "NanoCpus": 0,
+      "CpuQuota": 0,
+      "CpuPeriod": 0,
+      "CpusetCpus": "",
+      "Memory": 0
+    }
+  }
+]

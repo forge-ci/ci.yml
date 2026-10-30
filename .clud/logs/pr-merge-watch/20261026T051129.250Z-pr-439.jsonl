@@ -1,0 +1,12 @@
+{"v":1,"ts":"2026-10-26T05:11:29.250Z","elapsed_sec":0.0,"event":"START","repo":"forge-ci/kernal-api","pr":439,"log_path":".clud/logs/pr-merge-watch/20261026T051129.250Z-pr-439.jsonl"}
+{"v":1,"elapsed_sec":1.69,"event":"subscription","outcome":"available"}
+{"v":1,"elapsed_sec":5.13,"event":"checks","checks":{"total":8,"pending":0,"failed":0,"succeeded":8,"skipped":0},"mergeable":"UNKNOWN","merge_state_status":"UNKNOWN"}
+{"v":1,"elapsed_sec":5.13,"event":"coderabbit","coderabbit":{"state":"not_detected","sampled_merged_prs":5}}
+{"v":1,"elapsed_sec":24.09,"event":"checks","checks":{"total":8,"pending":0,"failed":0,"succeeded":8,"skipped":0},"mergeable":"UNKNOWN","merge_state_status":"UNKNOWN"}
+{"v":1,"elapsed_sec":43.92,"event":"checks","checks":{"total":8,"pending":0,"failed":0,"succeeded":8,"skipped":0},"mergeable":"UNKNOWN","merge_state_status":"UNKNOWN"}
+{"v":1,"elapsed_sec":43.92,"event":"coderabbit","coderabbit":{"state":"not_detected","sampled_merged_prs":5}}
+{"v":1,"elapsed_sec":64.03,"event":"checks","checks":{"total":8,"pending":0,"failed":0,"succeeded":8,"skipped":0},"mergeable":"UNKNOWN","merge_state_status":"UNKNOWN"}
+{"v":1,"elapsed_sec":84.34,"event":"checks","checks":{"total":8,"pending":0,"failed":0,"succeeded":8,"skipped":0},"mergeable":"UNKNOWN","merge_state_status":"UNKNOWN"}
+{"v":1,"elapsed_sec":104.17,"event":"checks","checks":{"total":8,"pending":0,"failed":0,"succeeded":8,"skipped":0},"mergeable":"UNKNOWN","merge_state_status":"UNKNOWN"}
+{"v":1,"elapsed_sec":104.17,"event":"coderabbit","coderabbit":{"state":"not_detected","sampled_merged_prs":5}}
+{"v":1,"elapsed_sec":104.17,"event":"EXIT","code":9,"reason":"mergeable_unknown","mergeable":"UNKNOWN","merge_state_status":"UNKNOWN"}

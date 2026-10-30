@@ -1,0 +1,6643 @@
+[
+  {
+    "id": "8633c62f-b6d9-4074-ae1c-d48f83b337ee",
+    "job": "dylints",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/verify",
+        "job_id": "verify",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Dylint workspace",
+        "job_id": "dylints",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "bde840c8-b84e-462b-b373-ac49e93c067e",
+    "job": "lint-linux-x64",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Clippy linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "865b1e1d-97c5-49c9-8f58-22f210e1eafa",
+    "job": null,
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Integration/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Integration/Integration (Linux)",
+        "job_id": "integration",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "a263ef05-57ce-4bc0-8cd8-460133199c27",
+    "job": null,
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Integration/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Integration/Integration (Linux)",
+        "job_id": "integration",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "b44ab81e-1d0f-421f-b747-52db93af66cf",
+    "job": "lint-linux-x64",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Clippy linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "c5a63eba-94bf-4ba2-8df6-6da7a9af91a3",
+    "job": "linux",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "ci-minimal/Verify local gate",
+        "job_id": "verify",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "failure"
+      },
+      {
+        "key": "linux",
+        "job_id": "linux",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      }
+    ]
+  },
+  {
+    "id": "b25ea8c8-2190-4155-9cbe-34df8e337c9a",
+    "job": null,
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Integration/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Integration/Integration (Linux)",
+        "job_id": "integration",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "58eb9fe9-5428-438e-9a1a-13b9d4a220ea",
+    "job": "test-linux-x64-unit",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-3/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-1/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "failure"
+      },
+      {
+        "key": "Test linux-x64 (unit)-2/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "test-linux-x64-unit",
+        "job_id": "test-linux-x64-unit",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      }
+    ]
+  },
+  {
+    "id": "a9fede9a-3fdf-4cfb-9a70-d5140eebd733",
+    "job": "lint-linux-x64",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Clippy linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "9aba5c1e-908f-4f05-809e-cfe23d221004",
+    "job": null,
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-1/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-2/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-3/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "build-linux-arm",
+        "job_id": "build-linux-arm",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "build-macos-arm",
+        "job_id": "build-macos-arm",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "build-macos-x64",
+        "job_id": "build-macos-x64",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "build-windows-arm",
+        "job_id": "build-windows-arm",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "build-windows-x64",
+        "job_id": "build-windows-x64",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "Dylint/Dylint/Dylint",
+        "job_id": "dylint",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Clippy linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Static checks",
+        "job_id": "static-checks",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "test-linux-arm",
+        "job_id": "test-linux-arm",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "test-linux-x64-harness",
+        "job_id": "test-linux-x64-harness",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "test-linux-x64-integration",
+        "job_id": "test-linux-x64-integration",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "test-linux-x64-unit",
+        "job_id": "test-linux-x64-unit",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "test-macos-arm",
+        "job_id": "test-macos-arm",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "test-macos-x64",
+        "job_id": "test-macos-x64",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "test-windows-arm",
+        "job_id": "test-windows-arm",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "test-windows-x64",
+        "job_id": "test-windows-x64",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "CI/CI OK",
+        "job_id": "ci-ok",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "98d7cd04-2436-4998-b99b-91154355c5e6",
+    "job": "linux",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/Select CI tier",
+        "job_id": "select-tier",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Verify local gate",
+        "job_id": "verify",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Linux (lint + unit + docker)",
+        "job_id": "linux",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "4f6e047e-0145-41f4-8ceb-d93e64b01549",
+    "job": "static-checks",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Static checks",
+        "job_id": "static-checks",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "7b1c3b99-6705-43f2-a9a7-1b36134e567e",
+    "job": null,
+    "reason": null,
+    "jobs": [
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Integration/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Integration/Integration (Linux)",
+        "job_id": "integration",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "failure"
+      }
+    ]
+  },
+  {
+    "id": "4f20c9ac-6090-495e-bc1d-1364a709eb5e",
+    "job": null,
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Integration/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Integration/Integration (Linux)",
+        "job_id": "integration",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "421fa46f-7107-4c12-a747-7136f5fa5dfb",
+    "job": "test-linux-x64-unit",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-1/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-2/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-3/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "test-linux-x64-unit",
+        "job_id": "test-linux-x64-unit",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      }
+    ]
+  },
+  {
+    "id": "c8b03473-de9f-4cef-b74c-55c03d92966b",
+    "job": "lint-linux-x64",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Clippy linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "8decca28-7f53-44d7-be6e-b24d5910e3e6",
+    "job": null,
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Integration/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Integration/Integration (Linux)",
+        "job_id": "integration",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "d6fdd1bc-93a4-4376-a004-a46443b3c00b",
+    "job": "static-checks",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Static checks",
+        "job_id": "static-checks",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "53520f48-5537-4e9c-a927-e68882a87692",
+    "job": "static-checks",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Static checks",
+        "job_id": "static-checks",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "2a463776-cbf3-48b2-a79a-5fa4c74e4808",
+    "job": "msrv",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/MSRV (1.95.0)",
+        "job_id": "msrv",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "0dc53fbd-5311-406c-a8c6-b561a602d561",
+    "job": "linux",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/Select CI tier",
+        "job_id": "select-tier",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Verify local gate",
+        "job_id": "verify",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Linux (lint + unit + docker)",
+        "job_id": "linux",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "b44d8fc3-b582-4e74-9857-60834bea51aa",
+    "job": null,
+    "reason": null,
+    "jobs": [
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Integration/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Integration/Integration (Linux)",
+        "job_id": "integration",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "failure"
+      }
+    ]
+  },
+  {
+    "id": "64fd49bd-65d7-43a7-8228-7c1d45d47348",
+    "job": "test-linux-x64-unit",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-2/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-3/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-1/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "test-linux-x64-unit",
+        "job_id": "test-linux-x64-unit",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      }
+    ]
+  },
+  {
+    "id": "7f300e87-3c1c-4b23-bebf-efa1e6b02a86",
+    "job": "static-checks",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Static checks",
+        "job_id": "static-checks",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "7c3d85e7-1212-49de-9604-6e1964612a7b",
+    "job": "dylints",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/verify",
+        "job_id": "verify",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Dylint workspace",
+        "job_id": "dylints",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "57d7677e-95de-43ed-9d43-305083ddab6b",
+    "job": "msrv",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/MSRV (1.95.0)",
+        "job_id": "msrv",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "8636e4cd-398b-4157-b0bc-4054ca489f2b",
+    "job": "lint-linux-x64",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Clippy linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "e2b5abaa-9a75-485f-9a7d-a0a4e4969def",
+    "job": "test-linux-x64-unit",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-2/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-1/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "failure"
+      },
+      {
+        "key": "Test linux-x64 (unit)-3/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "test-linux-x64-unit",
+        "job_id": "test-linux-x64-unit",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      }
+    ]
+  },
+  {
+    "id": "1d09115a-5bd8-4256-8946-87888080651d",
+    "job": "msrv",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/MSRV (1.95.0)",
+        "job_id": "msrv",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "053d28f6-491c-4167-b6ec-7a58c3793e0d",
+    "job": "msrv",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/MSRV (1.95.0)",
+        "job_id": "msrv",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "044f8e73-734a-404c-bcfb-039a470d1214",
+    "job": "test-linux-x64-unit",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-1/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-3/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-2/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "test-linux-x64-unit",
+        "job_id": "test-linux-x64-unit",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      }
+    ]
+  },
+  {
+    "id": "42214ab3-47f7-4a5e-97bb-d0a5b6765332",
+    "job": "test-linux-x64-unit",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-2/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-3/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-1/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "test-linux-x64-unit",
+        "job_id": "test-linux-x64-unit",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      }
+    ]
+  },
+  {
+    "id": "11cd3574-2f0f-497e-b953-2f6db4421ed8",
+    "job": "test-linux-x64-unit",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "failure"
+      },
+      {
+        "key": "test-linux-x64-unit",
+        "job_id": "test-linux-x64-unit",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      }
+    ]
+  },
+  {
+    "id": "3507879e-0bce-4cf3-8236-7ba57b33a238",
+    "job": "lint-linux-x64",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Clippy linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "failure"
+      }
+    ]
+  },
+  {
+    "id": "09f4a2e9-7161-4eb8-bbec-008afcd75f5e",
+    "job": "msrv",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/MSRV (1.95.0)",
+        "job_id": "msrv",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "be3c0138-3efe-4a4d-aca1-d9bb612f3a82",
+    "job": null,
+    "reason": null,
+    "jobs": [
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Integration/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Integration/Integration (Linux)",
+        "job_id": "integration",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "failure"
+      }
+    ]
+  },
+  {
+    "id": "a5ca72d4-8d90-4008-a711-4efaf7ff358b",
+    "job": "dylint",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Dylint/Dylint/Dylint",
+        "job_id": "dylint",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "failure"
+      }
+    ]
+  },
+  {
+    "id": "dc67045d-c3c4-4137-bb46-99e56e6a4236",
+    "job": "dylint",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Dylint",
+        "job_id": "dylint",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "cancelled"
+      }
+    ]
+  },
+  {
+    "id": "1641955d-bcc6-4008-827b-4bc8d14fb9c6",
+    "job": null,
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Integration/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Integration/Integration (Linux)",
+        "job_id": "integration",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "cc4342fb-606f-4863-a3e0-635849ef043a",
+    "job": "lint-linux-x64",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Clippy linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "56a5edc4-ae13-4c00-90a6-9dc435095115",
+    "job": "lint-linux-x64",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Clippy linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "a9540d2a-0f2d-4063-a6c8-be43d5723e28",
+    "job": "dylint",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Dylint",
+        "job_id": "dylint",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "50e929fb-ce20-4772-9a13-b98b2e224f16",
+    "job": "lint-linux-x64",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Clippy linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "failure"
+      }
+    ]
+  },
+  {
+    "id": "134dd78f-9a9a-454e-810a-8c86f020407c",
+    "job": "lint-linux-x64",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Clippy linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "failure"
+      }
+    ]
+  },
+  {
+    "id": "6895c92f-8878-4369-afa1-e74b3348c9ca",
+    "job": "dylint",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Dylint",
+        "job_id": "dylint",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "4c705d9d-31a1-4964-87aa-2ba86a50fd23",
+    "job": "dylint",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Dylint",
+        "job_id": "dylint",
+        "identity": null,
+        "status": "in_progress",
+        "conclusion": null
+      }
+    ]
+  },
+  {
+    "id": "a460f8ef-b571-489b-9398-74679cbd3f60",
+    "job": "dylint",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Dylint",
+        "job_id": "dylint",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "ee6cc800-b709-43e6-b847-2875ae0c5f11",
+    "job": "lint-linux-x64",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Clippy linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "failure"
+      }
+    ]
+  },
+  {
+    "id": "fdb62957-10fe-4442-bbde-b176380b5eae",
+    "job": "static-checks",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Static checks",
+        "job_id": "static-checks",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "c5785e94-d4d7-48a9-aea0-bbcf1d68e572",
+    "job": "static-checks",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Static checks",
+        "job_id": "static-checks",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "48da58b0-b8da-4e3e-8602-08298d1c7e92",
+    "job": "dylint",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Dylint",
+        "job_id": "dylint",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "fc4b3e83-3cfd-4e9d-b853-b0736dac73ed",
+    "job": "rust",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/Verify local gate",
+        "job_id": "verify",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Rust workspace (locked tests)",
+        "job_id": "rust",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "786a9c13-321c-4a06-a703-955e1a3ae665",
+    "job": null,
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-1/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-2/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-3/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "build-linux-arm",
+        "job_id": "build-linux-arm",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "build-macos-arm",
+        "job_id": "build-macos-arm",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "build-macos-x64",
+        "job_id": "build-macos-x64",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "build-windows-arm",
+        "job_id": "build-windows-arm",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "build-windows-x64",
+        "job_id": "build-windows-x64",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "Dylint/Dylint/Dylint",
+        "job_id": "dylint",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Clippy linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "failure"
+      },
+      {
+        "key": "CI/Static checks",
+        "job_id": "static-checks",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "test-linux-arm",
+        "job_id": "test-linux-arm",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "test-linux-x64-harness",
+        "job_id": "test-linux-x64-harness",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "test-linux-x64-integration",
+        "job_id": "test-linux-x64-integration",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "test-linux-x64-unit",
+        "job_id": "test-linux-x64-unit",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "test-macos-arm",
+        "job_id": "test-macos-arm",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "test-macos-x64",
+        "job_id": "test-macos-x64",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "test-windows-arm",
+        "job_id": "test-windows-arm",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "test-windows-x64",
+        "job_id": "test-windows-x64",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "CI/CI OK",
+        "job_id": "ci-ok",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "failure"
+      }
+    ]
+  },
+  {
+    "id": "71ad5683-4e6d-47df-bc6e-b82bfb4ca32b",
+    "job": "dylint",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Dylint",
+        "job_id": "dylint",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "d69a9d0f-1e77-4f3e-b57f-e38762f12170",
+    "job": "test-linux-x64-unit",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-3/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-1/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-2/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "test-linux-x64-unit",
+        "job_id": "test-linux-x64-unit",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      }
+    ]
+  },
+  {
+    "id": "24a50efe-50cf-4af3-9cab-c91e55449326",
+    "job": "test-linux-x64-unit",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "failure"
+      },
+      {
+        "key": "test-linux-x64-unit",
+        "job_id": "test-linux-x64-unit",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      }
+    ]
+  },
+  {
+    "id": "0a03779a-29d2-47d7-9a48-101192b1679f",
+    "job": "dylint",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Dylint",
+        "job_id": "dylint",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "11560be2-e437-4b52-9c57-dc5773fcf3c6",
+    "job": "static-checks",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Static checks",
+        "job_id": "static-checks",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "failure"
+      }
+    ]
+  },
+  {
+    "id": "0750fde2-b0be-49e4-a874-f4af58a44170",
+    "job": "dylints",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/verify",
+        "job_id": "verify",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Dylint workspace",
+        "job_id": "dylints",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "f1569348-1c03-42c2-98ad-5d962ef44184",
+    "job": "static-checks",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Static checks",
+        "job_id": "static-checks",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "c6664d80-437d-44ba-a4c6-6864a470c952",
+    "job": "static-checks",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Static checks",
+        "job_id": "static-checks",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "1a04e75f-a3dd-431b-9f1c-45df04039e27",
+    "job": "static-checks",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Static checks",
+        "job_id": "static-checks",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "b32ce170-f683-4311-88fb-f75e99c8facb",
+    "job": "msrv",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/MSRV (1.95.0)",
+        "job_id": "msrv",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "3124ae1d-7c85-4fb5-97bc-7f56ad392895",
+    "job": "test-linux-x64-unit",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-2/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-1/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-3/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "test-linux-x64-unit",
+        "job_id": "test-linux-x64-unit",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      }
+    ]
+  },
+  {
+    "id": "384979f0-7615-4431-b214-f2c080cac1cb",
+    "job": "static-checks",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Static checks",
+        "job_id": "static-checks",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "89d4e923-bc8a-49e8-91bb-6f6a8e7acb25",
+    "job": "static-checks",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Static checks",
+        "job_id": "static-checks",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "9a9ac284-9cff-421e-a6ee-ed573a570065",
+    "job": "dylint",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Dylint",
+        "job_id": "dylint",
+        "identity": null,
+        "status": "in_progress",
+        "conclusion": null
+      }
+    ]
+  },
+  {
+    "id": "877cc196-5127-4453-92de-7e6d86f62e36",
+    "job": null,
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Integration/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Integration/Integration (Linux)",
+        "job_id": "integration",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "819d5828-9fb1-4cd4-bb03-dc464fb38dd5",
+    "job": "static-checks",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Static checks",
+        "job_id": "static-checks",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "failure"
+      }
+    ]
+  },
+  {
+    "id": "40a12e7d-1707-4086-a0af-44b3ceecc978",
+    "job": "dylint",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Dylint/Dylint/Dylint",
+        "job_id": "dylint",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "234ca5d4-bb02-4772-a155-fcbebe14e77e",
+    "job": "dylint",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Dylint",
+        "job_id": "dylint",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "1ce3dde6-5745-4741-8657-9ac07b8e11c0",
+    "job": "test-linux-x64-unit",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-1/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-3/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-2/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "test-linux-x64-unit",
+        "job_id": "test-linux-x64-unit",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      }
+    ]
+  },
+  {
+    "id": "97addc43-f636-4a48-9b54-0cead3583c60",
+    "job": null,
+    "reason": null,
+    "jobs": [
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Integration/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Integration/Integration (Linux)",
+        "job_id": "integration",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "failure"
+      }
+    ]
+  },
+  {
+    "id": "102b2a43-3465-4a4b-aa32-53611f9ee24d",
+    "job": "test-linux-x64-unit",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-3/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "key": "Test linux-x64 (unit)-2/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "key": "Test linux-x64 (unit)-1/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "key": "test-linux-x64-unit",
+        "job_id": "test-linux-x64-unit",
+        "identity": null,
+        "status": "queued",
+        "conclusion": null
+      }
+    ]
+  },
+  {
+    "id": "6e2e74e1-abd9-44a1-8d89-4038c2589bb2",
+    "job": "msrv",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/MSRV (1.95.0)",
+        "job_id": "msrv",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "ad41d43f-c9e9-4a95-83ea-363785186579",
+    "job": "lint-linux-x64",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Clippy linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "failure"
+      }
+    ]
+  },
+  {
+    "id": "1e6b84ad-0c0e-4d43-bcb1-f3c4d327ebe5",
+    "job": "lint-linux-x64",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Clippy linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "f55dab4b-462a-41f8-b3c6-d631d02af1bc",
+    "job": "test-linux-x64-unit",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-1/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-2/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-3/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "test-linux-x64-unit",
+        "job_id": "test-linux-x64-unit",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      }
+    ]
+  },
+  {
+    "id": "7c769a21-c163-4305-86c2-0a946805f48d",
+    "job": null,
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Integration/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Integration/Integration (Linux)",
+        "job_id": "integration",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "82ec3cad-fe19-4ae2-bc23-d632a37512eb",
+    "job": "static-checks",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Static checks",
+        "job_id": "static-checks",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "ed199cce-2610-49a6-8c77-fd646a9e0baa",
+    "job": "msrv",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/MSRV (1.95.0)",
+        "job_id": "msrv",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "e3aef781-9ee6-44de-a250-3edc17e9e934",
+    "job": "dylint",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Dylint/Dylint/Dylint",
+        "job_id": "dylint",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "failure"
+      }
+    ]
+  },
+  {
+    "id": "99b95f86-c2bf-43db-88a9-07ea0dc2a3d4",
+    "job": "test-linux-x64-unit",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-3/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-1/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "failure"
+      },
+      {
+        "key": "Test linux-x64 (unit)-2/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "test-linux-x64-unit",
+        "job_id": "test-linux-x64-unit",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      }
+    ]
+  },
+  {
+    "id": "263e9f96-31f4-4088-bbaf-59a57c44070e",
+    "job": "test-linux-x64-unit",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-1/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-2/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-3/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "test-linux-x64-unit",
+        "job_id": "test-linux-x64-unit",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      }
+    ]
+  },
+  {
+    "id": "7d9cf82e-9adc-4a9b-950d-73736ae5ca71",
+    "job": "msrv",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/MSRV (1.95.0)",
+        "job_id": "msrv",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "672dec50-6b98-49bd-bef3-33f718b9b76d",
+    "job": "lint-linux-x64",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Clippy linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "219e650c-d69e-4d47-9bda-3d49ee760973",
+    "job": "msrv",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/MSRV (1.95.0)",
+        "job_id": "msrv",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "54ed9df5-0a4d-4e88-831d-4c32c2bc968f",
+    "job": "dylint",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Dylint",
+        "job_id": "dylint",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "29d6ff97-9929-4756-bbdb-6890800bf1e7",
+    "job": null,
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-2/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-3/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-1/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "build-linux-arm",
+        "job_id": "build-linux-arm",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "build-macos-arm",
+        "job_id": "build-macos-arm",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "build-macos-x64",
+        "job_id": "build-macos-x64",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "build-windows-arm",
+        "job_id": "build-windows-arm",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "build-windows-x64",
+        "job_id": "build-windows-x64",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "Dylint/Dylint/Dylint",
+        "job_id": "dylint",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Clippy linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Static checks",
+        "job_id": "static-checks",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "test-linux-arm",
+        "job_id": "test-linux-arm",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "test-linux-x64-harness",
+        "job_id": "test-linux-x64-harness",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "test-linux-x64-integration",
+        "job_id": "test-linux-x64-integration",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "test-linux-x64-unit",
+        "job_id": "test-linux-x64-unit",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "test-macos-arm",
+        "job_id": "test-macos-arm",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "test-macos-x64",
+        "job_id": "test-macos-x64",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "test-windows-arm",
+        "job_id": "test-windows-arm",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "test-windows-x64",
+        "job_id": "test-windows-x64",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "CI/CI OK",
+        "job_id": "ci-ok",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "44f36562-5384-44cc-9460-4db460b34782",
+    "job": "test-linux-x64-unit",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-2/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-3/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-1/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "failure"
+      },
+      {
+        "key": "test-linux-x64-unit",
+        "job_id": "test-linux-x64-unit",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      }
+    ]
+  },
+  {
+    "id": "40cf38b9-8ae3-4074-b3fa-c9d1b7ebefd3",
+    "job": "linux",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/verify",
+        "job_id": "verify",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/linux",
+        "job_id": "linux",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "e2dc800f-982d-49b1-b0c3-b4c32834de73",
+    "job": "test-linux-x64-unit",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-2/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-3/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-1/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "test-linux-x64-unit",
+        "job_id": "test-linux-x64-unit",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      }
+    ]
+  },
+  {
+    "id": "00fff191-3c00-4191-a9c3-00c785f3442c",
+    "job": "static-checks",
+    "reason": "engine cleanup failed: Docker CLI exceeded its deadline",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Static checks",
+        "job_id": "static-checks",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "2f87897c-12d3-4197-90e9-25fe87a714c0",
+    "job": null,
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Integration/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Integration/Integration (Linux)",
+        "job_id": "integration",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "6c1458d5-7c93-422a-b632-86484c2d98e0",
+    "job": "linux",
+    "reason": "the run exceeded its timeout",
+    "jobs": []
+  },
+  {
+    "id": "e1bb5e4f-5387-4dfe-83af-1eb54f4de6be",
+    "job": "test-linux-x64-unit",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-3/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-2/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-1/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "failure"
+      },
+      {
+        "key": "test-linux-x64-unit",
+        "job_id": "test-linux-x64-unit",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      }
+    ]
+  },
+  {
+    "id": "98929ad3-f708-4935-8f64-e2a652cac960",
+    "job": null,
+    "reason": null,
+    "jobs": [
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Integration/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Integration/Integration (Linux)",
+        "job_id": "integration",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "failure"
+      }
+    ]
+  },
+  {
+    "id": "309ccaef-ef25-4279-b27a-bbc912b562f3",
+    "job": "test-linux-x64-unit",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-3/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-2/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-1/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "test-linux-x64-unit",
+        "job_id": "test-linux-x64-unit",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      }
+    ]
+  },
+  {
+    "id": "2e0b0c82-cdb1-48e6-9307-c1e986bd2dfc",
+    "job": "dylints",
+    "reason": "interrupted: the daemon stopped during this run",
+    "jobs": [
+      {
+        "key": "CI/verify",
+        "job_id": "verify",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Dylint workspace",
+        "job_id": "dylints",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "cancelled"
+      }
+    ]
+  },
+  {
+    "id": "0e203918-00c7-43a1-a13a-f600e33b93c2",
+    "job": "rust",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/Verify local gate",
+        "job_id": "verify",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Rust workspace (locked tests)",
+        "job_id": "rust",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "4b1df34e-2d46-470b-848c-995436f69e73",
+    "job": "static-checks",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Static checks",
+        "job_id": "static-checks",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "7370f951-c089-489a-85d7-91d590bc03e0",
+    "job": "static-checks",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Static checks",
+        "job_id": "static-checks",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "failure"
+      }
+    ]
+  },
+  {
+    "id": "d3326b66-4c05-4ee5-ae56-edfda942bd74",
+    "job": "linux",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/verify",
+        "job_id": "verify",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/linux",
+        "job_id": "linux",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "11a98bc0-2b01-4f36-9f37-0ba397267ff7",
+    "job": "linux",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/Select CI tier",
+        "job_id": "select-tier",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Verify local gate",
+        "job_id": "verify",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Linux (lint + unit + docker)",
+        "job_id": "linux",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "6b11c837-88a2-48df-b293-2083fe822238",
+    "job": "static-checks",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Static checks",
+        "job_id": "static-checks",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "0c06d528-d124-493f-9686-5aa1bffb54a9",
+    "job": "msrv",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/MSRV (1.95.0)",
+        "job_id": "msrv",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "518c4249-b6b1-4e98-9286-3d307482035d",
+    "job": "linux",
+    "reason": "the run exceeded its timeout",
+    "jobs": []
+  },
+  {
+    "id": "c4493ae6-a4f4-4ff2-9c39-2c1a83949787",
+    "job": null,
+    "reason": null,
+    "jobs": [
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Integration/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Integration/Integration (Linux)",
+        "job_id": "integration",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "failure"
+      }
+    ]
+  },
+  {
+    "id": "b9342127-8ac7-4ab5-8486-73814a91f221",
+    "job": "linux",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/Select CI tier",
+        "job_id": "select-tier",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Verify local gate",
+        "job_id": "verify",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Linux (lint + unit + docker)",
+        "job_id": "linux",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "8a3b177f-0979-490b-b40f-67b10d853e3e",
+    "job": "test-linux-x64-unit",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-1/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-3/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-2/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "test-linux-x64-unit",
+        "job_id": "test-linux-x64-unit",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      }
+    ]
+  },
+  {
+    "id": "4399a990-d5e4-4f77-96ae-a293d47cff9d",
+    "job": "lint-linux-x64",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Clippy linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "442dd88b-d8f6-43fd-85e7-97ffe2bbe707",
+    "job": "dylints",
+    "reason": "interrupted: the daemon stopped during this run",
+    "jobs": [
+      {
+        "key": "CI/verify",
+        "job_id": "verify",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Dylint workspace",
+        "job_id": "dylints",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "cancelled"
+      }
+    ]
+  },
+  {
+    "id": "f82012b2-a92b-432b-847f-a4e2b90ba54c",
+    "job": "lint-linux-x64",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Clippy linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "failure"
+      }
+    ]
+  },
+  {
+    "id": "1d60cbf4-7477-44a8-92b1-c21174e1a0b9",
+    "job": "test-linux-x64-unit",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-2/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-3/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-1/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "failure"
+      },
+      {
+        "key": "test-linux-x64-unit",
+        "job_id": "test-linux-x64-unit",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      }
+    ]
+  },
+  {
+    "id": "e1845611-8541-4577-8ae2-33fa560959d4",
+    "job": "dylint",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Dylint",
+        "job_id": "dylint",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "c5ec23b1-00b3-4b5c-bbeb-acbc1925cc9f",
+    "job": "test-linux-x64-unit",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-1/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "failure"
+      },
+      {
+        "key": "Test linux-x64 (unit)-2/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "failure"
+      },
+      {
+        "key": "Test linux-x64 (unit)-3/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "test-linux-x64-unit",
+        "job_id": "test-linux-x64-unit",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      }
+    ]
+  },
+  {
+    "id": "7f588c77-ca3c-458b-8676-0365f899491d",
+    "job": null,
+    "reason": null,
+    "jobs": [
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Integration/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Integration/Integration (Linux)",
+        "job_id": "integration",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "failure"
+      }
+    ]
+  },
+  {
+    "id": "14920ac0-07e3-4b72-bb33-120cbda6bd82",
+    "job": "dylint",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Dylint",
+        "job_id": "dylint",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "98910f92-45b0-4b2f-a5ff-e473a3c443cd",
+    "job": "linux",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "ci-minimal/Verify local gate",
+        "job_id": "verify",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "linux/Check Ubuntu/Check (ubuntu-latest)",
+        "job_id": "check",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "linux/Check Ubuntu/Python facade tests (ubuntu-latest)",
+        "job_id": "python-facade-tests",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "077cc6aa-20de-46c2-bf04-30684f0f5dd0",
+    "job": "dylint",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Dylint",
+        "job_id": "dylint",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "e37b4074-c2b5-4966-a066-1a5bf8f158a2",
+    "job": "test-linux-x64-unit",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-3/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-2/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-1/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "test-linux-x64-unit",
+        "job_id": "test-linux-x64-unit",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      }
+    ]
+  },
+  {
+    "id": "95dd19f9-c116-4230-ba6c-e08633e073d8",
+    "job": "lint-linux-x64",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Clippy linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "2ac27b1a-d0e9-4697-9ceb-c66465043c40",
+    "job": "msrv",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/MSRV (1.95.0)",
+        "job_id": "msrv",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "e7191b3f-a38f-4935-9650-57d88d8b7fc9",
+    "job": "lint-linux-x64",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Clippy linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "88a91e63-069a-4f35-8630-6ca179da090c",
+    "job": "linux",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/verify",
+        "job_id": "verify",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/linux",
+        "job_id": "linux",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "05e4d2f4-5c66-4733-b7c5-0c3898e9a3d1",
+    "job": "test-linux-x64-unit",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "failure"
+      },
+      {
+        "key": "test-linux-x64-unit",
+        "job_id": "test-linux-x64-unit",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      }
+    ]
+  },
+  {
+    "id": "e03c8c94-3935-44d3-8d6e-73683e6beae0",
+    "job": "msrv",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/MSRV (1.95.0)",
+        "job_id": "msrv",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "70f2762b-375d-4d20-b8d7-d0a2b392ba79",
+    "job": "dylint",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Dylint",
+        "job_id": "dylint",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "bdb00148-a527-4b3e-a835-fe80fec1da31",
+    "job": "test-linux-x64-unit",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-2/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-1/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-3/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "test-linux-x64-unit",
+        "job_id": "test-linux-x64-unit",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      }
+    ]
+  },
+  {
+    "id": "53fe50f5-cf8e-4015-b7b3-ae771ddf9fcb",
+    "job": "msrv",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/MSRV (1.95.0)",
+        "job_id": "msrv",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "8a8f1bb1-8283-4888-9cf0-04192dbbc6b6",
+    "job": "lint-linux-x64",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Clippy linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "a9f634ff-9cc5-4c05-9aad-f6d983c4bbf1",
+    "job": "msrv",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/MSRV (1.95.0)",
+        "job_id": "msrv",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "3b20f0e8-7952-4626-9dd3-9a928c56be26",
+    "job": "static-checks",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Static checks",
+        "job_id": "static-checks",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "failure"
+      }
+    ]
+  },
+  {
+    "id": "2c172ee3-9425-4f17-85f2-615e1ddaf3a3",
+    "job": "msrv",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/MSRV (1.95.0)",
+        "job_id": "msrv",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "0185c69e-8ef8-41af-9b8a-e60d24c48e74",
+    "job": "rust",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/Verify local gate",
+        "job_id": "verify",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Rust workspace (locked tests)",
+        "job_id": "rust",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "bba5b470-e662-447c-8d76-d9ed9a282316",
+    "job": "static-checks",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Static checks",
+        "job_id": "static-checks",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "50d556bb-22b6-4723-bcd3-319659bf9f02",
+    "job": "dylint",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Dylint",
+        "job_id": "dylint",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "d2a12398-8ec2-496e-88a2-4b1086a0be64",
+    "job": "linux",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "ci-minimal/Verify local gate",
+        "job_id": "verify",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "linux/Check Ubuntu/Check (ubuntu-latest)",
+        "job_id": "check",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "linux/Check Ubuntu/Python facade tests (ubuntu-latest)",
+        "job_id": "python-facade-tests",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "61570517-442c-4935-afdf-594b90a748df",
+    "job": "test-linux-x64-unit",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-3/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-1/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-2/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "test-linux-x64-unit",
+        "job_id": "test-linux-x64-unit",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      }
+    ]
+  },
+  {
+    "id": "66d0ba76-4ccb-49c6-9275-54d9114172ba",
+    "job": "lint-linux-x64",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Clippy linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "failure"
+      }
+    ]
+  },
+  {
+    "id": "239ed19d-7927-4c32-9ed0-c737e750ef4a",
+    "job": "lint-linux-x64",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Clippy linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "b46d1834-4033-4ca5-8cf2-aaab7100aad2",
+    "job": null,
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-3/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-1/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-2/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "build-linux-arm",
+        "job_id": "build-linux-arm",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "build-macos-arm",
+        "job_id": "build-macos-arm",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "build-macos-x64",
+        "job_id": "build-macos-x64",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "build-windows-arm",
+        "job_id": "build-windows-arm",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "build-windows-x64",
+        "job_id": "build-windows-x64",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "Dylint/Dylint/Dylint",
+        "job_id": "dylint",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Clippy linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Static checks",
+        "job_id": "static-checks",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "failure"
+      },
+      {
+        "key": "test-linux-arm",
+        "job_id": "test-linux-arm",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "test-linux-x64-harness",
+        "job_id": "test-linux-x64-harness",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "test-linux-x64-integration",
+        "job_id": "test-linux-x64-integration",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "test-linux-x64-unit",
+        "job_id": "test-linux-x64-unit",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "test-macos-arm",
+        "job_id": "test-macos-arm",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "test-macos-x64",
+        "job_id": "test-macos-x64",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "test-windows-arm",
+        "job_id": "test-windows-arm",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "test-windows-x64",
+        "job_id": "test-windows-x64",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "CI/CI OK",
+        "job_id": "ci-ok",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "failure"
+      }
+    ]
+  },
+  {
+    "id": "09d8ab74-a6d9-4efb-a601-d5e8bdab91dc",
+    "job": null,
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-2/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-1/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-3/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "failure"
+      },
+      {
+        "key": "build-linux-arm",
+        "job_id": "build-linux-arm",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "build-macos-arm",
+        "job_id": "build-macos-arm",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "build-macos-x64",
+        "job_id": "build-macos-x64",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "build-windows-arm",
+        "job_id": "build-windows-arm",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "build-windows-x64",
+        "job_id": "build-windows-x64",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "Dylint/Dylint/Dylint",
+        "job_id": "dylint",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Clippy linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Static checks",
+        "job_id": "static-checks",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "failure"
+      },
+      {
+        "key": "test-linux-arm",
+        "job_id": "test-linux-arm",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "test-linux-x64-harness",
+        "job_id": "test-linux-x64-harness",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "test-linux-x64-integration",
+        "job_id": "test-linux-x64-integration",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "test-linux-x64-unit",
+        "job_id": "test-linux-x64-unit",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "test-macos-arm",
+        "job_id": "test-macos-arm",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "test-macos-x64",
+        "job_id": "test-macos-x64",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "test-windows-arm",
+        "job_id": "test-windows-arm",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "test-windows-x64",
+        "job_id": "test-windows-x64",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "CI/CI OK",
+        "job_id": "ci-ok",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "failure"
+      }
+    ]
+  },
+  {
+    "id": "7e702bed-c042-4f75-b114-0b1a1b4b5c4c",
+    "job": "msrv",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/MSRV (1.95.0)",
+        "job_id": "msrv",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "b81b9f92-98d1-4f2d-80f7-5bf541653b53",
+    "job": "msrv",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/MSRV (1.95.0)",
+        "job_id": "msrv",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "081e900b-c65c-47a7-af09-7fe6f12e43e7",
+    "job": "linux",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "ci-minimal/Verify local gate",
+        "job_id": "verify",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "linux/Check Ubuntu/Check (ubuntu-latest)",
+        "job_id": "check",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "linux/Check Ubuntu/Python facade tests (ubuntu-latest)",
+        "job_id": "python-facade-tests",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "8cd7f043-eaf5-4aa7-b925-d88c9d20b857",
+    "job": null,
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-2/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-1/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "failure"
+      },
+      {
+        "key": "Test linux-x64 (unit)-3/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "build-linux-arm",
+        "job_id": "build-linux-arm",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "build-macos-arm",
+        "job_id": "build-macos-arm",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "build-macos-x64",
+        "job_id": "build-macos-x64",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "build-windows-arm",
+        "job_id": "build-windows-arm",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "build-windows-x64",
+        "job_id": "build-windows-x64",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "Dylint/Dylint/Dylint",
+        "job_id": "dylint",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Clippy linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Static checks",
+        "job_id": "static-checks",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "test-linux-arm",
+        "job_id": "test-linux-arm",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "test-linux-x64-harness",
+        "job_id": "test-linux-x64-harness",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "test-linux-x64-integration",
+        "job_id": "test-linux-x64-integration",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "test-linux-x64-unit",
+        "job_id": "test-linux-x64-unit",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "test-macos-arm",
+        "job_id": "test-macos-arm",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "test-macos-x64",
+        "job_id": "test-macos-x64",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "test-windows-arm",
+        "job_id": "test-windows-arm",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "test-windows-x64",
+        "job_id": "test-windows-x64",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "key": "CI/CI OK",
+        "job_id": "ci-ok",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "d2c01808-f0d4-4eaf-8399-7d73c596217d",
+    "job": "test-linux-x64-unit",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-1/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-3/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-2/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "test-linux-x64-unit",
+        "job_id": "test-linux-x64-unit",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      }
+    ]
+  },
+  {
+    "id": "bf1cb6a3-d10a-4dff-8f7d-1e4764bdcfd8",
+    "job": "dylint",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Dylint",
+        "job_id": "dylint",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "0bf7ba56-bd3c-4f08-8e7d-756b4960a5a7",
+    "job": "lint-linux-x64",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Clippy linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "failure"
+      }
+    ]
+  },
+  {
+    "id": "927093fa-e2e6-4cb7-a60e-1f3e4a3db2c0",
+    "job": "test-linux-x64-unit",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-2/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-1/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-3/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "test-linux-x64-unit",
+        "job_id": "test-linux-x64-unit",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      }
+    ]
+  },
+  {
+    "id": "51aa743a-d657-4fcc-9928-b7e62da4cf8b",
+    "job": "static-checks",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Static checks",
+        "job_id": "static-checks",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "7bcb36cf-efb3-4288-88b9-313fb67cb713",
+    "job": "dylint",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Dylint/Dylint/Dylint",
+        "job_id": "dylint",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "9a7da14e-7a3b-49f1-9195-154043055a89",
+    "job": "test-linux-x64-unit",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-1/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-2/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-3/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "test-linux-x64-unit",
+        "job_id": "test-linux-x64-unit",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      }
+    ]
+  },
+  {
+    "id": "edb8d5bd-c8c4-42f3-9ae8-66ce6618c760",
+    "job": "dylint",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Dylint",
+        "job_id": "dylint",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "d332261f-5e78-4ca9-8950-5afe6497b5ef",
+    "job": null,
+    "reason": null,
+    "jobs": [
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Integration/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Integration/Integration (Linux)",
+        "job_id": "integration",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "failure"
+      }
+    ]
+  },
+  {
+    "id": "4f0068cc-857e-4a4f-8178-2c5a5939f627",
+    "job": "static-checks",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Static checks",
+        "job_id": "static-checks",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "failure"
+      }
+    ]
+  },
+  {
+    "id": "06ffbada-01c1-4009-81dd-7ac462a591df",
+    "job": null,
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Integration/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Integration/Integration (Linux)",
+        "job_id": "integration",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "c4140ac4-235d-4bb5-836b-bab502749117",
+    "job": "dylint",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Dylint",
+        "job_id": "dylint",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "481dfe38-4cd8-4e8a-a049-f6be8176e946",
+    "job": "lint-linux-x64",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Clippy linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "failure"
+      }
+    ]
+  },
+  {
+    "id": "1b880fe3-dd4e-4d6f-8ca5-32caf2857692",
+    "job": "msrv",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/MSRV (1.95.0)",
+        "job_id": "msrv",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "8b13d252-b16e-4e92-bb8c-851e3ece617d",
+    "job": "lint-linux-x64",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Clippy linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "09f4d13b-3f1b-496f-bee6-d297dc65890c",
+    "job": null,
+    "reason": null,
+    "jobs": [
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Integration/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Integration/Integration (Linux)",
+        "job_id": "integration",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "failure"
+      }
+    ]
+  },
+  {
+    "id": "a1385504-b73e-4995-99a8-3cc8482691e6",
+    "job": "static-checks",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Static checks",
+        "job_id": "static-checks",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "ebfcca56-adfd-4332-8bbc-a007178227a0",
+    "job": null,
+    "reason": null,
+    "jobs": [
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Integration/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Integration/Integration (Linux)",
+        "job_id": "integration",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "failure"
+      }
+    ]
+  },
+  {
+    "id": "fcdc8ca3-88a3-4b73-91c1-795b624c8f81",
+    "job": "rust",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/Verify local gate",
+        "job_id": "verify",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Rust workspace (locked tests)",
+        "job_id": "rust",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "b05985a1-8e2d-43fc-9ba8-28b232422d0f",
+    "job": "static-checks",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Static checks",
+        "job_id": "static-checks",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "9a745dcd-a858-4745-bdc1-db6fcc484983",
+    "job": "test-linux-x64-unit",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-2/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-3/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-1/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "failure"
+      },
+      {
+        "key": "test-linux-x64-unit",
+        "job_id": "test-linux-x64-unit",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      }
+    ]
+  },
+  {
+    "id": "8b75ebe7-3c7d-4c21-83c6-cf77c79a5b63",
+    "job": "test-linux-x64-unit",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-2/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-1/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "failure"
+      },
+      {
+        "key": "Test linux-x64 (unit)-3/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "test-linux-x64-unit",
+        "job_id": "test-linux-x64-unit",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      }
+    ]
+  },
+  {
+    "id": "bfdefab8-3564-401d-96fd-6bb781a92f94",
+    "job": "static-checks",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Static checks",
+        "job_id": "static-checks",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "a3e9d2bc-ea68-4667-85d2-2255710b9b48",
+    "job": "dylint",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Dylint",
+        "job_id": "dylint",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "f84b791b-4553-46c9-8c27-30d833eaa54c",
+    "job": "linux",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "ci-minimal/Verify local gate",
+        "job_id": "verify",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "linux/Check Ubuntu/Check (ubuntu-latest)",
+        "job_id": "check",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "linux/Check Ubuntu/Python facade tests (ubuntu-latest)",
+        "job_id": "python-facade-tests",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "69e1924f-bb15-4db0-bd8c-31e377515d75",
+    "job": "lint-linux-x64",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Clippy linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "failure"
+      }
+    ]
+  },
+  {
+    "id": "13fa8bf1-bded-493e-86ab-e1fcebbd8765",
+    "job": "static-checks",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Static checks",
+        "job_id": "static-checks",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "failure"
+      }
+    ]
+  },
+  {
+    "id": "a2cf56ae-ae6c-46a5-9c3d-77eff8d5bf29",
+    "job": "build-linux-x64",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "c2f8c0cb-a6b4-43d5-9c1b-814f0dec960a",
+    "job": null,
+    "reason": null,
+    "jobs": [
+      {
+        "key": "Dylint/Dylint Full (Linux builder, all OS targets)",
+        "job_id": "dylint",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Dylint/Dylint policy",
+        "job_id": "policy",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Dylint/Dylint",
+        "job_id": "gate",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "6f8c5ad3-41cf-4eac-807c-61db4e2e0db8",
+    "job": "dylint",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Dylint",
+        "job_id": "dylint",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "1a1e767a-ca7e-4558-97ec-e07d10ffb423",
+    "job": "msrv",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/MSRV (1.95.0)",
+        "job_id": "msrv",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "0b4c7253-4fa9-4074-96f6-ccc3400d5e3f",
+    "job": "test-linux-x64-unit",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-3/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-2/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-1/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "failure"
+      },
+      {
+        "key": "test-linux-x64-unit",
+        "job_id": "test-linux-x64-unit",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      }
+    ]
+  },
+  {
+    "id": "33fc800e-61be-4e52-be08-8ebc1bf50810",
+    "job": "test-linux-x64-unit",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-2/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-1/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "failure"
+      },
+      {
+        "key": "Test linux-x64 (unit)-3/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "test-linux-x64-unit",
+        "job_id": "test-linux-x64-unit",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      }
+    ]
+  },
+  {
+    "id": "0be28fb4-1ec6-467b-b707-c02f95f6c212",
+    "job": "test-linux-x64-unit",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-2/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-1/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-3/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "test-linux-x64-unit",
+        "job_id": "test-linux-x64-unit",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      }
+    ]
+  },
+  {
+    "id": "de6eed7a-0359-4520-b1b3-90170b91f79a",
+    "job": "rust",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/Verify local gate",
+        "job_id": "verify",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Rust workspace (locked tests)",
+        "job_id": "rust",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "b0fce159-c232-44ce-8686-0c9f1fecd30a",
+    "job": "dylint",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Dylint",
+        "job_id": "dylint",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "c2ea70da-1eb1-40e9-b859-91b345822067",
+    "job": null,
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Integration/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Integration/Integration (Linux)",
+        "job_id": "integration",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "38fa54cc-f060-43bf-9885-3c075eb24163",
+    "job": null,
+    "reason": null,
+    "jobs": [
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Integration/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Integration/Integration (Linux)",
+        "job_id": "integration",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "failure"
+      }
+    ]
+  },
+  {
+    "id": "7df6cbec-0a42-49a7-abbf-ae235dbc8a9d",
+    "job": "lint-linux-x64",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Clippy linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "2acb20bb-88a2-4c22-b8e9-7f54a3dec05c",
+    "job": "test-linux-x64-unit",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-3/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-1/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-2/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "test-linux-x64-unit",
+        "job_id": "test-linux-x64-unit",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      }
+    ]
+  },
+  {
+    "id": "292f478e-5c5f-4aac-8037-c59233bad923",
+    "job": null,
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Integration/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Integration/Integration (Linux)",
+        "job_id": "integration",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "f290fdb3-a4b5-4c3e-ab57-a75ea6952e2a",
+    "job": "linux",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/Select CI tier",
+        "job_id": "select-tier",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Verify local gate",
+        "job_id": "verify",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Linux (lint + unit + docker)",
+        "job_id": "linux",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "9a6cd9f3-fb74-4ded-92d7-f252e354f6cc",
+    "job": "test-linux-x64-unit",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-2/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-1/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "failure"
+      },
+      {
+        "key": "Test linux-x64 (unit)-3/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "test-linux-x64-unit",
+        "job_id": "test-linux-x64-unit",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      }
+    ]
+  },
+  {
+    "id": "cba2b7a2-5bae-4c87-9571-9dd988553d3d",
+    "job": "msrv",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/MSRV (1.95.0)",
+        "job_id": "msrv",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "f7766ded-f902-4e7b-9bd6-bdafe5ffb954",
+    "job": null,
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Integration/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Integration/Integration (Linux)",
+        "job_id": "integration",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "8617ae9c-50d4-4f64-b737-7531fe0bf74c",
+    "job": "lint-linux-x64",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Clippy linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "394fa71b-4c74-4621-8f61-b1c815515cef",
+    "job": null,
+    "reason": null,
+    "jobs": [
+      {
+        "key": "Dylint/Dylint Full (Linux builder, all OS targets)",
+        "job_id": "dylint",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Dylint/Dylint policy",
+        "job_id": "policy",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Dylint/Dylint",
+        "job_id": "gate",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "392a3e30-b8cd-44c2-bd82-7c53bd5af97b",
+    "job": "test-linux-x64-unit",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-3/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-1/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-2/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "test-linux-x64-unit",
+        "job_id": "test-linux-x64-unit",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      }
+    ]
+  },
+  {
+    "id": "a06c42f4-43f1-41a7-af3f-68b2b70a23a7",
+    "job": "lint-linux-x64",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Clippy linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "b4281e1d-3aee-421b-a2dd-29b7d274f1b7",
+    "job": "test-linux-x64-unit",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-1/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-2/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Test linux-x64 (unit)-3/Run tests/x86_64-unknown-linux-gnu unit",
+        "job_id": "test",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "test-linux-x64-unit",
+        "job_id": "test-linux-x64-unit",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "skipped"
+      }
+    ]
+  },
+  {
+    "id": "506e634e-efd1-4fa5-9eae-529f3d57d05d",
+    "job": "lint-linux-x64",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Clippy linux-x64/Build target/x86_64-unknown-linux-gnu",
+        "job_id": "build",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "b31ca3cb-1a8b-4cad-9003-1a8d7bc4b653",
+    "job": "msrv",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/MSRV (1.95.0)",
+        "job_id": "msrv",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "15a69af0-4d30-40f0-b8f5-ddab3f8081fc",
+    "job": "static-checks",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Static checks",
+        "job_id": "static-checks",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "77e646d7-854f-4698-96df-c82f472addee",
+    "job": "msrv",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/MSRV (1.95.0)",
+        "job_id": "msrv",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "59af5b3e-9573-4ebe-b2a5-b5e947f74dc3",
+    "job": "msrv",
+    "reason": "reusable workflows require qualified execution identity",
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "ci-mode",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+        "job_id": "wait",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/MSRV (1.95.0)",
+        "job_id": "msrv",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "id": "fd12b489-8398-4351-b1d0-d9f565bb515d",
+    "job": "static-checks",
+    "reason": null,
+    "jobs": [
+      {
+        "key": "CI/CI mode",
+        "job_id": "static",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "key": "CI/Static checks",
+        "job_id": "static-checks",
+        "identity": null,
+        "status": "completed",
+        "conclusion": "failure"
+      }
+    ]
+  }
+]

@@ -1,0 +1,6 @@
+{"v":1,"ts":"2026-10-26T12:39:52.371Z","elapsed_sec":0.0,"event":"START","repo":"forge-ci/setup-soldr","pr":608,"log_path":".clud/logs/pr-merge-watch/20261026T123952.371Z-pr-608.jsonl"}
+{"v":1,"elapsed_sec":1.65,"event":"subscription","outcome":"available"}
+{"v":1,"elapsed_sec":3.91,"event":"checks","checks":{"total":9,"pending":0,"failed":0,"succeeded":9,"skipped":0},"mergeable":"MERGEABLE","merge_state_status":"CLEAN"}
+{"v":1,"elapsed_sec":3.91,"event":"coderabbit","coderabbit":{"state":"not_detected","sampled_merged_prs":5}}
+{"v":1,"elapsed_sec":3.91,"event":"green","mergeable":"MERGEABLE","checks":{"total":9,"pending":0,"failed":0,"succeeded":9,"skipped":0},"coderabbit":"absent"}
+{"v":1,"elapsed_sec":3.91,"event":"EXIT","code":0,"reason":"never"}

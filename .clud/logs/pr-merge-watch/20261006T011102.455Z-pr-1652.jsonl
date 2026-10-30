@@ -1,0 +1,7 @@
+{"v":1,"ts":"2026-10-06T01:11:02.455Z","elapsed_sec":0.0,"event":"START","repo":"FastLED/fbuild","pr":1652,"log_path":".clud/logs/pr-merge-watch/20261006T011102.455Z-pr-1652.jsonl"}
+{"v":1,"elapsed_sec":1.3,"event":"subscription","outcome":"available"}
+{"v":1,"elapsed_sec":3.83,"event":"checks","checks":{"total":21,"pending":0,"failed":9,"succeeded":12,"skipped":0},"mergeable":"MERGEABLE","merge_state_status":"BLOCKED"}
+{"v":1,"elapsed_sec":4.41,"event":"required_failure","check":{"name":"Dylint","state":"failure","link":"https://github.com/FastLED/fbuild/actions/runs/37397703573/job/112057945957","workflow":".github/workflows/dylint.yml"}}
+{"v":1,"elapsed_sec":5.46,"event":"cancel","trigger":"fail","attempts":0,"mode":"runs"}
+{"v":1,"elapsed_sec":5.46,"event":"failure_diagnostic","check_name":"Dylint","first_error":"Process completed with exit code 1.","classifier":null}
+{"v":1,"elapsed_sec":5.46,"event":"EXIT","code":1,"reason":"fail"}

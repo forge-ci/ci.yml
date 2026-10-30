@@ -1,0 +1,13 @@
+{"v":1,"ts":"2026-10-26T11:37:04.764Z","elapsed_sec":0.0,"event":"START","repo":"FastLED/fbuild","pr":1747,"log_path":".clud/logs/pr-merge-watch/20261026T113704.764Z-pr-1747.jsonl"}
+{"v":1,"elapsed_sec":1.25,"event":"subscription","outcome":"available"}
+{"v":1,"elapsed_sec":4.92,"event":"checks","checks":{"total":20,"pending":7,"failed":0,"succeeded":13,"skipped":0},"mergeable":"MERGEABLE","merge_state_status":"BLOCKED"}
+{"v":1,"elapsed_sec":4.92,"event":"coderabbit","coderabbit":{"state":"detected","sampled_merged_prs":1}}
+{"v":1,"elapsed_sec":4.92,"event":"coderabbit","coderabbit":{"state":"skipped","reason":"review_skipped"}}
+{"v":1,"elapsed_sec":63.5,"event":"subscription","outcome":"changed","deferred_until_s":null}
+{"v":1,"elapsed_sec":66.21,"event":"checks","checks":{"total":20,"pending":4,"failed":0,"succeeded":16,"skipped":0},"mergeable":"MERGEABLE","merge_state_status":"BLOCKED"}
+{"v":1,"elapsed_sec":103.56,"event":"subscription","outcome":"changed","deferred_until_s":null}
+{"v":1,"elapsed_sec":106.08,"event":"checks","checks":{"total":20,"pending":2,"failed":0,"succeeded":18,"skipped":0},"mergeable":"MERGEABLE","merge_state_status":"BLOCKED"}
+{"v":1,"elapsed_sec":228.55,"event":"subscription","outcome":"quiet","deferred_until_s":null}
+{"v":1,"elapsed_sec":231.19,"event":"checks","checks":{"total":21,"pending":1,"failed":0,"succeeded":20,"skipped":0},"mergeable":"MERGEABLE","merge_state_status":"UNSTABLE"}
+{"v":1,"elapsed_sec":231.19,"event":"green","mergeable":"MERGEABLE","checks":{"total":21,"pending":1,"failed":0,"succeeded":20,"skipped":0},"coderabbit":"absent"}
+{"v":1,"elapsed_sec":231.19,"event":"EXIT","code":0,"reason":"never"}
