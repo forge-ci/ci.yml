@@ -1,0 +1,321 @@
+{
+  "schema_version": 1,
+  "id": "1d09115a-5bd8-4256-8946-87888080651d",
+  "provider": "github",
+  "engine": "act",
+  "workspace": "/home/niteris/dev/zccache",
+  "repository": "zackees/zccache",
+  "sha": "8d92c517bf49349b26bc727619c23251fb60a4b1",
+  "branch": "main",
+  "dirty": null,
+  "commit": null,
+  "tree_digest": "1424d93f8d8a9d1deb4c26f00a07840328cf7f406b81d11e1661ab8c20a4825a",
+  "git_tree": "2085077358e73af589bfab576e093a85b218ba58",
+  "workflow": ".github/workflows/ci.yml",
+  "job": "msrv",
+  "trigger": "pr",
+  "mode": "minimal",
+  "actor": "agent:clud-3746640-1791301260617011139-0",
+  "event": "pull_request",
+  "payload_sha256": "f425a0eb338338fcd832d4082a4b3f3ada320e4ce074895dbeed9c884043453f",
+  "state": "done",
+  "conclusion": "incomplete",
+  "reason": "reusable workflows require qualified execution identity",
+  "created_at": 1791318160.7961495,
+  "started_at": 1791318160.8104944,
+  "finished_at": 1791318312.5640128,
+  "act_exit_code": 0,
+  "cleanup": "removed",
+  "engine_id": "6b4800b372672c2a90f1361d445c70dab422691aa9edb45a72a4500ad40fe013",
+  "act_version": "0.2.89-act2.10",
+  "runner_image": "docker.io/catthehacker/ubuntu@sha256:4f2d5083a9d10d018c1c511eb8665cd480553c11975e78fd903a46daa830768b",
+  "submitters": 1,
+  "retry_of": null,
+  "timeout_secs": 7200,
+  "secrets": [],
+  "log_records": 650,
+  "tree": {
+    "groups": [
+      {
+        "name": "0",
+        "jobs": [
+          {
+            "key": "CI/CI mode",
+            "job_id": "ci-mode",
+            "name": "CI mode",
+            "matrix": {},
+            "status": "completed",
+            "conclusion": "success",
+            "sections": [
+              {
+                "id": "--setup-job",
+                "name": "Set up job",
+                "stage": "Setup",
+                "status": "completed",
+                "conclusion": "success",
+                "first_seq": 25,
+                "last_seq": 47,
+                "duration_ms": null,
+                "started_at": "2026-10-06T20:23:12Z",
+                "completed_at": "2026-10-06T20:23:16Z",
+                "exit_code": null
+              },
+              {
+                "id": "0",
+                "name": "actions/checkout@v6",
+                "stage": "Main",
+                "status": "completed",
+                "conclusion": "success",
+                "first_seq": 49,
+                "last_seq": 57,
+                "duration_ms": 1742,
+                "started_at": "2026-10-06T20:23:16Z",
+                "completed_at": "2026-10-06T20:23:18Z",
+                "exit_code": null
+              },
+              {
+                "id": "1",
+                "name": "actions/checkout zackees/ci.yml@365508627edb8130e2c5615338b00bf02a069fa7",
+                "stage": "Main",
+                "status": "completed",
+                "conclusion": "success",
+                "first_seq": 58,
+                "last_seq": 63,
+                "duration_ms": 2095,
+                "started_at": "2026-10-06T20:23:18Z",
+                "completed_at": "2026-10-06T20:23:20Z",
+                "exit_code": null
+              },
+              {
+                "id": "gate",
+                "name": "Local gate attestation",
+                "stage": "Main",
+                "status": "completed",
+                "conclusion": "success",
+                "first_seq": 64,
+                "last_seq": 88,
+                "duration_ms": 1020,
+                "started_at": "2026-10-06T20:23:20Z",
+                "completed_at": "2026-10-06T20:23:21Z",
+                "exit_code": null
+              },
+              {
+                "id": "--complete-job",
+                "name": "Complete job",
+                "stage": "Complete",
+                "status": "completed",
+                "conclusion": "success",
+                "first_seq": 89,
+                "last_seq": 91,
+                "duration_ms": null,
+                "started_at": "2026-10-06T20:23:21Z",
+                "completed_at": "2026-10-06T20:23:22Z",
+                "exit_code": null
+              }
+            ],
+            "started_at": "2026-10-06T20:23:12Z",
+            "completed_at": "2026-10-06T20:23:22Z",
+            "duration_ms": 10000
+          },
+          {
+            "key": "Cache pre-prune barrier/Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+            "job_id": "wait",
+            "name": "Wait for cache pre-prune (reusable)/Wait for exact-SHA cache pre-prune",
+            "matrix": {},
+            "status": "completed",
+            "conclusion": "success",
+            "sections": [
+              {
+                "id": "--setup-job",
+                "name": "Set up job",
+                "stage": "Setup",
+                "status": "completed",
+                "conclusion": "success",
+                "first_seq": 27,
+                "last_seq": 48,
+                "duration_ms": null,
+                "started_at": "2026-10-06T20:23:12Z",
+                "completed_at": "2026-10-06T20:23:16Z",
+                "exit_code": null
+              },
+              {
+                "id": "--complete-job",
+                "name": "Complete job",
+                "stage": "Complete",
+                "status": "completed",
+                "conclusion": "success",
+                "first_seq": 52,
+                "last_seq": 54,
+                "duration_ms": null,
+                "started_at": "2026-10-06T20:23:16Z",
+                "completed_at": "2026-10-06T20:23:18Z",
+                "exit_code": null
+              }
+            ],
+            "started_at": "2026-10-06T20:23:12Z",
+            "completed_at": "2026-10-06T20:23:18Z",
+            "duration_ms": 6000
+          }
+        ]
+      },
+      {
+        "name": "1",
+        "jobs": [
+          {
+            "key": "CI/MSRV (1.95.0)",
+            "job_id": "msrv",
+            "name": "MSRV (1.95.0)",
+            "matrix": {},
+            "status": "completed",
+            "conclusion": "success",
+            "sections": [
+              {
+                "id": "--setup-job",
+                "name": "Set up job",
+                "stage": "Setup",
+                "status": "completed",
+                "conclusion": "success",
+                "first_seq": 93,
+                "last_seq": 104,
+                "duration_ms": null,
+                "started_at": "2026-10-06T20:23:22Z",
+                "completed_at": "2026-10-06T20:23:24Z",
+                "exit_code": null
+              },
+              {
+                "id": "2",
+                "name": "zackees/setup-soldr@v0",
+                "stage": "Pre",
+                "status": "completed",
+                "conclusion": "skipped",
+                "first_seq": null,
+                "last_seq": null,
+                "duration_ms": null,
+                "exit_code": null
+              },
+              {
+                "id": "0",
+                "name": "actions/checkout@v6",
+                "stage": "Main",
+                "status": "completed",
+                "conclusion": "success",
+                "first_seq": 108,
+                "last_seq": 112,
+                "duration_ms": 1350,
+                "started_at": "2026-10-06T20:23:24Z",
+                "completed_at": "2026-10-06T20:23:26Z",
+                "exit_code": null
+              },
+              {
+                "id": "1",
+                "name": "Wait for current-main cache pre-prune",
+                "stage": "Main",
+                "status": "completed",
+                "conclusion": "success",
+                "first_seq": 113,
+                "last_seq": 118,
+                "duration_ms": 350,
+                "started_at": "2026-10-06T20:23:26Z",
+                "completed_at": "2026-10-06T20:23:26Z",
+                "exit_code": null
+              },
+              {
+                "id": "1/0",
+                "name": "Wait for current-main cache pre-prune \u203a 0",
+                "stage": "Main",
+                "status": "completed",
+                "conclusion": "skipped",
+                "first_seq": null,
+                "last_seq": null,
+                "duration_ms": null,
+                "exit_code": null
+              },
+              {
+                "id": "2",
+                "name": "zackees/setup-soldr@v0",
+                "stage": "Main",
+                "status": "completed",
+                "conclusion": "success",
+                "first_seq": 119,
+                "last_seq": 488,
+                "duration_ms": 36413,
+                "started_at": "2026-10-06T20:23:27Z",
+                "completed_at": "2026-10-06T20:24:03Z",
+                "exit_code": null
+              },
+              {
+                "id": "3",
+                "name": "Check MSRV",
+                "stage": "Main",
+                "status": "completed",
+                "conclusion": "success",
+                "first_seq": 489,
+                "last_seq": 541,
+                "duration_ms": 18750,
+                "started_at": "2026-10-06T20:24:03Z",
+                "completed_at": "2026-10-06T20:24:22Z",
+                "exit_code": null
+              },
+              {
+                "id": "4",
+                "name": "Verify nested Dylint cache contract",
+                "stage": "Main",
+                "status": "completed",
+                "conclusion": "success",
+                "first_seq": 542,
+                "last_seq": 595,
+                "duration_ms": 40359,
+                "started_at": "2026-10-06T20:24:22Z",
+                "completed_at": "2026-10-06T20:25:02Z",
+                "exit_code": null
+              },
+              {
+                "id": "2",
+                "name": "zackees/setup-soldr@v0",
+                "stage": "Post",
+                "status": "completed",
+                "conclusion": "success",
+                "first_seq": 596,
+                "last_seq": 638,
+                "duration_ms": 719,
+                "started_at": "2026-10-06T20:25:03Z",
+                "completed_at": "2026-10-06T20:25:03Z",
+                "exit_code": null
+              },
+              {
+                "id": "1",
+                "name": "Wait for current-main cache pre-prune",
+                "stage": "Post",
+                "status": "completed",
+                "conclusion": "success",
+                "first_seq": 639,
+                "last_seq": 641,
+                "duration_ms": 0,
+                "started_at": "2026-10-06T20:25:03Z",
+                "completed_at": "2026-10-06T20:25:03Z",
+                "exit_code": null
+              },
+              {
+                "id": "--complete-job",
+                "name": "Complete job",
+                "stage": "Complete",
+                "status": "completed",
+                "conclusion": "success",
+                "first_seq": 642,
+                "last_seq": 644,
+                "duration_ms": null,
+                "started_at": "2026-10-06T20:25:03Z",
+                "completed_at": "2026-10-06T20:25:06Z",
+                "exit_code": null
+              }
+            ],
+            "started_at": "2026-10-06T20:23:22Z",
+            "completed_at": "2026-10-06T20:25:06Z",
+            "duration_ms": 104000
+          }
+        ]
+      }
+    ],
+    "malformed_lines": 0
+  }
+}

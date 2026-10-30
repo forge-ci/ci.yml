@@ -1,0 +1,102 @@
+[
+  {
+    "seq": 244,
+    "job": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+    "text": "00:00 build-cache key=setup-soldr-buildcache-v2-linux-x64-ad2781a8e00fd96e-build-x86_64-unknown-linux-gnu-314e10a8550aaa80"
+  },
+  {
+    "seq": 253,
+    "job": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+    "text": "00:00 cache-policy layers=toolchain+zccache-unit"
+  },
+  {
+    "seq": 254,
+    "job": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+    "text": "00:00 cache-policy target-tree-snapshot=false"
+  },
+  {
+    "seq": 255,
+    "job": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+    "text": "00:00 cache-policy test-products=never (soldr#2931 tier 3)"
+  },
+  {
+    "seq": 503,
+    "job": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+    "text": "  \u2699  ::set-output:: cache-policy-json={\"schema\":1,\"layers\":[\"toolchain\",\"zccache-unit\"],\"target_tree_snapshot\":false,\"test_products\":\"never\",\"ci_tests\":false,\"ci_tests_target_tree_refused\":false}"
+  },
+  {
+    "seq": 1456,
+    "job": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+    "text": "  338.03     Finished `dev` profile [unoptimized + debuginfo] target(s) in 5m 38s"
+  },
+  {
+    "seq": 1458,
+    "job": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+    "text": "soldr: cache 1 HIT, 450 MISS (0% hit rate, saved 5.8s)"
+  },
+  {
+    "seq": 1483,
+    "job": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+    "text": "  159.93     Finished `test` profile [unoptimized + debuginfo] target(s) in 2m 39s"
+  },
+  {
+    "seq": 1485,
+    "job": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+    "text": "soldr: cache 1 HIT, 450 MISS (0% hit rate, saved 5.8s)"
+  },
+  {
+    "seq": 1494,
+    "job": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+    "text": "soldr: cache 1 HIT, 450 MISS (0% hit rate, saved 5.8s)"
+  },
+  {
+    "seq": 1498,
+    "job": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+    "text": "    0.46     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.45s"
+  },
+  {
+    "seq": 1499,
+    "job": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+    "text": "soldr: cache 1 HIT, 450 MISS (0% hit rate, saved 5.8s)"
+  },
+  {
+    "seq": 1500,
+    "job": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+    "text": "    0.46     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.44s"
+  },
+  {
+    "seq": 1501,
+    "job": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+    "text": "soldr: cache 1 HIT, 450 MISS (0% hit rate, saved 5.8s)"
+  },
+  {
+    "seq": 1502,
+    "job": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+    "text": "    0.46     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.45s"
+  },
+  {
+    "seq": 1503,
+    "job": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+    "text": "soldr: cache 1 HIT, 450 MISS (0% hit rate, saved 5.8s)"
+  },
+  {
+    "seq": 1596,
+    "job": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+    "text": "09:52 final cache summary: setup=miss target=disabled build=exact hit/skipped exact hit cargo-registry=disabled/disabled"
+  },
+  {
+    "seq": 1597,
+    "job": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+    "text": "09:52 final zccache session stats: hits=1 misses=450 compilations=469 non_cacheable=5 errors=7 hit_rate=0.2%"
+  },
+  {
+    "seq": 1616,
+    "job": "Build linux-x64/Build target/x86_64-unknown-linux-gnu",
+    "text": "  \u2699  Summary - ## setup-soldr final cache summary\n\n| Layer | Restore | Primary key | Matched key | Save |\n| --- | --- | --- | --- | --- |\n| setup cache | miss | setup-soldr-v4-linux-x64-ad2781a8e00fd96e-build-x86_64-unknown-linux-gnu |  | not managed in post |\n| target cache | disabled | setup-soldr-targetcache-off-v1-linux-x64-654f1da8015137e8 |  | disabled |\n| build cache | exact hit | setup-soldr-buildcache-v2-linux-x64-ad2781a8e00fd96e-build-x86_64-unknown-linux-gnu-314e10a8550aaa80 | setup-soldr-buildcache-v2-linux-x64-ad2781a8e00fd96e-build-x86_64-unknown-linux-gnu-314e10a8550aaa80 | skipped exact hit |\n| cargo registry cache | disabled | setup-soldr-cargoregistry-v1-linux-x64-314e10a8550aaa80-ad2781a8e00fd96e |  | disabled |\n\n### zccache session\n\n- Stats: hits=1 misses=450 compilations=469 non_cacheable=5 errors=7 hit_rate=0.2%\n- Stats file: /tmp/setup-soldr-soldr/cache/zccache/logs/last-session-stats.json\n\n### Compile cache (zccache)\n\n| Metric | Value |\n| --- | --- |\n| Compilations | 469 |\n| Hits | 1 |\n| Misses | 450 |\n| Hit rate | 0.2% |\n| Time saved (est.) | 5.8s |\n| soldr | 0.9.27 |\n| zccache | 1.15.0 |\n\n<details><summary>Notes from soldr</summary>\n\n- provenance: could not read build history (NotRunning); using global last-writer-wins stats /tmp/setup-soldr-soldr/cache/zccache/logs/last-session-stats.json (originating workspace: unknown)\n- rollups: journal missing \u2014 soldr writes it on cache-enabled builds\n\n</details>\n\n<details><summary>Final cache summary JSON</summary>\n\n```json\n{\n  \"schema_version\": 1,\n  \"setup_cache\": {\n    \"enabled\": true,\n    \"key\": \"setup-soldr-v4-linux-x64-ad2781a8e00fd96e-build-x86_64-unknown-linux-gnu\",\n    \"matched_key\": \"\",\n    \"exact_hit\": false,\n    \"restore_status\": \"miss\",\n    \"save\": {\n      \"status\": \"not-managed-in-post\"\n    }\n  },\n  \"target_cache\": {\n    \"enabled\": false,\n    \"key\": \"setup-soldr-targetcache-off-v1-linux-x64-654f1da8015137e8\",\n    \"matched_key\": \"\",\n    \"exact_hit\": false,\n    \"restore_status\": \"disabled\",\n    \"save\": {\n      \"status\": \"disabled\",\n      \"archiveBytes\": null\n    }\n  },\n  \"build_cache\": {\n    \"enabled\": true,\n    \"key\": \"setup-soldr-buildcache-v2-linux-x64-ad2781a8e00fd96e-build-x86_64-unknown-linux-gnu-314e10a8550aaa80\",\n    \"matched_key\": \"setup-soldr-buildcache-v2-linux-x64-ad2781a8e00fd96e-build-x86_64-unknown-linux-gnu-314e10a8550aaa80\",\n    \"exact_hit\": true,\n    \"restore_status\": \"exact-hit\",\n    \"save\": {\n      \"status\": \"exact-hit-skip\",\n      \"cache_dir\": \"/tmp/setup-soldr-soldr/cache/zccache\",\n      \"archiveBytes\": null,\n      \"inflatedBytes\": null,\n      \"fileCount\": null,\n      \"payload\": null\n    }\n  },\n  \"cargo_registry_cache\": {\n    \"enabled\": false,\n    \"key\": \"setup-soldr-cargoregistry-v1-linux-x64-314e10a8550aaa80-ad2781a8e00fd96e\",\n    \"matched_key\": \"\",\n    \"exact_hit\": false,\n    \"restore_status\": \"disabled\",\n    \"save\": {\n      \"status\": \"disabled\",\n      \"archiveBytes\": null,\n      \"inflatedBytes\": null,\n      \"fileCount\": null,\n      \"payload\": null\n    }\n  },\n  \"zccache_session\": {\n    \"stats_path\": \"/tmp/setup-soldr-soldr/cache/zccache/logs/last-session-stats.json\",\n    \"present\": true,\n    \"status\": \"ok\",\n    \"stats\": {\n      \"compilations\": 469,\n      \"errors\": 7,\n      \"hit_rate\": 0.0022172949002217295,\n      \"hits\": 1,\n      \"misses\": 450,\n      \"non_cacheable\": 5,\n      \"phase_profile\": {\n        \"staged\": {\n          \"bytes\": {\n            \"materialization_copied\": 2189357955,\n            \"publication_copied\": 2017504734,\n            \"salvage_copied\": 0\n          },\n          \"counters\": {\n            \"compiler_staged\": 463,\n            \"materialize_copy\": 1274,\n            \"materialize_failure\": 6,\n            \"materialize_hardlink_shared\": 0,\n            \"materialize_reflink\": 0,\n            \"plan_attempted\": 463,\n            \"plan_enabled\": 463,\n            \"plan_error\": 0,\n            \"plan_unsupported\": 0,\n            \"publication_conflict\": 0,\n            \"publication_failure\": 0,\n            \"publication_success\": 449,\n            \"salvage_attempt\": 0,\n            \"salvage_failure\": 0,\n            \"salvage_success\": 0\n          },\n          \"failures\": {\n            \"corrupt_object\": 0,\n            \"durable_digest\": 0,\n            \"generation_publish\": 0,\n            \"hashing\": 0,\n            \"index_commit\": 0,\n            \"logical_depfile_rewrite\": 0,\n            \"manifest\": 0,\n            \"output_validation\": 0,\n            \"plan_ambiguous_output_argument\": 0,\n            \"plan_lane_disabled\": 0,\n            \"plan_missing_option_value\": 0,\n            \"plan_missing_required_output_flag\": 0,\n            \"plan_no_declared_outputs\": 0,\n            \"plan_output_missing_filename\": 0,\n            \"plan_output_name_collision\": 0,\n            \"plan_output_not_in_arguments\": 0,\n            \"plan_output_to_stdout\": 0,\n            \"plan_staging_directory_create\": 0,\n            \"plan_unmodeled_side_output\": 0,\n            \"plan_unsupported_output_path\": 0,\n            \"plan_unsupported_output_role\": 0,\n            \"planning\": 0,\n            \"pointer_commit\": 0,\n            \"publication\": 0,\n            \"publication_conflict\": 0,\n            \"publication_output_copy\": 0,\n            \"publication_output_durability\": 0,\n            \"requested_materialization\": 6,\n            \"salvage\": 0,\n            \"snapshot_content_changed\": 0,\n            \"snapshot_incomplete\": 0,\n            \"snapshot_input_set_changed\": 0,\n            \"snapshot_journal_changed\": 0,\n            \"snapshot_stamp_changed\": 0,\n            \"snapshot_stamp_set_changed\": 0,\n            \"unsupported_shape\": 0\n          },\n          \"timings_ns\": {\n            \"compiler_staging\": 2645039959762,\n            \"hashing\": 4142322623,\n            \"hit_materialization\": 18698739,\n            \"hit_store_lock_hold\": 88224950,\n            \"hit_store_lock_pre_materialization\": 69746890,\n            \"hit_store_lock_wait\": 115049,\n            \"miss_materialization\": 6081074262,\n            \"planning\": 328036035,\n            \"publication\": 81561896148,\n            \"salvage\": 0\n          }\n        }\n      },\n      \"status\": \"ok\",\n      \"time_saved_ms\": 5807\n    }\n  },\n  \"compile_cache_report\": {\n    \"status\": \"ok\",\n    \"soldr_version\": \"0.9.27\",\n    \"managed_zccache_version\": \"1.15.0\",\n    \"report\": {\n      \"schema_version\": 1,\n      \"command\": \"cache report\",\n      \"soldr_version\": \"0.9.27\",\n      \"managed_zccache_version\": \"1.15.0\",\n      \"session_stats_path\": \"/tmp/setup-soldr-soldr/cache/zccache/logs/last-session-stats.json\",\n      \"session_stats_present\": true,\n      \"journal_path\": \"/tmp/setup-soldr-soldr/cache/zccache/logs/last-session.jsonl\",\n      \"journal_present\": false,\n      \"session_id\": null,\n      \"workspace_root\": \"/home/actrunner/work/src/src\",\n      \"stats_written_at\": 1791337330097,\n      \"session_source\": \"global-fallback\",\n      \"last_session\": {\n        \"compilations\": 469,\n        \"errors\": 7,\n        \"hit_rate\": 0.0022172949002217295,\n        \"hits\": 1,\n        \"misses\": 450,\n        \"non_cacheable\": 5,\n        \"phase_profile\": {\n          \"staged\": {\n            \"bytes\": {\n              \"materialization_copied\": 2189357955,\n              \"publication_copied\": 2017504734,\n              \"salvage_copied\": 0\n            },\n            \"counters\": {\n              \"compiler_staged\": 463,\n              \"materialize_copy\": 1274,\n              \"materialize_failure\": 6,\n              \"materialize_hardlink_shared\": 0,\n              \"materialize_reflink\": 0,\n              \"plan_attempted\": 463,\n              \"plan_enabled\": 463,\n              \"plan_error\": 0,\n              \"plan_unsupported\": 0,\n              \"publication_conflict\": 0,\n              \"publication_failure\": 0,\n              \"publication_success\": 449,\n              \"salvage_attempt\": 0,\n              \"salvage_failure\": 0,\n              \"salvage_success\": 0\n            },\n            \"failures\": {\n              \"corrupt_object\": 0,\n              \"durable_digest\": 0,\n              \"generation_publish\": 0,\n              \"hashing\": 0,\n              \"index_commit\": 0,\n              \"logical_depfile_rewrite\": 0,\n              \"manifest\": 0,\n              \"output_validation\": 0,\n              \"plan_ambiguous_output_argument\": 0,\n              \"plan_lane_disabled\": 0,\n              \"plan_missing_option_value\": 0,\n              \"plan_missing_required_output_flag\": 0,\n              \"plan_no_declared_outputs\": 0,\n              \"plan_output_missing_filename\": 0,\n              \"plan_output_name_collision\": 0,\n              \"plan_output_not_in_arguments\": 0,\n              \"plan_output_to_stdout\": 0,\n              \"plan_staging_directory_create\": 0,\n              \"plan_unmodeled_side_output\": 0,\n              \"plan_unsupported_output_path\": 0,\n              \"plan_unsupported_output_role\": 0,\n              \"planning\": 0,\n              \"pointer_commit\": 0,\n              \"publication\": 0,\n              \"publication_conflict\": 0,\n              \"publication_output_copy\": 0,\n              \"publication_output_durability\": 0,\n              \"requested_materialization\": 6,\n              \"salvage\": 0,\n              \"snapshot_content_changed\": 0,\n              \"snapshot_incomplete\": 0,\n              \"snapshot_input_set_changed\": 0,\n              \"snapshot_journal_changed\": 0,\n              \"snapshot_stamp_changed\": 0,\n              \"snapshot_stamp_set_changed\": 0,\n              \"unsupported_shape\": 0\n            },\n            \"timings_ns\": {\n              \"compiler_staging\": 2645039959762,\n              \"hashing\": 4142322623,\n              \"hit_materialization\": 18698739,\n              \"hit_store_lock_hold\": 88224950,\n              \"hit_store_lock_pre_materialization\": 69746890,\n              \"hit_store_lock_wait\": 115049,\n              \"miss_materialization\": 6081074262,\n              \"planning\": 328036035,\n              \"publication\": 81561896148,\n              \"salvage\": 0\n            }\n          }\n        },\n        \"status\": \"ok\",\n        \"time_saved_ms\": 5807\n      },\n      \"rollups\": null,\n      \"diagnoses\": [],\n      \"notes\": [\n        \"provenance: could not read build history (NotRunning); using global last-writer-wins stats /tmp/setup-soldr-soldr/cache/zccache/logs/last-session-stats.json (originating workspace: unknown)\",\n        \"rollups: journal missing \u2014 soldr writes it on cache-enabled builds\"\n      ]\n    }\n  },\n  \"multi_session_rollup\": {\n    \"sessionCount\": 1,\n    \"totalHits\": 1,\n    \"totalMisses\": 450,\n    \"totalCompilations\": 469,\n    \"overallHitRate\": 0.0021321961620469083,\n    \"totalTimeSavedMs\": 5807,\n    \"totalBytesRead\": 0,\n    \"totalBytesWritten\": 0,\n    \"sessions\": [\n      {\n        \"sessionId\": \"no-session\",\n        \"hits\": 1,\n        \"misses\": 450,\n        \"hitRate\": 0.0022172949002217295,\n        \"timeSavedMs\": 5807\n      }\n    ]\n  }\n}\n```\n\n</details>\n\n"
+  },
+  {
+    "seq": 6387,
+    "job": "Test linux-x64 (unit)-1/Run tests/x86_64-unknown-linux-gnu unit",
+    "text": "test result: ok. 4126 passed; 0 failed; 9 ignored; 0 measured; 0 filtered out; finished in 43.09s"
+  }
+]

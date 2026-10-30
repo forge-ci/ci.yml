@@ -1,0 +1,23 @@
+{"v":1,"ts":"2026-10-26T08:02:53.784Z","elapsed_sec":0.0,"event":"START","repo":"forge-ci/ghd","pr":5,"log_path":".clud/logs/pr-merge-watch/20261026T080253.784Z-pr-5.jsonl"}
+{"v":1,"elapsed_sec":1.65,"event":"subscription","outcome":"available"}
+{"v":1,"elapsed_sec":3.9,"event":"checks","checks":{"total":1,"pending":1,"failed":0,"succeeded":0,"skipped":0},"mergeable":"MERGEABLE","merge_state_status":"UNSTABLE"}
+{"v":1,"elapsed_sec":3.9,"event":"coderabbit","coderabbit":{"state":"not_detected","sampled_merged_prs":2}}
+{"v":1,"elapsed_sec":52.58,"event":"subscription","outcome":"changed","deferred_until_s":null}
+{"v":1,"elapsed_sec":54.77,"event":"checks","checks":{"total":4,"pending":4,"failed":0,"succeeded":0,"skipped":0},"mergeable":"MERGEABLE","merge_state_status":"UNSTABLE"}
+{"v":1,"elapsed_sec":57.37,"event":"subscription","outcome":"changed","deferred_until_s":null}
+{"v":1,"elapsed_sec":59.61,"event":"checks","checks":{"total":4,"pending":3,"failed":0,"succeeded":1,"skipped":0},"mergeable":"MERGEABLE","merge_state_status":"UNSTABLE"}
+{"v":1,"elapsed_sec":59.61,"event":"coderabbit","coderabbit":{"state":"not_detected","sampled_merged_prs":2}}
+{"v":1,"elapsed_sec":63.15,"event":"subscription","outcome":"changed","deferred_until_s":null}
+{"v":1,"elapsed_sec":65.55,"event":"checks","checks":{"total":4,"pending":1,"failed":0,"succeeded":3,"skipped":0},"mergeable":"MERGEABLE","merge_state_status":"UNSTABLE"}
+{"v":1,"elapsed_sec":68.13,"event":"subscription","outcome":"changed","deferred_until_s":null}
+{"v":1,"elapsed_sec":70.78,"event":"checks","checks":{"total":19,"pending":2,"failed":0,"succeeded":17,"skipped":0},"mergeable":"MERGEABLE","merge_state_status":"UNSTABLE"}
+{"v":1,"elapsed_sec":74.37,"event":"subscription","outcome":"changed","deferred_until_s":null}
+{"v":1,"elapsed_sec":76.98,"event":"checks","checks":{"total":19,"pending":2,"failed":0,"succeeded":17,"skipped":0},"mergeable":"MERGEABLE","merge_state_status":"UNSTABLE"}
+{"v":1,"elapsed_sec":76.98,"event":"coderabbit","coderabbit":{"state":"not_detected","sampled_merged_prs":2}}
+{"v":1,"elapsed_sec":198.57,"event":"subscription","outcome":"quiet","deferred_until_s":null}
+{"v":1,"elapsed_sec":200.64,"event":"checks","checks":{"total":19,"pending":2,"failed":0,"succeeded":17,"skipped":0},"mergeable":"MERGEABLE","merge_state_status":"UNSTABLE"}
+{"v":1,"elapsed_sec":301.43,"event":"subscription","outcome":"changed","deferred_until_s":null}
+{"v":1,"elapsed_sec":303.66,"event":"checks","checks":{"total":19,"pending":1,"failed":1,"succeeded":17,"skipped":0},"mergeable":"MERGEABLE","merge_state_status":"UNSTABLE"}
+{"v":1,"elapsed_sec":304.22,"event":"required_failure","check":{"name":"dylint [1d570ef5206c]","state":"failure","link":"https://github.com/forge-ci/ghd/actions/runs/40289597780/job/121461665427","workflow":".github/workflows/ci.yml"}}
+{"v":1,"elapsed_sec":305.88,"event":"failure_diagnostic","check_name":"dylint [1d570ef5206c]","first_error":"error: failed to run custom build command for `openssl-sys v0.9.117`","classifier":null}
+{"v":1,"elapsed_sec":305.88,"event":"EXIT","code":1,"reason":"fail"}

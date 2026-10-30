@@ -1,0 +1,84 @@
+CI CPU investigation — live host, October 6, 2026 PDT
+
+Finding
+
+The rollout is failing to deliver reusable proof and effective compiler-cache warmth for substantial local CI work. The observed workload is not explained by a local FIFO backlog. It combines (1) a Bosn/act2 reusable-workflow identity contract mismatch, (2) archive-level hits with compiler-level misses, followed by saves skipped on immutable exact keys, (3) repeated completed submissions, (4) conservative lane invalidation, and (5) several independent agents building concurrently. Shared action and tool caches work; they are not equivalent to a persistent compiler store or reusable test evidence.
+
+Scope and evidence
+
+Read-only investigation of /proc, Docker inspections/stats, main and scratch Bosn run records, selected logs, repository configuration, installed package metadata, exact tagged upstream source and GitHub GET APIs. No new build or test suite was launched. No service was stopped or configuration changed. The retained main state held 203 runs, including 200 finished records. Last-24-hour figures refer to the saved inventory, not all historical activity: 108 records, 93 clud and 15 zccache. Conclusions: 52 incomplete, 31 failure, 20 success, 3 running, 1 cancelled, 1 error. Run wall time summed to approximately 10.88 runner-hours, including 6.47 hours marked incomplete. Runner-hours are occupied elapsed time, not measured CPU-hours and not necessarily all avoidable work.
+
+1. Green reusable workflow results are rejected; proof cannot be reused.
+
+Installed Bosn package metadata says 0.1.15. Main daemon reports act2 0.2.89-act2.10. All 52 incomplete records cite: reusable workflows require qualified execution identity.
+
+Run 421fa46f-7107-4c12-a747-7136f5fa5dfb, clud test-linux-x64-unit, SHA 00c7b42d53ee14032efed50dacab0e7adbe01546, took 837.7 seconds. The tree has successful CI mode, build, and three expanded unit jobs; the outer matrix node is skipped. Its Rust main suite reports 4,126 passed, zero failed. The run nevertheless concludes incomplete. Every saved job has no qualified identity. Clud lint run a06c42f4-43f1-41a7-af3f-68b2b70a23a7 similarly completed both actual jobs successfully, took 594.6 seconds, and was rejected.
+
+Exact Bosn v0.1.15 source, report.rs and model/identity.rs, requires a caller-qualified identity when the executed job is nested inside a reusable workflow and cannot be matched as a direct declaration. Exact act2.10 pkg/runner/logger.go WithJobLogger emits job, jobID, dryrun and matrix, but no jobIdentity caller chain. The saved execution trees demonstrate this absence. This is a producer/consumer compatibility failure; green human-readable names are not sufficient proof of the declared nested execution. Zccache's otherwise direct MSRV job hits it through its nested reusable cache pre-prune barrier.
+
+Clud ci/local_gate.py requires conclusion success and exit_code 0 before accepting any lane; ci_lint/local_gate.py records only successful lane outcomes. Consequently an incomplete run cannot supply a new lane pass or attestation. Local-Gate and Ci-Attestation trailers are absent on the two sampled clud heads and sampled zccache head. Existing historical lane pass caches do exist, so the mechanism is partially active, not wholly absent. A manual bosn ci run also does not itself stamp a commit: stamping requires the successful ci-lint local-gate flow.
+
+Upstream issue #525 is open and describes the same symptom. Its speculation that installed 0.1.15 lacks the direct-job fix #477 is stale: the actual v0.1.15 tagged source includes the direct-job exception and the release notes include #478. Merely reinstalling current latest 0.1.15 does not resolve the observed absence of nested caller identity.
+
+Sources:
+https://github.com/zackees/bosn/blob/v0.1.15/crates/bosn-service/src/ci/model/identity.rs
+https://github.com/zackees/bosn/blob/v0.1.15/crates/bosn-service/src/ci/report.rs
+https://github.com/zackees/act2/blob/v0.2.89-act2.10/pkg/runner/logger.go
+https://github.com/zackees/bosn/issues/525
+
+2. Cache transport succeeds while compiler warmth fails to improve.
+
+The selected clud replay logs show target-tree-snapshot=false and test-products=never. Bosn mounts a shared machine volume but executes jobs in fresh private Docker engines; /bosn/cache contains archive/tool/action stores, not a continuously shared writable target tree. Compiler results are restored into a per-run store and survive only through a successful publication to a reusable cache.
+
+Two clud build replays, 421fa46f and 102b2a43-3465-4a4b-aa32-53611f9ee24d, restored the exact same build-cache key:
+setup-soldr-buildcache-v2-linux-x64-ad2781a8e00fd96e-build-x86_64-unknown-linux-gnu-314e10a8550aaa80
+
+Both logs report one compiler hit and 450 misses (0.2% hit rate). Both final summaries report exact-hit-skip for the build cache. The first shows 449 successful compiler-object publications into the private store, about 2.02 GB of publication copies and 2.19 GB of materialization copies. Those new objects were not saved back into the shared archive. The logs do not identify why each restored compiler object missed (absent object versus an incompatible compiler fingerprint); that finer cause requires key-level trace comparison, and a persistent store alone would not fix unstable keys. The result is a self-repeating cold path: restore the same archive, rebuild the missing objects, skip replacing the archive, retire the private engine, repeat.
+
+These stats are global-fallback session snapshots, with missing journal and unknown originating workspace; they are not a sum over every command/job. The stats-written timestamps fall inside their respective runs, and the console, 380 Compiling lines and build durations corroborate current build activity. Do not equate Cargo's Compiling lines with cache misses in general.
+
+First replay: dev build 338 seconds, test-harness compilation 160 seconds, main Rust test execution 43 seconds. Next replay: dev build 260 seconds and test compilation 120 seconds. A large fraction of what looks like redoing tests is repeated compilation before the tests start.
+
+Clud's lint job explicitly passes save-cache=false because its remote design gives a sibling build job sole ownership of their shared immutable key. A local --job lint-linux-x64 replay does not select that sibling build writer. Its log says build-cache: save skipped: save-cache=false. This makes the writer assumption inappropriate for that isolated local job selection.
+
+Local setup-soldr post.ts saveTarCacheLayer skips when matchedKey == key, explaining the observed exact-hit behavior. No attempt was made to overwrite or delete live caches.
+
+Some sharing works: 697 Cache restored successfully messages appeared across the sampled recent logs; toolchain, uv, venv and Dylint caches show hits. Bosn docs explicitly say actions/cache stores are namespaced per repository and cross-repository compiler-cache sharing outside actions/cache remains unimplemented (#323). Host ~/.soldr and container /tmp/setup-soldr stores also differ; automatic host-to-act2 compiler-store sharing is not established by this setup.
+
+3. Completed identical work is resubmitted; deduplication only covers live work.
+
+At the same zccache SHA 8d92c517bf49349b26bc727619c23251fb60a4b1, same workspace/job/payload, four MSRV runs took 183, 162, 157 and 152 seconds; all were incomplete. Two Dylint runs on that same source took 566 and 612 seconds, both incomplete. The duplicate MSRV work beyond the first totals about 7.8 minutes; duplicate Dylint adds about 10.2 minutes.
+
+Clud static-checks at SHA 00c7b42d53 ran successfully twice with the same workspace, source digest, payload and actor: 82ec3cad (163 seconds), then bfdefab8 (97 seconds). Both compiled/cache transport successfully; the second was still a full new execution.
+
+Bosn scheduler.rs coalesces only queued/running submissions; finish() removes the key. It is not a cache of completed successes. Raw CLI submission bypasses ci-lint's lane-pass lookup. A record of these repeats does not prove a daemon-owned automatic retry loop: each is a separate submission, retry_of is null, and most other clud records have different SHAs. Incomplete evidence provides a concrete reason the gate cannot reuse those passes, but not proof of the human/agent motivation for each retry.
+
+Most recent submissions came from a small number of active agent sessions: clud's leading actor submitted 53 of 93 runs; another submitted 26; generic agent:claude submitted 14. These are continuing development sessions, not a central ci.yml scheduler.
+
+Lane reuse is conservative: lane_cache hashes all tracked files except explicitly excluded paths, plus mandatory gate/config/tool inputs. Clud only excludes tests/test_*.py in three heavy lanes; static and unit broadly see the whole tree. Documentation and unrelated tracked-file changes can therefore invalidate expensive lanes. This is expected conservative behavior, distinct from the rejected reusable-job evidence.
+
+4. There is CPU pressure without local queue delay.
+
+Two main runner snapshots: 3 running / 0 queued / limit 4, later 4 running / 0 queued / limit 4. Across the 108 retained recent runs, queue wait median was 0.018 seconds and maximum 0.263 seconds. This does not support a main-daemon FIFO backlog during this sample.
+
+Host has 8 physical cores / 16 logical CPUs. Inspected Bosn act engine cgroups have CpuQuota 800000 / CpuPeriod 100000, i.e. 8 CPU equivalents per engine. Four slots can permit 32 CPU equivalents of CI demand on a 16-thread workstation, before direct host builds and desktop workloads. This is an allowed ceiling, not evidence that every slot always uses eight cores. Nine Bosn serve daemons were visible with different state directories: the documented machine-wide queue is in practice scoped to a daemon/state actor, not a single global semaphore across those independent daemons.
+
+A 15-second /proc counter sample beginning 2026-10-07T02:20:25.493750Z measured approximately: clud test binary PID 336337 108.7%; host Docker PID 51296 97.9%; containerd PID 51314 81.7%; two direct host bosn rustc processes PIDs 335041 and 335069 72.8%/71.3%; two pytest processes PIDs 336172 and 337263 72.4%/69.2%. Multiple browser renderers, lazydocker and other agents also consumed CPU. 100% represents one logical CPU. The sample excludes processes that both started and exited between endpoints, so it is not a whole-host exact total.
+
+Docker stats at an earlier instant showed one active engine at 378.65%, another at 59.43%, and a preparing spare at 92.54%. Older 37–40-hour engines were present but near idle (0.02–0.06%) in that sample; their age is not evidence of current CPU burn or permission to remove them. Spare preparation adds temporary image/tool preparation work. Docker/containerd have material current CPU usage; a stack-level cause for that overhead is not established. perf attempted a 10-second sampled profile of PID 51296 but the OS denied opening performance events despite perf_event_paranoid=-1. No privileges or system security settings were changed.
+
+5. Widget trouble affects visibility; execution does not require it.
+
+The widget service was active with only about 88 CPU seconds over two days; the main daemon first reported widget connected, later widget absent while jobs kept running. The CLI returned run lists, runner status and records without widget interaction. The service state cannot prove its window renders or controls function correctly. Several defunct widget child processes were also visible. This investigation does not diagnose the exact visual failure, but rules out the claim that act2 needs a working widget to be inspected or execute jobs.
+
+GitHub GET checks found no in-progress workflows in clud, zccache, soldr or bosn, one queued historical run each in clud/zccache/soldr and none in bosn. Saved github-active-runs.json carries dates and URLs; these old records are not a demonstrated current remote build fan-out. This is a bounded four-repository check, not a fleet-wide remote audit.
+
+Recommended order
+
+1. Restore end-to-end reusable-job identity compatibility between act2 and Bosn; validate direct, nested and caller-matrix job evidence plus successful ci-lint stamping. Preserve fail-closed behavior; do not turn incomplete into success based on display names.
+2. Replace the immutable stale compiler-archive path with versioned/generation-aware publication or a coordinated persistent compiler store that carries new objects between local engines. Ensure locally selected lint jobs have a real writer path. Validate the same clean source twice in fresh engines: useful compiler hits must rise, and new objects must remain available after teardown.
+3. Route agents through ci-lint local-gate and usable lane-pass records, instead of repeated raw bosn submissions. Consider completed-success reuse only with a complete execution/source/tool/event identity and explicit rerun control.
+4. Set a total workstation CPU budget including all daemon state roots, host builds and spare preparation; four eight-CPU jobs exceed this machine's logical CPU capacity.
+5. Repair widget visibility separately, using CLI records meanwhile. Refine lane dependencies only where soundness can be proven.
+
+These recommendations are not implemented by this investigative task. No single metric proves all CPU use is waste; changing source, genuinely failing tests, replay isolation, non-cacheable outputs and desktop activity all account for legitimate work. The evidence does prove wasted repeated compilation, unusable passing evidence, completed resubmissions and insufficient aggregate resource coordination.

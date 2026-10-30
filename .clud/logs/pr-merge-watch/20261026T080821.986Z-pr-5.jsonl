@@ -1,0 +1,9 @@
+{"v":1,"ts":"2026-10-26T08:08:21.986Z","elapsed_sec":0.0,"event":"START","repo":"forge-ci/ghd","pr":5,"log_path":".clud/logs/pr-merge-watch/20261026T080821.986Z-pr-5.jsonl"}
+{"v":1,"elapsed_sec":1.6,"event":"subscription","outcome":"available"}
+{"v":1,"elapsed_sec":3.84,"event":"checks","checks":{"total":19,"pending":1,"failed":1,"succeeded":17,"skipped":0},"mergeable":"MERGEABLE","merge_state_status":"UNSTABLE"}
+{"v":1,"elapsed_sec":3.84,"event":"coderabbit","coderabbit":{"state":"not_detected","sampled_merged_prs":2}}
+{"v":1,"elapsed_sec":51.16,"event":"subscription","outcome":"changed","deferred_until_s":null}
+{"v":1,"elapsed_sec":53.58,"event":"checks","checks":{"total":20,"pending":0,"failed":2,"succeeded":18,"skipped":0},"mergeable":"MERGEABLE","merge_state_status":"UNSTABLE"}
+{"v":1,"elapsed_sec":54.24,"event":"required_failure","check":{"name":"CI OK","state":"failure","link":"https://github.com/forge-ci/ghd/actions/runs/40289597780/job/121463252624","workflow":".github/workflows/ci.yml"}}
+{"v":1,"elapsed_sec":55.49,"event":"failure_diagnostic","check_name":"CI OK","first_error":"Process completed with exit code 1.","classifier":null}
+{"v":1,"elapsed_sec":55.49,"event":"EXIT","code":1,"reason":"fail"}
