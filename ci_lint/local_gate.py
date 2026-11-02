@@ -452,13 +452,33 @@ def check_commit(repo: Path, sha: str, *, _depth: int = 0) -> CommitCheck:
     return CommitCheck(sha, "missing", f"no {TRAILER_KEY} trailer on {sha[:12]}")
 
 
-def stamp_head(repo: Path, attestation: Attestation, gate_trailers: tuple[str, ...] = ()) -> str:
+class HeadMoved(ValueError):
+    """HEAD is no longer the commit the gate ran against (ci.yml#515)."""
+
+
+def head_moved(repo: Path, expected: str) -> str | None:
+    """None when `git rev-parse HEAD` is still `expected`, else why not."""
+
+    now = _git(repo, "rev-parse", "HEAD").strip()
+    if now == expected:
+        return None
+    return (f"HEAD moved during the run: the gate ran against {expected[:12]} but HEAD is now {now[:12]}; "
+            "nothing was stamped -- run the gate again on the new HEAD")
+
+
+def stamp_head(repo: Path, attestation: Attestation, gate_trailers: tuple[str, ...] = (), *,
+               expected: str | None = None) -> str:
     """Rewrite HEAD's message with the trailer (replacing any older one) and
     return the new HEAD sha. The tree is untouched; `--no-verify` skips
     commit hooks because nothing they inspect (the tree) has changed.
     `gate_trailers` (GATE-010 `Ci-Attestation:` lines) replace every older
-    one."""
+    one. With `expected`, HEAD is re-read at stamp time and must still be
+    that commit, or `HeadMoved` is raised and nothing is amended (#515)."""
 
+    if expected is not None:
+        moved = head_moved(repo, expected)
+        if moved is not None:
+            raise HeadMoved(moved)
     message = strip_attestation_trailers(_git(repo, "log", "-1", "--format=%B", "HEAD"))
     args = ["interpret-trailers", "--if-exists", "replace", "--trailer", attestation.trailer()]
     for trailer in gate_trailers:
@@ -871,6 +891,9 @@ def _run_gate(  # noqa: C901
         lane_run = run_lanes(repo, config, head, tree, use_cache=use_cache, serial_heavy=serial_heavy)
         secs = int(round(time.monotonic() - start))
         lanes_field = ",".join(lane_run.provenance)
+        moved = head_moved(repo, head)
+        if moved is not None:
+            return RunOutcome(1, f"local-gate run: FAILED after {secs}s: {moved}")
         if lane_run.exit_code != 0:
             return RunOutcome(lane_run.exit_code, f"local-gate run: FAILED after {secs}s ({lanes_field or 'no lane passed'})")
         if already_attested and not force and all(item.via == "reused" for item in lane_run.passed):
@@ -878,10 +901,12 @@ def _run_gate(  # noqa: C901
         if not stamp:
             return RunOutcome(0, f"local-gate run: passed in {secs}s [{lanes_field}] (not stamped)", head)
         trailers = gate_attestation_trailers(repo, config, head, tree, lane_run.passed)
-        new_head = stamp_head(repo, Attestation(tree=tree, secs=secs, lanes=lanes_field), trailers)
+        try:
+            new_head = stamp_head(repo, Attestation(tree=tree, secs=secs, lanes=lanes_field), trailers, expected=head)
+        except HeadMoved as exc:
+            return RunOutcome(1, f"local-gate run: FAILED after {secs}s: {exc}")
         return RunOutcome(
-            0, f"local-gate run: passed in {secs}s [{lanes_field}]; stamped {new_head[:12]} ({TRAILER_KEY} tree={tree[:12]})",
-            new_head,
+            0, f"local-gate run: passed in {secs}s [{lanes_field}]; {_stamped(new_head, tree)}", new_head,
         )
     print(f"local-gate run: {config.command}", file=sys.stderr, flush=True)
     start = time.monotonic()
@@ -896,7 +921,9 @@ def _run_gate(  # noqa: C901
         head_after = _git(repo, "rev-parse", "HEAD").strip()
     except GitError as exc:
         return RunOutcome(2, f"local-gate run: {exc}")
-    if after or head_after != head:
+    if head_after != head:
+        return RunOutcome(1, f"local-gate run: FAILED after {secs}s: {head_moved(repo, head)}")
+    if after:
         return RunOutcome(
             1,
             "local-gate run: the gate passed but changed the repository (a formatter rewrote files, or HEAD "
@@ -907,8 +934,17 @@ def _run_gate(  # noqa: C901
         return RunOutcome(1, f"local-gate run: {provider_problem}")
     if not stamp:
         return RunOutcome(0, f"local-gate run: passed in {secs}s (not stamped)", head)
-    new_head = stamp_head(repo, Attestation(tree=tree, secs=secs))
-    return RunOutcome(0, f"local-gate run: passed in {secs}s; stamped {new_head[:12]} ({TRAILER_KEY} tree={tree[:12]})", new_head)
+    try:
+        new_head = stamp_head(repo, Attestation(tree=tree, secs=secs), expected=head)
+    except HeadMoved as exc:
+        return RunOutcome(1, f"local-gate run: FAILED after {secs}s: {exc}")
+    return RunOutcome(0, f"local-gate run: passed in {secs}s; {_stamped(new_head, tree)}", new_head)
+
+
+def _stamped(new_head: str, tree: str) -> str:
+    """`stamped <sha> (HEAD)`: the amended commit, re-read as HEAD (#515)."""
+
+    return f"stamped {new_head[:12]} (HEAD) ({TRAILER_KEY} tree={tree[:12]})"
 
 
 # ── pre-push hook ────────────────────────────────────────────────────────────
