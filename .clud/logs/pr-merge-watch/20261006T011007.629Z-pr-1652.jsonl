@@ -1,0 +1,12 @@
+{"v":1,"ts":"2026-10-06T01:10:07.629Z","elapsed_sec":0.0,"event":"START","repo":"FastLED/fbuild","pr":1652,"log_path":".clud/logs/pr-merge-watch/20261006T011007.629Z-pr-1652.jsonl"}
+{"v":1,"elapsed_sec":1.48,"event":"subscription","outcome":"available"}
+{"v":1,"elapsed_sec":5.12,"event":"checks","checks":{"total":18,"pending":7,"failed":0,"succeeded":11,"skipped":0},"mergeable":"MERGEABLE","merge_state_status":"BLOCKED"}
+{"v":1,"elapsed_sec":5.12,"event":"coderabbit","coderabbit":{"state":"detected","sampled_merged_prs":2}}
+{"v":1,"elapsed_sec":5.12,"event":"coderabbit","coderabbit":{"state":"actionable","unresolved_threads":1}}
+{"v":1,"elapsed_sec":5.12,"event":"review_activity","state":"actionable"}
+{"v":1,"elapsed_sec":5.88,"event":"cancel_item","watcher_pid":977636,"watcher_host":"nixos","mode":"runs","item_id":37397703797,"status":"cancelled"}
+{"v":1,"elapsed_sec":6.57,"event":"cancel_item","watcher_pid":977636,"watcher_host":"nixos","mode":"runs","item_id":37397703801,"status":"cancelled"}
+{"v":1,"elapsed_sec":7.2,"event":"cancel_item","watcher_pid":977636,"watcher_host":"nixos","mode":"runs","item_id":37397704516,"status":"cancelled"}
+{"v":1,"elapsed_sec":7.8,"event":"cancel_item","watcher_pid":977636,"watcher_host":"nixos","mode":"runs","item_id":37397703573,"status":"cancelled"}
+{"v":1,"elapsed_sec":7.8,"event":"cancel","trigger":"review","attempts":4,"mode":"runs"}
+{"v":1,"elapsed_sec":7.8,"event":"EXIT","code":2,"reason":"review"}

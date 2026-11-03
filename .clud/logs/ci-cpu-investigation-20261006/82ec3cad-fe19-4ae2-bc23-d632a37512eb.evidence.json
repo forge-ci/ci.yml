@@ -1,0 +1,42 @@
+[
+  {
+    "seq": 274,
+    "job": "CI/Static checks",
+    "text": "00:00 build-cache key=setup-soldr-buildcache-v2-linux-x64-4f471a0fa0a2a00c-static-314e10a8550aaa80"
+  },
+  {
+    "seq": 283,
+    "job": "CI/Static checks",
+    "text": "00:00 cache-policy layers=toolchain+zccache-unit"
+  },
+  {
+    "seq": 284,
+    "job": "CI/Static checks",
+    "text": "00:00 cache-policy target-tree-snapshot=false"
+  },
+  {
+    "seq": 285,
+    "job": "CI/Static checks",
+    "text": "00:00 cache-policy test-products=never (soldr#2931 tier 3)"
+  },
+  {
+    "seq": 529,
+    "job": "CI/Static checks",
+    "text": "  \u2699  ::set-output:: cache-policy-json={\"schema\":1,\"layers\":[\"toolchain\",\"zccache-unit\"],\"target_tree_snapshot\":false,\"test_products\":\"never\",\"ci_tests\":false,\"ci_tests_target_tree_refused\":false}"
+  },
+  {
+    "seq": 620,
+    "job": "CI/Static checks",
+    "text": "00:34 final cache summary: setup=miss target=disabled build=exact hit/skipped exact hit cargo-registry=disabled/disabled"
+  },
+  {
+    "seq": 621,
+    "job": "CI/Static checks",
+    "text": "00:34 final zccache session stats: missing (/tmp/setup-soldr-soldr/cache/zccache/logs/last-session-stats.json)"
+  },
+  {
+    "seq": 635,
+    "job": "CI/Static checks",
+    "text": "  \u2699  Summary - ## setup-soldr final cache summary\n\n| Layer | Restore | Primary key | Matched key | Save |\n| --- | --- | --- | --- | --- |\n| setup cache | miss | setup-soldr-v4-linux-x64-4f471a0fa0a2a00c-static |  | not managed in post |\n| target cache | disabled | setup-soldr-targetcache-off-v1-linux-x64-c9c774c2ad1aae51 |  | disabled |\n| build cache | exact hit | setup-soldr-buildcache-v2-linux-x64-4f471a0fa0a2a00c-static-314e10a8550aaa80 | setup-soldr-buildcache-v2-linux-x64-4f471a0fa0a2a00c-static-314e10a8550aaa80 | skipped exact hit |\n| cargo registry cache | disabled | setup-soldr-cargoregistry-v1-linux-x64-314e10a8550aaa80-4f471a0fa0a2a00c |  | disabled |\n\n### zccache session\n\n- Stats: missing (/tmp/setup-soldr-soldr/cache/zccache/logs/last-session-stats.json)\n- Stats file: /tmp/setup-soldr-soldr/cache/zccache/logs/last-session-stats.json\n\n### Compile cache (zccache)\n\n_(no last\\_session yet \u2014 run a cache-enabled build first)_\n\n<details><summary>Notes from soldr</summary>\n\n- provenance: could not read build history (NotRunning); using global last-writer-wins stats /tmp/setup-soldr-soldr/cache/zccache/logs/last-session-stats.json (originating workspace: unknown)\n- last_session: file missing \u2014 run a cache-enabled Soldr build first\n- rollups: journal missing \u2014 soldr writes it on cache-enabled builds\n\n</details>\n\n<details><summary>Final cache summary JSON</summary>\n\n```json\n{\n  \"schema_version\": 1,\n  \"setup_cache\": {\n    \"enabled\": true,\n    \"key\": \"setup-soldr-v4-linux-x64-4f471a0fa0a2a00c-static\",\n    \"matched_key\": \"\",\n    \"exact_hit\": false,\n    \"restore_status\": \"miss\",\n    \"save\": {\n      \"status\": \"not-managed-in-post\"\n    }\n  },\n  \"target_cache\": {\n    \"enabled\": false,\n    \"key\": \"setup-soldr-targetcache-off-v1-linux-x64-c9c774c2ad1aae51\",\n    \"matched_key\": \"\",\n    \"exact_hit\": false,\n    \"restore_status\": \"disabled\",\n    \"save\": {\n      \"status\": \"disabled\",\n      \"archiveBytes\": null\n    }\n  },\n  \"build_cache\": {\n    \"enabled\": true,\n    \"key\": \"setup-soldr-buildcache-v2-linux-x64-4f471a0fa0a2a00c-static-314e10a8550aaa80\",\n    \"matched_key\": \"setup-soldr-buildcache-v2-linux-x64-4f471a0fa0a2a00c-static-314e10a8550aaa80\",\n    \"exact_hit\": true,\n    \"restore_status\": \"exact-hit\",\n    \"save\": {\n      \"status\": \"exact-hit-skip\",\n      \"cache_dir\": \"/tmp/setup-soldr-soldr/cache/zccache\",\n      \"archiveBytes\": null,\n      \"inflatedBytes\": null,\n      \"fileCount\": null,\n      \"payload\": null\n    }\n  },\n  \"cargo_registry_cache\": {\n    \"enabled\": false,\n    \"key\": \"setup-soldr-cargoregistry-v1-linux-x64-314e10a8550aaa80-4f471a0fa0a2a00c\",\n    \"matched_key\": \"\",\n    \"exact_hit\": false,\n    \"restore_status\": \"disabled\",\n    \"save\": {\n      \"status\": \"disabled\",\n      \"archiveBytes\": null,\n      \"inflatedBytes\": null,\n      \"fileCount\": null,\n      \"payload\": null\n    }\n  },\n  \"zccache_session\": {\n    \"stats_path\": \"/tmp/setup-soldr-soldr/cache/zccache/logs/last-session-stats.json\",\n    \"present\": false,\n    \"status\": \"missing\"\n  },\n  \"compile_cache_report\": {\n    \"status\": \"ok\",\n    \"soldr_version\": \"0.9.27\",\n    \"managed_zccache_version\": \"1.15.0\",\n    \"report\": {\n      \"schema_version\": 1,\n      \"command\": \"cache report\",\n      \"soldr_version\": \"0.9.27\",\n      \"managed_zccache_version\": \"1.15.0\",\n      \"session_stats_path\": \"/tmp/setup-soldr-soldr/cache/zccache/logs/last-session-stats.json\",\n      \"session_stats_present\": false,\n      \"journal_path\": \"/tmp/setup-soldr-soldr/cache/zccache/logs/last-session.jsonl\",\n      \"journal_present\": false,\n      \"session_id\": null,\n      \"workspace_root\": \"/home/actrunner/work/src/src\",\n      \"stats_written_at\": null,\n      \"session_source\": \"global-fallback\",\n      \"last_session\": null,\n      \"rollups\": null,\n      \"diagnoses\": [],\n      \"notes\": [\n        \"provenance: could not read build history (NotRunning); using global last-writer-wins stats /tmp/setup-soldr-soldr/cache/zccache/logs/last-session-stats.json (originating workspace: unknown)\",\n        \"last_session: file missing \u2014 run a cache-enabled Soldr build first\",\n        \"rollups: journal missing \u2014 soldr writes it on cache-enabled builds\"\n      ]\n    }\n  },\n  \"multi_session_rollup\": {\n    \"sessionCount\": 0,\n    \"totalHits\": 0,\n    \"totalMisses\": 0,\n    \"totalCompilations\": 0,\n    \"overallHitRate\": null,\n    \"totalTimeSavedMs\": 0,\n    \"totalBytesRead\": 0,\n    \"totalBytesWritten\": 0,\n    \"sessions\": []\n  }\n}\n```\n\n</details>\n\n"
+  }
+]

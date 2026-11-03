@@ -1,0 +1,8 @@
+{"v":1,"ts":"2026-10-26T07:53:51.206Z","elapsed_sec":0.0,"event":"START","repo":"zackees/soldr-toolchain","pr":215,"log_path":".clud/logs/pr-merge-watch/20261026T075351.206Z-pr-215.jsonl"}
+{"v":1,"elapsed_sec":1.66,"event":"subscription","outcome":"available"}
+{"v":1,"elapsed_sec":3.69,"event":"checks","checks":{"total":2,"pending":1,"failed":0,"succeeded":1,"skipped":0},"mergeable":"MERGEABLE","merge_state_status":"UNSTABLE"}
+{"v":1,"elapsed_sec":3.69,"event":"coderabbit","coderabbit":{"state":"not_detected","sampled_merged_prs":5}}
+{"v":1,"elapsed_sec":89.28,"event":"subscription","outcome":"changed","deferred_until_s":null}
+{"v":1,"elapsed_sec":91.78,"event":"checks","checks":{"total":2,"pending":0,"failed":0,"succeeded":2,"skipped":0},"mergeable":"MERGEABLE","merge_state_status":"CLEAN"}
+{"v":1,"elapsed_sec":91.78,"event":"green","mergeable":"MERGEABLE","checks":{"total":2,"pending":0,"failed":0,"succeeded":2,"skipped":0},"coderabbit":"absent"}
+{"v":1,"elapsed_sec":91.78,"event":"EXIT","code":0,"reason":"never"}

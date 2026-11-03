@@ -1,0 +1,5 @@
+{"v":1,"ts":"2026-10-04T23:41:41.390Z","elapsed_sec":0.0,"event":"START","repo":"zackees/ci.yml","pr":30,"log_path":".clud/logs/pr-merge-watch/20261004T234141.390Z-pr-30.jsonl"}
+{"v":1,"elapsed_sec":0.48,"event":"api_degraded","source":"pr_snapshot","reason":"fetch_failed"}
+{"v":1,"elapsed_sec":20.99,"event":"api_degraded","source":"pr_snapshot","reason":"fetch_failed"}
+{"v":1,"elapsed_sec":41.41,"event":"api_degraded","source":"pr_snapshot","reason":"fetch_failed"}
+{"v":1,"elapsed_sec":41.41,"event":"EXIT","code":10,"reason":"github_unreachable","why":"could not fetch PR #30","stderr":"GraphQL: Could not resolve to a PullRequest with the number of 30. (repository.pullRequest)"}

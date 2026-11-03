@@ -1,0 +1,16 @@
+{"v":1,"ts":"2026-10-26T13:47:00.586Z","elapsed_sec":0.0,"event":"START","repo":"forge-ci/kernal-api","pr":465,"log_path":".clud/logs/pr-merge-watch/20261026T134700.586Z-pr-465.jsonl"}
+{"v":1,"elapsed_sec":1.74,"event":"subscription","outcome":"available"}
+{"v":1,"elapsed_sec":4.17,"event":"checks","checks":{"total":11,"pending":0,"failed":0,"succeeded":11,"skipped":0},"mergeable":"MERGEABLE","merge_state_status":"CLEAN"}
+{"v":1,"elapsed_sec":4.17,"event":"coderabbit","coderabbit":{"state":"not_detected","sampled_merged_prs":5}}
+{"v":1,"elapsed_sec":5.04,"event":"queue","state":"OPEN","entry":"QUEUED","position":1,"queue_sha":null,"auto_merge":false}
+{"v":1,"elapsed_sec":27.46,"event":"queue","state":"OPEN","entry":"AWAITING_CHECKS","position":1,"queue_sha":"421ce2084cd94ceb12bbf42183a9a284c1cb6475","auto_merge":false}
+{"v":1,"elapsed_sec":46.29,"event":"queue","state":"OPEN","entry":"AWAITING_CHECKS","position":1,"queue_sha":"421ce2084cd94ceb12bbf42183a9a284c1cb6475","auto_merge":false}
+{"v":1,"elapsed_sec":66.34,"event":"queue","state":"OPEN","entry":"AWAITING_CHECKS","position":1,"queue_sha":"421ce2084cd94ceb12bbf42183a9a284c1cb6475","auto_merge":false}
+{"v":1,"elapsed_sec":86.27,"event":"queue","state":"OPEN","entry":"AWAITING_CHECKS","position":1,"queue_sha":"421ce2084cd94ceb12bbf42183a9a284c1cb6475","auto_merge":false}
+{"v":1,"elapsed_sec":106.34,"event":"queue","state":"OPEN","entry":"AWAITING_CHECKS","position":1,"queue_sha":"421ce2084cd94ceb12bbf42183a9a284c1cb6475","auto_merge":false}
+{"v":1,"elapsed_sec":126.14,"event":"queue","state":"OPEN","entry":"AWAITING_CHECKS","position":1,"queue_sha":"421ce2084cd94ceb12bbf42183a9a284c1cb6475","auto_merge":false}
+{"v":1,"elapsed_sec":146.11,"event":"queue","state":"OPEN","entry":"AWAITING_CHECKS","position":1,"queue_sha":"421ce2084cd94ceb12bbf42183a9a284c1cb6475","auto_merge":false}
+{"v":1,"elapsed_sec":166.1,"event":"queue","state":"OPEN","entry":"AWAITING_CHECKS","position":1,"queue_sha":"421ce2084cd94ceb12bbf42183a9a284c1cb6475","auto_merge":false}
+{"v":1,"elapsed_sec":186.34,"event":"queue","state":"OPEN","entry":"AWAITING_CHECKS","position":1,"queue_sha":"421ce2084cd94ceb12bbf42183a9a284c1cb6475","auto_merge":false}
+{"v":1,"elapsed_sec":204.88,"event":"queue","state":"MERGED","entry":null,"position":null,"queue_sha":null,"auto_merge":false}
+{"v":1,"elapsed_sec":204.88,"event":"EXIT","code":0,"reason":"merged"}

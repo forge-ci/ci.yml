@@ -1,0 +1,3 @@
+{"v":1,"ts":"2026-10-26T07:49:41.792Z","elapsed_sec":0.0,"event":"START","repo":"forge-ci/kernal-api","pr":439,"log_path":".clud/logs/pr-merge-watch/20261026T074941.792Z-pr-439.jsonl"}
+{"v":1,"elapsed_sec":0.63,"event":"pr_state","state":"MERGED","head_sha":"0327f42a4859f29b564acc13965f81180150dee0"}
+{"v":1,"elapsed_sec":0.63,"event":"EXIT","code":0,"reason":"merged"}

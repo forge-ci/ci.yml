@@ -1,0 +1,7 @@
+{"v":1,"ts":"2026-10-06T01:23:45.963Z","elapsed_sec":0.0,"event":"START","repo":"FastLED/fbuild","pr":1652,"log_path":".clud/logs/pr-merge-watch/20261006T012345.963Z-pr-1652.jsonl"}
+{"v":1,"elapsed_sec":1.54,"event":"subscription","outcome":"available"}
+{"v":1,"elapsed_sec":4.6,"event":"checks","checks":{"total":24,"pending":0,"failed":0,"succeeded":24,"skipped":0},"mergeable":"MERGEABLE","merge_state_status":"BLOCKED"}
+{"v":1,"elapsed_sec":4.6,"event":"coderabbit","coderabbit":{"state":"detected","sampled_merged_prs":2}}
+{"v":1,"elapsed_sec":4.6,"event":"coderabbit","coderabbit":{"state":"actionable","unresolved_threads":1}}
+{"v":1,"elapsed_sec":4.6,"event":"review_activity","state":"actionable"}
+{"v":1,"elapsed_sec":4.6,"event":"EXIT","code":2,"reason":"review"}

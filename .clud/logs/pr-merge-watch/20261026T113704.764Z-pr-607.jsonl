@@ -1,0 +1,8 @@
+{"v":1,"ts":"2026-10-26T11:37:04.764Z","elapsed_sec":0.0,"event":"START","repo":"forge-ci/setup-soldr","pr":607,"log_path":".clud/logs/pr-merge-watch/20261026T113704.764Z-pr-607.jsonl"}
+{"v":1,"elapsed_sec":1.67,"event":"subscription","outcome":"available"}
+{"v":1,"elapsed_sec":4.18,"event":"checks","checks":{"total":0,"pending":0,"failed":0,"succeeded":0,"skipped":0},"note":"rollup_empty","mergeable":"MERGEABLE","merge_state_status":"CLEAN"}
+{"v":1,"elapsed_sec":23.72,"event":"checks","checks":{"total":0,"pending":0,"failed":0,"succeeded":0,"skipped":0},"note":"rollup_empty","mergeable":"MERGEABLE","merge_state_status":"CLEAN"}
+{"v":1,"elapsed_sec":43.81,"event":"checks","checks":{"total":0,"pending":0,"failed":0,"succeeded":0,"skipped":0},"note":"rollup_empty","mergeable":"MERGEABLE","merge_state_status":"CLEAN"}
+{"v":1,"elapsed_sec":63.84,"event":"checks","checks":{"total":0,"pending":0,"failed":0,"succeeded":0,"skipped":0},"note":"rollup_empty","mergeable":"MERGEABLE","merge_state_status":"CLEAN"}
+{"v":1,"elapsed_sec":63.84,"event":"no_checks","reason":"empty_after_grace","merge_state_status":"CLEAN","mergeable":"MERGEABLE","head_sha":"df699a6c6f28234de2e303e6dbdebed61d01c294"}
+{"v":1,"elapsed_sec":63.84,"event":"EXIT","code":8,"reason":"no_checks","merge_state_status":"CLEAN"}

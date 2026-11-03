@@ -1,0 +1,22 @@
+{"v":1,"ts":"2026-10-04T23:42:32.978Z","elapsed_sec":0.0,"event":"START","repo":"zackees/act2","pr":30,"log_path":".clud/logs/pr-merge-watch/20261004T234232.978Z-pr-30.jsonl"}
+{"v":1,"elapsed_sec":1.75,"event":"subscription","outcome":"available"}
+{"v":1,"elapsed_sec":5.78,"event":"checks","checks":{"total":6,"pending":4,"failed":0,"succeeded":2,"skipped":0},"mergeable":"MERGEABLE","merge_state_status":"UNSTABLE"}
+{"v":1,"elapsed_sec":5.78,"event":"coderabbit","coderabbit":{"state":"not_detected","sampled_merged_prs":5}}
+{"v":1,"elapsed_sec":64.12,"event":"subscription","outcome":"changed","deferred_until_s":null}
+{"v":1,"elapsed_sec":66.35,"event":"checks","checks":{"total":6,"pending":3,"failed":0,"succeeded":3,"skipped":0},"mergeable":"MERGEABLE","merge_state_status":"UNSTABLE"}
+{"v":1,"elapsed_sec":121.55,"event":"subscription","outcome":"changed","deferred_until_s":null}
+{"v":1,"elapsed_sec":123.8,"event":"checks","checks":{"total":6,"pending":2,"failed":0,"succeeded":4,"skipped":0},"mergeable":"MERGEABLE","merge_state_status":"UNSTABLE"}
+{"v":1,"elapsed_sec":123.8,"event":"coderabbit","coderabbit":{"state":"not_detected","sampled_merged_prs":5}}
+{"v":1,"elapsed_sec":243.74,"event":"subscription","outcome":"changed","deferred_until_s":null}
+{"v":1,"elapsed_sec":246.22,"event":"checks","checks":{"total":6,"pending":1,"failed":0,"succeeded":5,"skipped":0},"mergeable":"MERGEABLE","merge_state_status":"UNSTABLE"}
+{"v":1,"elapsed_sec":367.69,"event":"subscription","outcome":"quiet","deferred_until_s":null}
+{"v":1,"elapsed_sec":369.89,"event":"checks","checks":{"total":6,"pending":1,"failed":0,"succeeded":5,"skipped":0},"mergeable":"MERGEABLE","merge_state_status":"UNSTABLE"}
+{"v":1,"elapsed_sec":491.05,"event":"subscription","outcome":"quiet","deferred_until_s":null}
+{"v":1,"elapsed_sec":493.08,"event":"checks","checks":{"total":6,"pending":1,"failed":0,"succeeded":5,"skipped":0},"mergeable":"MERGEABLE","merge_state_status":"UNSTABLE"}
+{"v":1,"elapsed_sec":493.08,"event":"coderabbit","coderabbit":{"state":"not_detected","sampled_merged_prs":5}}
+{"v":1,"elapsed_sec":612.69,"event":"subscription","outcome":"changed","deferred_until_s":null}
+{"v":1,"elapsed_sec":614.52,"event":"checks","checks":{"total":6,"pending":0,"failed":1,"succeeded":5,"skipped":0},"mergeable":"MERGEABLE","merge_state_status":"UNSTABLE"}
+{"v":1,"elapsed_sec":615.05,"event":"required_failure","check":{"name":"test-linux","state":"failure","link":"https://github.com/zackees/act2/actions/runs/37244669428/job/111560074624","workflow":".github/workflows/checks.yml"}}
+{"v":1,"elapsed_sec":618.05,"event":"cancel","trigger":"fail","attempts":0,"mode":"runs"}
+{"v":1,"elapsed_sec":618.05,"event":"failure_diagnostic","check_name":"test-linux","first_error":"error: Fail the action with an error message","classifier":null}
+{"v":1,"elapsed_sec":618.05,"event":"EXIT","code":1,"reason":"fail"}

@@ -1,0 +1,8 @@
+{"v":1,"ts":"2026-10-26T07:58:38.949Z","elapsed_sec":0.0,"event":"START","repo":"forge-ci/ghd","pr":5,"log_path":".clud/logs/pr-merge-watch/20261026T075838.949Z-pr-5.jsonl"}
+{"v":1,"elapsed_sec":1.84,"event":"subscription","outcome":"available"}
+{"v":1,"elapsed_sec":4.35,"event":"checks","checks":{"total":19,"pending":1,"failed":1,"succeeded":17,"skipped":0},"mergeable":"MERGEABLE","merge_state_status":"UNSTABLE"}
+{"v":1,"elapsed_sec":4.35,"event":"coderabbit","coderabbit":{"state":"not_detected","sampled_merged_prs":2}}
+{"v":1,"elapsed_sec":128.11,"event":"subscription","outcome":"quiet","deferred_until_s":null}
+{"v":1,"elapsed_sec":130.36,"event":"checks","checks":{"total":20,"pending":1,"failed":1,"succeeded":18,"skipped":0},"mergeable":"MERGEABLE","merge_state_status":"UNSTABLE"}
+{"v":1,"elapsed_sec":130.36,"event":"green","mergeable":"MERGEABLE","checks":{"total":20,"pending":1,"failed":1,"succeeded":18,"skipped":0},"coderabbit":"absent"}
+{"v":1,"elapsed_sec":130.36,"event":"EXIT","code":0,"reason":"never"}

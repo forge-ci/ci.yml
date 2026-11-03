@@ -1,0 +1,18 @@
+{"v":1,"ts":"2026-10-26T08:10:15.626Z","elapsed_sec":0.0,"event":"START","repo":"forge-ci/ghd","pr":5,"log_path":".clud/logs/pr-merge-watch/20261026T081015.626Z-pr-5.jsonl"}
+{"v":1,"elapsed_sec":1.76,"event":"subscription","outcome":"available"}
+{"v":1,"elapsed_sec":4.23,"event":"checks","checks":{"total":1,"pending":1,"failed":0,"succeeded":0,"skipped":0},"mergeable":"MERGEABLE","merge_state_status":"UNSTABLE"}
+{"v":1,"elapsed_sec":4.23,"event":"coderabbit","coderabbit":{"state":"not_detected","sampled_merged_prs":2}}
+{"v":1,"elapsed_sec":62.8,"event":"subscription","outcome":"changed","deferred_until_s":null}
+{"v":1,"elapsed_sec":65.02,"event":"checks","checks":{"total":19,"pending":2,"failed":0,"succeeded":17,"skipped":0},"mergeable":"MERGEABLE","merge_state_status":"UNSTABLE"}
+{"v":1,"elapsed_sec":186.64,"event":"subscription","outcome":"quiet","deferred_until_s":null}
+{"v":1,"elapsed_sec":188.92,"event":"checks","checks":{"total":19,"pending":2,"failed":0,"succeeded":17,"skipped":0},"mergeable":"MERGEABLE","merge_state_status":"UNSTABLE"}
+{"v":1,"elapsed_sec":188.92,"event":"coderabbit","coderabbit":{"state":"not_detected","sampled_merged_prs":2}}
+{"v":1,"elapsed_sec":310.37,"event":"subscription","outcome":"quiet","deferred_until_s":null}
+{"v":1,"elapsed_sec":312.81,"event":"checks","checks":{"total":19,"pending":2,"failed":0,"succeeded":17,"skipped":0},"mergeable":"MERGEABLE","merge_state_status":"UNSTABLE"}
+{"v":1,"elapsed_sec":372.0,"event":"subscription","outcome":"changed","deferred_until_s":null}
+{"v":1,"elapsed_sec":374.18,"event":"checks","checks":{"total":19,"pending":1,"failed":0,"succeeded":18,"skipped":0},"mergeable":"MERGEABLE","merge_state_status":"UNSTABLE"}
+{"v":1,"elapsed_sec":437.38,"event":"subscription","outcome":"changed","deferred_until_s":null}
+{"v":1,"elapsed_sec":440.04,"event":"checks","checks":{"total":20,"pending":0,"failed":2,"succeeded":18,"skipped":0},"mergeable":"MERGEABLE","merge_state_status":"UNSTABLE"}
+{"v":1,"elapsed_sec":440.76,"event":"required_failure","check":{"name":"CI OK","state":"failure","link":"https://github.com/forge-ci/ghd/actions/runs/40290411136/job/121466182704","workflow":".github/workflows/ci.yml"}}
+{"v":1,"elapsed_sec":441.95,"event":"failure_diagnostic","check_name":"CI OK","first_error":"Process completed with exit code 1.","classifier":null}
+{"v":1,"elapsed_sec":441.95,"event":"EXIT","code":1,"reason":"fail"}

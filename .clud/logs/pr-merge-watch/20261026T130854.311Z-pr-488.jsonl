@@ -1,0 +1,6 @@
+{"v":1,"ts":"2026-10-26T13:08:54.311Z","elapsed_sec":0.0,"event":"START","repo":"forge-ci/ci.yml","pr":488,"log_path":".clud/logs/pr-merge-watch/20261026T130854.311Z-pr-488.jsonl"}
+{"v":1,"elapsed_sec":1.76,"event":"subscription","outcome":"available"}
+{"v":1,"elapsed_sec":4.76,"event":"checks","checks":{"total":0,"pending":0,"failed":0,"succeeded":0,"skipped":0},"note":"rollup_empty","mergeable":"MERGEABLE","merge_state_status":"CLEAN"}
+{"v":1,"elapsed_sec":13.21,"event":"checks","checks":{"total":0,"pending":0,"failed":0,"succeeded":0,"skipped":0},"note":"rollup_empty","mergeable":"MERGEABLE","merge_state_status":"CLEAN"}
+{"v":1,"elapsed_sec":13.21,"event":"no_checks","reason":"no_workflows","merge_state_status":"CLEAN","mergeable":"MERGEABLE","head_sha":"6455d053885dde7c74ae66e963a472eb266a89b5"}
+{"v":1,"elapsed_sec":13.21,"event":"EXIT","code":8,"reason":"no_checks","merge_state_status":"CLEAN"}

@@ -1,0 +1,15 @@
+{"v":1,"ts":"2026-10-26T06:50:47.930Z","elapsed_sec":0.0,"event":"START","repo":"forge-ci/kernal-api","pr":439,"log_path":".clud/logs/pr-merge-watch/20261026T065047.930Z-pr-439.jsonl"}
+{"v":1,"elapsed_sec":1.91,"event":"subscription","outcome":"available"}
+{"v":1,"elapsed_sec":5.43,"event":"checks","checks":{"total":8,"pending":0,"failed":0,"succeeded":8,"skipped":0},"mergeable":"MERGEABLE","merge_state_status":"CLEAN"}
+{"v":1,"elapsed_sec":5.43,"event":"coderabbit","coderabbit":{"state":"not_detected","sampled_merged_prs":5}}
+{"v":1,"elapsed_sec":6.54,"event":"queue","state":"OPEN","entry":"QUEUED","position":2,"queue_sha":null,"auto_merge":false}
+{"v":1,"elapsed_sec":26.27,"event":"queue","state":"OPEN","entry":"QUEUED","position":2,"queue_sha":null,"auto_merge":false}
+{"v":1,"elapsed_sec":46.52,"event":"queue","state":"OPEN","entry":"QUEUED","position":2,"queue_sha":null,"auto_merge":false}
+{"v":1,"elapsed_sec":66.7,"event":"queue","state":"OPEN","entry":"QUEUED","position":2,"queue_sha":null,"auto_merge":false}
+{"v":1,"elapsed_sec":86.08,"event":"queue","state":"OPEN","entry":"QUEUED","position":2,"queue_sha":null,"auto_merge":false}
+{"v":1,"elapsed_sec":106.01,"event":"queue","state":"OPEN","entry":"QUEUED","position":2,"queue_sha":null,"auto_merge":false}
+{"v":1,"elapsed_sec":126.09,"event":"queue","state":"OPEN","entry":"QUEUED","position":2,"queue_sha":null,"auto_merge":false}
+{"v":1,"elapsed_sec":146.09,"event":"queue","state":"OPEN","entry":"QUEUED","position":2,"queue_sha":null,"auto_merge":false}
+{"v":1,"elapsed_sec":166.11,"event":"queue","state":"OPEN","entry":"UNMERGEABLE","position":1,"queue_sha":null,"auto_merge":false}
+{"v":1,"elapsed_sec":186.14,"event":"queue","state":"OPEN","entry":null,"position":null,"queue_sha":null,"auto_merge":false}
+{"v":1,"elapsed_sec":186.14,"event":"EXIT","code":13,"reason":"removed from the merge queue"}

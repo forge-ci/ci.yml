@@ -1,0 +1,7 @@
+{"v":1,"ts":"2026-10-26T04:03:05.255Z","elapsed_sec":0.0,"event":"START","repo":"forge-ci/kernal-api","pr":439,"log_path":".clud/logs/pr-merge-watch/20261026T040305.255Z-pr-439.jsonl"}
+{"v":1,"elapsed_sec":1.93,"event":"subscription","outcome":"available"}
+{"v":1,"elapsed_sec":5.07,"event":"checks","checks":{"total":8,"pending":0,"failed":0,"succeeded":8,"skipped":0},"mergeable":"MERGEABLE","merge_state_status":"CLEAN"}
+{"v":1,"elapsed_sec":5.07,"event":"coderabbit","coderabbit":{"state":"not_detected","sampled_merged_prs":5}}
+{"v":1,"elapsed_sec":8.6,"event":"queue","state":"OPEN","entry":"AWAITING_CHECKS","position":1,"queue_sha":"694ef595ebbabd9d4aec0b4f9d1792d32366b1a5","auto_merge":false}
+{"v":1,"elapsed_sec":25.72,"event":"queue","state":"OPEN","entry":null,"position":null,"queue_sha":null,"auto_merge":false}
+{"v":1,"elapsed_sec":25.72,"event":"EXIT","code":13,"reason":"removed from the merge queue"}

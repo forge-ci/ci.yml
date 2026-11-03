@@ -1,0 +1,14 @@
+{"v":1,"ts":"2026-10-26T07:54:15.182Z","elapsed_sec":0.0,"event":"START","repo":"forge-ci/ghd","pr":5,"log_path":".clud/logs/pr-merge-watch/20261026T075415.182Z-pr-5.jsonl"}
+{"v":1,"elapsed_sec":1.56,"event":"subscription","outcome":"available"}
+{"v":1,"elapsed_sec":3.64,"event":"checks","checks":{"total":1,"pending":1,"failed":0,"succeeded":0,"skipped":0},"mergeable":"MERGEABLE","merge_state_status":"UNSTABLE"}
+{"v":1,"elapsed_sec":3.64,"event":"coderabbit","coderabbit":{"state":"not_detected","sampled_merged_prs":2}}
+{"v":1,"elapsed_sec":63.64,"event":"subscription","outcome":"changed","deferred_until_s":null}
+{"v":1,"elapsed_sec":65.62,"event":"checks","checks":{"total":19,"pending":2,"failed":0,"succeeded":17,"skipped":0},"mergeable":"MERGEABLE","merge_state_status":"UNSTABLE"}
+{"v":1,"elapsed_sec":187.13,"event":"subscription","outcome":"quiet","deferred_until_s":null}
+{"v":1,"elapsed_sec":189.41,"event":"checks","checks":{"total":19,"pending":2,"failed":0,"succeeded":17,"skipped":0},"mergeable":"MERGEABLE","merge_state_status":"UNSTABLE"}
+{"v":1,"elapsed_sec":189.41,"event":"coderabbit","coderabbit":{"state":"not_detected","sampled_merged_prs":2}}
+{"v":1,"elapsed_sec":249.76,"event":"subscription","outcome":"changed","deferred_until_s":null}
+{"v":1,"elapsed_sec":251.88,"event":"checks","checks":{"total":19,"pending":1,"failed":1,"succeeded":17,"skipped":0},"mergeable":"MERGEABLE","merge_state_status":"UNSTABLE"}
+{"v":1,"elapsed_sec":252.62,"event":"required_failure","check":{"name":"dylint [95e08b035188]","state":"failure","link":"https://github.com/forge-ci/ghd/actions/runs/40288651186/job/121458440922","workflow":".github/workflows/ci.yml"}}
+{"v":1,"elapsed_sec":254.02,"event":"failure_diagnostic","check_name":"dylint [95e08b035188]","first_error":"error: failed to run custom build command for `ring v0.17.14`","classifier":null}
+{"v":1,"elapsed_sec":254.02,"event":"EXIT","code":1,"reason":"fail"}
