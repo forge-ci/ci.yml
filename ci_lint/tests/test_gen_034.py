@@ -11,6 +11,7 @@ from __future__ import annotations
 import unittest
 
 from ci_lint.cargo_messages import JsonValue
+from ci_lint.github_api import HttpResult
 from ci_lint.merge_policy import evaluate, rollout, to_json_dict
 from ci_lint.settings_audit import RepoFacts, SettingsReply, check_gen_034
 
@@ -147,7 +148,7 @@ class RolloutApplyTest(unittest.TestCase):
             self.assertEqual(method, "PATCH")
             writes.append({"url": url, "payload": payload})
             state["allow_auto_merge"] = bool(payload["allow_auto_merge"])
-            return 200, {"ok": True}
+            return HttpResult(200, {"ok": True})
 
         report = rollout(fetch, token="t", owners=("forge-ci",), repos=(), apply=True, write=write)
         self.assertEqual(report.applied, (f"{REPO}:enable",))
@@ -179,7 +180,7 @@ class RolloutApplyTest(unittest.TestCase):
             self.assertEqual(method, "PATCH")
             payloads.append(payload)
             state["allow_auto_merge"] = bool(payload["allow_auto_merge"])
-            return 200, {"ok": True}
+            return HttpResult(200, {"ok": True})
 
         report = rollout(fetch, token="t", owners=(), repos=(REPO,), apply=True, write=write)
         self.assertEqual(payloads, [{"allow_auto_merge": False}])

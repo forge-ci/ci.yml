@@ -212,7 +212,8 @@ def evaluate(
     allow = facts.allow_auto_merge if facts is not None else None
     if facts is None or allow is None:
         return RepoPolicy(full_name, default_branch, archived, fork, allow, contexts, queue, "unreadable",
-                          "repository settings unreadable; never treated as policed")
+                          "the repository payload carries no allow_auto_merge (admin-only on private "
+                          "repositories); never treated as policed")
     if allow and not contexts:
         return RepoPolicy(full_name, default_branch, archived, fork, allow, contexts, queue, "unpoliced",
                           "allow_auto_merge is on but the default branch requires no status check")
@@ -229,8 +230,10 @@ def evaluate(
                       "required checks exist but auto-merge is off: a green PR cannot land unattended")
 
 
-def _set_auto_merge(write: HttpWriteFn, token: str, full_name: str, value: bool) -> None:
-    write(f"{API_ROOT}/repos/{full_name}", token, "PATCH", {"allow_auto_merge": value})
+def _set_auto_merge(write: HttpWriteFn, token: str, full_name: str, value: bool) -> HttpResult:
+    """PATCH one repository's `allow_auto_merge`; the caller checks the status."""
+
+    return write(f"{API_ROOT}/repos/{full_name}", token, "PATCH", {"allow_auto_merge": value})
 
 
 def rollout(
@@ -265,16 +268,27 @@ def rollout(
     failures: list[Failure] = []
     for full_name in targets:
         branch = _default_branch(fetch_status, token, full_name)
-        facts = fetch_repo_facts(cast(FetchStatusFn, fetch_status), token, full_name).facts
+        payload = fetch_repo_facts(cast(FetchStatusFn, fetch_status), token, full_name)
+        if payload.reply is not None and payload.reply.status in (403, 429) and _rate_limited(payload.reply.body):
+            raise RolloutError(
+                f"GitHub API rate limit exhausted while reading {full_name}; re-run after the reset window"
+            )
+        facts = payload.facts
         protection = _protection(fetch_status, token, full_name, branch)
         rulesets = _rulesets(fetch_status, token, full_name)
         policy = evaluate(full_name, branch, facts, protection, rulesets)
         if apply and policy.actionable and write is not None:
             value = policy.verdict == "enable"
             try:
-                _set_auto_merge(write, token, full_name, value)
+                patched = _set_auto_merge(write, token, full_name, value)
             except Exception as exc:  # noqa: BLE001 - reported per repository, never swallowed
                 failures.append(Failure(full_name, str(exc)))
+                policies.append(policy)
+                continue
+            if patched.status not in (200, 201):
+                body = patched.body
+                detail = body.get("message") if isinstance(body, dict) else body
+                failures.append(Failure(full_name, f"PATCH refused with HTTP {patched.status}: {detail}"))
                 policies.append(policy)
                 continue
             after = fetch_repo_facts(cast(FetchStatusFn, fetch_status), token, full_name).facts
@@ -295,7 +309,19 @@ def rollout(
 
 
 class RolloutError(RuntimeError):
-    """A repository listing failed; the rollout must not pretend it covered a fleet."""
+    """A listing or a settings read failed; the rollout must not pretend it covered a fleet.
+
+    Raised for a failed owner listing and for an exhausted GitHub API rate
+    limit: a 403 that means "slow down" must stop the run, not become 35
+    `unreadable` verdicts that read like per-repository permission problems.
+    """
+
+
+def _rate_limited(body: JsonValue) -> bool:
+    if not isinstance(body, dict):
+        return False
+    message = body.get("message")
+    return isinstance(message, str) and "rate limit" in message.lower()
 
 
 def to_json_dict(report: RolloutReport) -> dict[str, JsonValue]:
