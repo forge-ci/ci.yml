@@ -907,7 +907,10 @@ def _cmd_merge_policy(args: argparse.Namespace) -> int:
         print(f"ci-lint merge-policy: {exc}", file=sys.stderr)
         return 2
     print(json.dumps(merge_policy_to_json_dict(report), indent=2) if args.json else render_merge_policy(report))
-    blocking = [p for p in report.policies if p.verdict in ("unpoliced", "no-checks", "unreadable")]
+    # `no-checks` with auto-merge off is a healthy resting state (nothing to
+    # police, nothing to land); only an unpoliced licence or an unreadable
+    # setting makes the run fail.
+    blocking = [p for p in report.policies if p.verdict in ("unpoliced", "unreadable")]
     return 1 if blocking or report.failures else 0
 
 

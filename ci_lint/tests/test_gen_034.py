@@ -106,6 +106,21 @@ class Gen034AuditTest(unittest.TestCase):
         self.assertEqual(len(findings), 1)
         self.assertEqual(findings[0].status, "needs_review")
 
+    def test_auto_merge_with_unreadable_rulesets_is_never_a_pass(self) -> None:
+        reply, facts = _facts(True)
+        findings = check_gen_034(REPO, reply, facts, _NO_PROTECTION, SettingsReply(403, []), BRANCH)
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0].status, "needs_review")
+        self.assertIn("cannot be decided", findings[0].message)
+
+    def test_auto_merge_with_unreadable_branch_protection_is_needs_review_not_violation(self) -> None:
+        reply, facts = _facts(True)
+        findings = check_gen_034(
+            REPO, reply, facts, SettingsReply(403, {}), SettingsReply(200, []), BRANCH
+        )
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0].status, "needs_review")
+
     def test_missing_payload_field_is_needs_review(self) -> None:
         reply = SettingsReply(200, {"owner": {"type": "Organization"}})
         facts = RepoFacts(owner_type="Organization", allow_auto_merge=None)
@@ -210,6 +225,24 @@ class RolloutApplyTest(unittest.TestCase):
         self.assertEqual(report.applied, ())
         self.assertTrue(report.dry_run)
         self.assertEqual(report.policies[0].verdict, "enable")
+
+    def test_apply_without_a_write_function_is_reported_as_a_dry_run(self) -> None:
+        def fetch(url: str, _token: str) -> tuple[int, JsonValue]:
+            if url == f"{API}/repos/{REPO}":
+                return 200, {
+                    "owner": {"type": "Organization"},
+                    "default_branch": BRANCH,
+                    "allow_auto_merge": True,
+                }
+            if url == f"{API}/repos/{REPO}/branches/{BRANCH}/protection":
+                return 404, None
+            if url == f"{API}/repos/{REPO}/rulesets":
+                return 200, []
+            raise AssertionError(f"unexpected URL {url}")
+
+        report = rollout(fetch, token="t", owners=(), repos=(REPO,), apply=True, write=None)
+        self.assertTrue(report.dry_run)
+        self.assertEqual(report.policies[0].verdict, "unpoliced")
 
     def test_a_repo_with_no_required_checks_is_never_enabled(self) -> None:
         def fetch(url: str, _token: str) -> tuple[int, JsonValue]:

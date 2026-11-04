@@ -599,6 +599,7 @@ class RepoFacts:
 
     owner_type: str | None
     allow_auto_merge: bool | None
+    default_branch: str | None = None
 
 
 @dataclass(frozen=True)
@@ -621,11 +622,24 @@ def fetch_repo_facts(fetch_status: FetchStatusFn, token: str, repo: str) -> Repo
     owner = body.get("owner")
     owner_type = owner.get("type") if isinstance(owner, dict) else None
     allow_auto_merge = body.get("allow_auto_merge")
+    branch = body.get("default_branch")
     facts = RepoFacts(
         owner_type=owner_type if isinstance(owner_type, str) else None,
         allow_auto_merge=allow_auto_merge if isinstance(allow_auto_merge, bool) else None,
+        default_branch=branch if isinstance(branch, str) else None,
     )
     return RepoFactsReply(reply, facts)
+
+
+def _unverifiable_finding(repo: str, detail: str) -> Finding:
+    return Finding(
+        rule="GEN-034",
+        status=Status.NEEDS_REVIEW,
+        path=f"repo:{repo}",
+        message=f"GEN-034 cannot be decided: {detail}",
+        fix="re-run with a token that can read the repository's rulesets and branch protection; "
+        "an unreadable policing setting is never treated as a pass",
+    )
 
 
 def _merge_automation_violation(path: str) -> Finding:
@@ -705,11 +719,22 @@ def check_gen_034(
             )
         ]
     if rulesets is None or rulesets.status not in (200, 404):
-        return []  # GEN-022 owns an unreadable rulesets payload; do not double-report
+        # GEN-022 already reports the unreadable payload. GEN-034 must still not
+        # call an auto-merge licence "policed" when it cannot see the rules: with
+        # allow_auto_merge on and no ruleset visibility, clause A cannot be
+        # cleared, so it is needs_review rather than silence.
+        if facts.allow_auto_merge:
+            return [_unverifiable_finding(repo, "the rulesets could not be read, so whether a required "
+                                                "status check polices the default branch is unknown")]
+        return []
     rs_list = _ruleset_payloads(rulesets)
     required = _required_contexts(branch_protection, rs_list, default_branch)
     path = f"branch:{default_branch}"
+    protection_unreadable = branch_protection is not None and branch_protection.status in (401, 403)
     if facts.allow_auto_merge and not required:
+        if protection_unreadable:
+            return [_unverifiable_finding(repo, "branch protection could not be read, so whether "
+                                                "auto-merge is policed by a required check is unknown")]
         return [_merge_automation_violation(path)]
     if not facts.allow_auto_merge and required and not _has_active_merge_queue(rs_list, default_branch):
         return [_merge_automation_gap()]

@@ -171,14 +171,6 @@ def list_owner_repos(fetch_status: HttpFetchFn, token: str, owner: str) -> Owner
     return OwnerListing(owner=owner, full_names=(), error=f"could not list repositories for {owner}")
 
 
-def _default_branch(fetch_status: HttpFetchFn, token: str, full_name: str, fallback: str = "main") -> str:
-    reply = _get(fetch_status, token, f"{API_ROOT}/repos/{full_name}")
-    if reply is None or reply.status != 200 or not isinstance(reply.body, dict):
-        return fallback
-    branch = reply.body.get("default_branch")
-    return branch if isinstance(branch, str) else fallback
-
-
 def _protection(fetch_status: HttpFetchFn, token: str, full_name: str, branch: str) -> SettingsReply | None:
     return _get(fetch_status, token, f"{API_ROOT}/repos/{full_name}/branches/{branch}/protection")
 
@@ -267,13 +259,15 @@ def rollout(
     applied: list[str] = []
     failures: list[Failure] = []
     for full_name in targets:
-        branch = _default_branch(fetch_status, token, full_name)
         payload = fetch_repo_facts(cast(FetchStatusFn, fetch_status), token, full_name)
         if payload.reply is not None and payload.reply.status in (403, 429) and _rate_limited(payload.reply.body):
             raise RolloutError(
                 f"GitHub API rate limit exhausted while reading {full_name}; re-run after the reset window"
             )
         facts = payload.facts
+        # One GET of /repos/{repo} answers both questions: the settings and the
+        # default branch the rulesets are matched against.
+        branch = (facts.default_branch if facts is not None else None) or "main"
         protection = _protection(fetch_status, token, full_name, branch)
         rulesets = _rulesets(fetch_status, token, full_name)
         policy = evaluate(full_name, branch, facts, protection, rulesets)
@@ -304,7 +298,12 @@ def rollout(
                 )
         policies.append(policy)
     return RolloutReport(
-        policies=tuple(policies), applied=tuple(applied), failures=tuple(failures), dry_run=not apply
+        policies=tuple(policies),
+        applied=tuple(applied),
+        failures=tuple(failures),
+        # `apply=True` with no write function cannot change anything, so it is a
+        # dry run and must say so rather than reporting an applied run.
+        dry_run=not (apply and write is not None),
     )
 
 
@@ -360,7 +359,7 @@ def render_text(report: RolloutReport) -> str:
         )
     if report.applied:
         lines.append("")
-        lines.append("enabled allow_auto_merge: " + ", ".join(report.applied))
+        lines.append("allow_auto_merge changes: " + ", ".join(report.applied))
     if report.failures:
         lines.append("")
         for failure in report.failures:
