@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import unittest
+import urllib.error
 
 from ci_lint.cache.audit import ClassifiedEntry
 from ci_lint.cache.github_cache import CacheEntry
@@ -55,6 +56,44 @@ def _failing_delete():
         raise GitHubApiError("boom")
 
     return delete
+
+
+def _http_failing_delete(status: int):
+    def delete(url: str, token: str) -> None:
+        try:
+            raise urllib.error.HTTPError(url, status, "failure", None, None)
+        except urllib.error.HTTPError as exc:
+            raise GitHubApiError("DELETE failed") from exc
+
+    return delete
+
+
+class DeleteStatusTest(unittest.TestCase):
+    def test_delete_status_by_id_and_key(self) -> None:
+        ci = load_ci_toml(REPO).ci
+        assert ci is not None
+        for status in (404, 401, 403, 429, 500):
+            for by_key in (False, True):
+                with self.subTest(status=status, by_key=by_key):
+                    delete = _http_failing_delete(status)
+                    if by_key:
+                        result = heal(delete=delete, token=TOKEN, repo=REPO_SLUG, key="k")
+                    else:
+                        result = janitor(
+                            ci, fetch=_fetch_from(_load("caches-synthetic-rules.json")),
+                            graphql=_graphql_from(_load("pr-states.json")), delete=delete,
+                            token=TOKEN, repo=REPO_SLUG,
+                        ).result
+                    self.assertTrue(result.planned)
+                    self.assertEqual((), result.deleted)
+                    if status == 404:
+                        self.assertEqual((), result.errors)
+                        self.assertEqual(result.planned, result.already_gone)
+                        self.assertIn("already gone (404)", result.render())
+                        self.assertIn("deleted 0 entrie(s)", result.render())
+                        self.assertEqual(len(result.planned), len(result.to_json_dict()["already_gone"]))
+                    else:
+                        self.assertEqual(len(result.planned), len(result.errors))
 
 
 class TrimTest(unittest.TestCase):
