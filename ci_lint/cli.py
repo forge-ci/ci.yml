@@ -59,6 +59,7 @@ from ci_lint.finding import Finding, Status
 from ci_lint.fleet_cli import register as register_fleet
 from ci_lint.gh_repo_cache import register as register_gh_cache
 from ci_lint.github_api import GitHubApiError, default_delete, default_fetch, default_fetch_status, default_graphql
+from ci_lint.github_api import default_write, HttpResult
 from ci_lint.hosted_attestations import verified_jobs, verified_merge_group_jobs
 from ci_lint.local_gate_cli import register as register_local_gate
 from ci_lint.perf import (
@@ -160,6 +161,12 @@ from ci_lint.settings_audit import DEFAULT_GATE_CHECK_NAME
 from ci_lint.settings_audit import render_text as render_settings_audit_text
 from ci_lint.settings_audit import run_audit as run_settings_audit
 from ci_lint.settings_audit import to_json_dict as settings_audit_to_json_dict
+from ci_lint.merge_policy import (
+    RolloutError,
+    render_text as render_merge_policy,
+    rollout as run_merge_rollout,
+    to_json_dict as merge_policy_to_json_dict,
+)
 
 
 @dataclass(frozen=True)
@@ -849,6 +856,59 @@ def _cmd_audit(args: argparse.Namespace) -> int:
 
 
 # ── `ci-lint publish oidc-check` (round-5) ──────────────────────────────────
+
+
+def _http_fetch(url: str, token: str) -> HttpResult:
+    """The status-carrying GET the merge-policy rollout expects."""
+
+    return default_fetch_status(url, token)
+
+
+def _http_write(url: str, token: str, method: str, payload: dict[str, JsonValue]) -> HttpResult:
+    """The status-carrying PATCH the merge-policy rollout expects."""
+
+    return default_write(url, token, method, payload)
+
+
+def _cmd_merge_policy(args: argparse.Namespace) -> int:
+    """`ci-lint merge-policy` (GEN-034): evaluate, and with --apply police, auto-merge.
+
+    Exit codes: 0 = every repository is policed or was fixed, 1 = at least one
+    repository is in a state this tool must not change (unpoliced auto-merge or
+    no required checks), 2 = usage/credentials/repository-listing failure.
+    """
+
+    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+    if not token:
+        print(
+            "ci-lint merge-policy: GITHUB_TOKEN (or GH_TOKEN) is required -- this command spans "
+            "owners, so GITHUB_REPOSITORY is not needed",
+            file=sys.stderr,
+        )
+        return 2
+    owners = tuple(args.owner)
+    repos = tuple(args.repo)
+    if not owners and not repos:
+        print(
+            "ci-lint merge-policy: name at least one --owner <org|user> or --repo <owner/name>",
+            file=sys.stderr,
+        )
+        return 2
+    try:
+        report = run_merge_rollout(
+            _http_fetch,
+            token=token,
+            owners=owners,
+            repos=repos,
+            apply=args.apply,
+            write=_http_write if args.apply else None,
+        )
+    except RolloutError as exc:
+        print(f"ci-lint merge-policy: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(merge_policy_to_json_dict(report), indent=2) if args.json else render_merge_policy(report))
+    blocking = [p for p in report.policies if p.verdict in ("unpoliced", "no-checks", "unreadable")]
+    return 1 if blocking or report.failures else 0
 
 
 def _cmd_publish_oidc_check(args: argparse.Namespace) -> int:
@@ -1747,7 +1807,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_delta_apply.set_defaults(func=_cmd_cache_delta_apply)
 
     p_audit = sub.add_parser(
-        "audit", help="live settings audit: SEC-005/006/007, GEN-006/011 (distinct from 'cache audit')"
+        "audit",
+        help="live settings audit: SEC-005/006/007, GEN-006/011/022/034 "
+        "(auto-merge policing; distinct from 'cache audit')",
     )
     p_audit.add_argument("--repo", default=".")
     p_audit.add_argument("--default-branch", default=None, help="default: inferred (#425); unresolvable is an error (#491)")
@@ -1758,6 +1820,31 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_audit.add_argument("--json", action="store_true")
     p_audit.set_defaults(func=_cmd_audit)
+
+    p_merge = sub.add_parser(
+        "merge-policy",
+        help="GEN-034 rollout: police auto-merge across owners (dry run unless --apply)",
+    )
+    p_merge.add_argument(
+        "--owner",
+        action="append",
+        default=[],
+        help="an organization or user whose repositories are evaluated (repeatable)",
+    )
+    p_merge.add_argument(
+        "--repo",
+        action="append",
+        default=[],
+        help="an explicit owner/name to evaluate in addition to --owner (repeatable)",
+    )
+    p_merge.add_argument(
+        "--apply",
+        action="store_true",
+        help="PATCH allow_auto_merge=true on repositories whose default branch already requires checks "
+        "(the default is a read-only dry run)",
+    )
+    p_merge.add_argument("--json", action="store_true")
+    p_merge.set_defaults(func=_cmd_merge_policy)
 
     p_publish = sub.add_parser("publish", help="publish checks: oidc-check (issue #6 §7 mock publisher)")
     publish_sub = p_publish.add_subparsers(dest="publish_command", required=True)
