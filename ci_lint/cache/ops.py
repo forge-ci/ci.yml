@@ -54,20 +54,25 @@ class OpsResult:
     errors: tuple[str, ...]  # per-entry delete failures; never raised
     dry_run: bool
     warning: str | None = None
+    already_gone: tuple[DeletePlanEntry, ...] = ()
 
     def to_json_dict(self) -> dict[str, JsonValue]:
         return {
             "planned": [p.__dict__ for p in self.planned],
             "deleted": [p.__dict__ for p in self.deleted],
+            "already_gone": [p.__dict__ for p in self.already_gone],
             "errors": list(self.errors),
             "dry_run": self.dry_run,
             "warning": self.warning,
         }
 
     def render(self) -> str:
-        lines = [f"ci-lint cache: {'would delete' if self.dry_run else 'deleted'} {len(self.planned)} entrie(s)"]
+        count = len(self.planned) if self.dry_run else len(self.deleted)
+        lines = [f"ci-lint cache: {'would delete' if self.dry_run else 'deleted'} {count} entrie(s)"]
         for p in self.planned:
             lines.append(f"  id={p.id} key={p.key!r} {p.size_in_bytes}B -- {p.reason}")
+        for p in self.already_gone:
+            lines.append(f"  id={p.id} key={p.key!r} already gone (404)")
         for e in self.errors:
             lines.append(f"  ERROR: {e}")
         if self.warning:
@@ -124,13 +129,19 @@ def _apply(planned: list[DeletePlanEntry], *, delete: DeleteFn | None, token: st
         return OpsResult(planned=tuple(planned), deleted=(), errors=(), dry_run=True)
     deleted: list[DeletePlanEntry] = []
     errors: list[str] = []
+    already_gone: list[DeletePlanEntry] = []
     for p in planned:
         try:
-            delete_cache_by_id(delete, token, repo, p.id)
-            deleted.append(p)
+            if delete_cache_by_id(delete, token, repo, p.id):
+                deleted.append(p)
+            else:
+                already_gone.append(p)
         except CacheApiError as exc:
             errors.append(f"id={p.id} key={p.key!r}: {exc}")
-    return OpsResult(planned=tuple(planned), deleted=tuple(deleted), errors=tuple(errors), dry_run=False)
+    return OpsResult(
+        planned=tuple(planned), deleted=tuple(deleted), errors=tuple(errors),
+        dry_run=False, already_gone=tuple(already_gone),
+    )
 
 
 def _finding_entry(f, index: _EntryIndex) -> ClassifiedEntry | None:
@@ -494,8 +505,11 @@ def heal(*, delete: DeleteFn | None, token: str, repo: str, key: str, ref: str |
     if dry_run or delete is None:
         return OpsResult(planned=planned, deleted=(), errors=(), dry_run=True)
     try:
-        delete_cache_by_key(delete, token, repo, key, ref)
-        return OpsResult(planned=planned, deleted=planned, errors=(), dry_run=False)
+        removed = delete_cache_by_key(delete, token, repo, key, ref)
+        return OpsResult(
+            planned=planned, deleted=planned if removed else (), errors=(), dry_run=False,
+            already_gone=() if removed else planned,
+        )
     except CacheApiError as exc:
         return OpsResult(planned=planned, deleted=(), errors=(str(exc),), dry_run=False)
 

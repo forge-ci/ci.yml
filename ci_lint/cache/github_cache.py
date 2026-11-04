@@ -13,6 +13,7 @@ live cache state doesn't currently exercise; each fixture file says which).
 from __future__ import annotations
 
 from dataclasses import dataclass
+from urllib.error import HTTPError
 
 from ci_lint.cargo_messages import JsonValue
 from ci_lint.github_api import DeleteFn, FetchFn, GitHubApiError, GraphQLFn
@@ -100,19 +101,24 @@ def list_caches(fetch: FetchFn, token: str, repo: str) -> list[CacheEntry]:
     return entries
 
 
-def delete_cache_by_id(delete: DeleteFn, token: str, repo: str, cache_id: int) -> None:
-    """`DELETE /repos/{repo}/actions/caches/{id}` (`actions: write`)."""
+def delete_cache_by_id(delete: DeleteFn, token: str, repo: str, cache_id: int) -> bool:
+    """`DELETE /repos/{repo}/actions/caches/{id}` (`actions: write`); False means already absent (404)."""
 
     try:
         delete(f"https://api.github.com/repos/{repo}/actions/caches/{cache_id}", token)
     except GitHubApiError as exc:
+        # Only cache DELETE treats absence as success; API reads retain their
+        # existing fail-closed behavior. Never infer a status from message text.
+        if isinstance(exc.__cause__, HTTPError) and exc.__cause__.code == 404:
+            return False
         raise CacheApiError(f"deleting cache id={cache_id}: {exc}") from exc
+    return True
 
 
-def delete_cache_by_key(delete: DeleteFn, token: str, repo: str, key: str, ref: str | None = None) -> None:
+def delete_cache_by_key(delete: DeleteFn, token: str, repo: str, key: str, ref: str | None = None) -> bool:
     """`DELETE /repos/{repo}/actions/caches?key=<key>[&ref=<ref>]`
     (`actions: write`) -- `ci-lint cache heal`'s "delete exactly that key",
-    with no id lookup needed first."""
+    with no id lookup needed first. False means already absent (404)."""
 
     url = f"https://api.github.com/repos/{repo}/actions/caches?key={key}"
     if ref:
@@ -120,7 +126,12 @@ def delete_cache_by_key(delete: DeleteFn, token: str, repo: str, key: str, ref: 
     try:
         delete(url, token)
     except GitHubApiError as exc:
+        # Only cache DELETE treats absence as success; API reads retain their
+        # existing fail-closed behavior. Never infer a status from message text.
+        if isinstance(exc.__cause__, HTTPError) and exc.__cause__.code == 404:
+            return False
         raise CacheApiError(f"deleting cache key={key!r}: {exc}") from exc
+    return True
 
 
 @dataclass(frozen=True)
