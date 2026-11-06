@@ -80,6 +80,58 @@ jobs:
         self.assertTrue(self.report().ok)
 
     @requires_yaml_tooling
+    def test_producer_queue_evidence_with_include_matrix_reaches_gate(self) -> None:
+        from ci_lint.default_branch_reuse import to_json_dict
+        from ci_lint.tests.test_default_branch_reuse import (
+            QUEUE_JOBS, QUEUE_NOW, SHA_1630, body, queue_table, req, run,
+        )
+
+        path = self.directory / "ci.yml"
+        path.write_text(path.read_text().replace("  ci-ok:\n", """  optional-macos:
+    name: Test macos-x64
+    strategy:
+      matrix:
+        include:
+          - {suite: unit, shard: all}
+          - {suite: integration, shard: py1of2}
+    steps: [{run: 'test'}]
+  ci-ok:
+"""))
+        table = queue_table()
+        jobs = body(table, QUEUE_JOBS)["jobs"]
+        for job, name in zip(jobs, self.names):
+            job["name"] = name
+        decision = run(table, req(SHA_1630, QUEUE_NOW, jobs=self.names, queue_evidence=True))
+        self.assertTrue(decision.reuse, decision.detail)
+        self.assertNotEqual(decision.pr_head_sha, decision.proving_sha)
+        self.doc = to_json_dict(decision)
+        self.live = {job.job_id: {"name": job.name, "conclusion": "success",
+                                 "head_sha": decision.proving_sha, "run_id": job.run_id}
+                     for job in decision.jobs}
+        report = compute_gate(
+            build_plan(self.repo, "ci.yml", "ci-ok", self.needs, event="push"), self.needs,
+            default_branch_reuse=self.doc, push_sha=SHA_1630,
+            fetch=lambda url, _token: self.live[int(url.rsplit("/", 1)[1])],
+            token="t", repo="owner/repo", workflow_jobs=self.source(),
+        )
+        self.assertTrue(report.ok, report)
+        self.assertEqual(self.source().for_job("optional-macos"),
+                         ("Test macos-x64 (unit, all)", "Test macos-x64 (integration, py1of2)"))
+
+    def test_include_display_order_requires_identical_literal_keys(self) -> None:
+        from ci_lint.workflow_job_names import _automatic_axes
+
+        self.assertEqual(_automatic_axes({"include": [{"suite": "unit", "shard": "all"}]},
+                                         {"shard": "all", "suite": "unit"}), ("suite", "shard"))
+        for raw in ({"include": [{"suite": "unit"}, {"shard": "all"}]},
+                    {"include": [{"suite": "unit", "shard": "all"},
+                                 {"shard": "py", "suite": "integration"}]},
+                    {"include": [{"suite": "other", "shard": "all"}]},
+                    {"include": [{"suite": "unit", "shard": "all"}], "shard": ["all"]}):
+            with self.subTest(raw=raw), self.assertRaises(ValueError):
+                _automatic_axes(raw, {"shard": "all", "suite": "unit"})
+
+    @requires_yaml_tooling
     def test_incomplete_or_duplicate_shard_proof_fails(self) -> None:
         original = self.doc["jobs"]
         for jobs in (original[:-1], original + [original[0]], [original[0]] * 3):
