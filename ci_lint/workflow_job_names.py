@@ -21,6 +21,20 @@ from ci_lint.workflow_scan import ParsedYamlFile, jobs_of, load_workflows
 from ci_lint.yaml_io import YamlValue
 
 
+def _automatic_axes(raw: YamlValue, matrix: dict[str, YamlValue]) -> tuple[str, ...]:
+    """Recover display order from source, never canonical identity JSON's key order."""
+    if isinstance(raw, dict) and set(raw) == set(matrix):
+        return tuple(raw)
+    if isinstance(raw, dict) and set(raw) == {"include"}:
+        rows = raw["include"]
+        if isinstance(rows, list) and rows and all(isinstance(row, dict) for row in rows):
+            first = rows[0]
+            if isinstance(first, dict) and all(tuple(row) == tuple(first) for row in rows):
+                if set(first) == set(matrix) and matrix in rows:
+                    return tuple(first)
+    raise ValueError("automatic matrix display name is not statically proven")
+
+
 def _component(job_id: str, job: dict[str, YamlValue], inputs: tuple[BoundInput, ...],
                matrix: YamlValue) -> str:
     template = job.get("name", job_id)
@@ -31,9 +45,7 @@ def _component(job_id: str, job: dict[str, YamlValue], inputs: tuple[BoundInput,
         return name
     strategy = job.get("strategy")
     axes = strategy.get("matrix") if isinstance(strategy, dict) else None
-    if not isinstance(axes, dict) or set(axes) != set(matrix):
-        raise ValueError("automatic matrix display name is not statically proven")
-    values = [matrix[axis] for axis in axes]
+    values = [matrix[axis] for axis in _automatic_axes(axes, matrix)]
     if any(not isinstance(value, (str, bool, int)) for value in values):
         raise ValueError("automatic matrix display name has unsupported values")
     return name + " (" + ", ".join(str(value).lower() if isinstance(value, bool) else str(value)
