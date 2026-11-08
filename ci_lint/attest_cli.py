@@ -25,6 +25,7 @@ from pathlib import Path
 from ci_lint.attestations import (
     MISSING,
     VALID,
+    CommitAttestations,
     Definition,
     load_definition,
     parse_trailers,
@@ -64,6 +65,51 @@ def _lineage(repo: Path, args: argparse.Namespace) -> Lineage:
     return lineage_of(repo, args.commit, main_ref=args.main_ref, pr=args.pr)
 
 
+def _tree_of(repo: Path, commit: str) -> str:
+    """The commit's tree sha, for the message a blocked push prints."""
+
+    out = run_captured(["git", "-C", str(repo), "rev-parse", f"{commit}^{{tree}}"]).stdout
+    return out.strip() or commit
+
+
+def _required_gates(args: argparse.Namespace) -> list[str]:
+    """`--required a,b --required c` -> ['a', 'b', 'c'] in the order given."""
+
+    gates: list[str] = []
+    for value in getattr(args, "required", None) or []:
+        gates.extend(gate.strip() for gate in value.split(",") if gate.strip())
+    return gates
+
+
+def _report_required(args: argparse.Namespace, repo: Path, result: CommitAttestations) -> int:
+    """Report the `--required` gates the commit did not attest, honouring --mode.
+
+    `off` prints nothing and returns 0 so the command behaves exactly as before;
+    `warn` prints an annotation and still returns 0; `enforce` prints an ::error
+    and returns 1. A stale or forged trailer arrives here as `missing`, never as
+    a failure, so the message is always "not attested".
+    """
+
+    gates = _required_gates(args)
+    if not gates or args.mode == "off":
+        return 0
+    attested = {status.gate for status in result.statuses if status.state == VALID}
+    missing = [gate for gate in gates if gate not in attested]
+    if not missing:
+        return 0
+    tree = _tree_of(repo, args.commit)
+    for gate in missing:
+        text = (
+            f"{gate} not attested for tree {tree}. Run ./push "
+            "(it runs 'soldr lint rust --attest' and stamps the commit)."
+        )
+        if args.mode == "enforce":
+            print(f"::error title=Missing client attestation::{text}")
+        else:
+            print(f"::warning title=Missing client attestation::{text}")
+    return 1 if args.mode == "enforce" else 0
+
+
 def _cmd_verify(args: argparse.Namespace) -> int:
     repo = Path(args.repo).resolve()
     definition = _definition(repo, args.base)
@@ -75,7 +121,9 @@ def _cmd_verify(args: argparse.Namespace) -> int:
         print(f"{mark} {status.gate}: {status.state} -- {status.detail}")
     for error in result.malformed:
         print(f"FAIL {error}")
-    return 1 if result.errors or result.malformed else 0
+    if result.errors or result.malformed:
+        return 1
+    return _report_required(args, repo, result)
 
 
 def _cmd_lineage(args: argparse.Namespace) -> int:
@@ -134,10 +182,21 @@ def _publish_keys(args: argparse.Namespace) -> int:
 
         token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN") or ""
         slug = args.github_repo or os.environ.get("GITHUB_REPOSITORY", "")
-        promoted = promote(repo, PromotionInput(
-            slug, lineage.sha, os.environ.get("GITHUB_EVENT_NAME", ""), os.environ.get("GITHUB_REF", ""),
-            args.main_ref.removeprefix("origin/"), int(time.time()), args.promotion_max_age_hours * 3600, args.fetch_promotion_source,
-        ), default_fetch, token)
+        promoted = promote(
+            repo,
+            PromotionInput(
+                slug,
+                lineage.sha,
+                os.environ.get("GITHUB_EVENT_NAME", ""),
+                os.environ.get("GITHUB_REF", ""),
+                args.main_ref.removeprefix("origin/"),
+                int(time.time()),
+                args.promotion_max_age_hours * 3600,
+                args.fetch_promotion_source,
+            ),
+            default_fetch,
+            token,
+        )
         print(f"ci-lint attest keys: promotion {promoted.reason}; source={promoted.source}")
         for record in promoted.records:
             records[record.gate] = record
@@ -153,10 +212,12 @@ def _publish_keys(args: argparse.Namespace) -> int:
     # dropped `rust/x86_64-unknown-linux-gnu/test` alphabetically.
     mapped = {gate for job in definition.jobs for gate in job.gates}
     valid = sorted((s for s in result.statuses if s.state == VALID), key=lambda s: (s.gate not in mapped, s.gate))
-    dropped = [s.gate for s in valid[args.slots:]]
+    dropped = [s.gate for s in valid[args.slots :]]
     if dropped:
-        message = (f"{len(valid)} valid gates but only {args.slots} side-entry slots; not published: "
-                   f"{', '.join(dropped)} (add save slots and raise --slots)")
+        message = (
+            f"{len(valid)} valid gates but only {args.slots} side-entry slots; not published: "
+            f"{', '.join(dropped)} (add save slots and raise --slots)"
+        )
         print(f"ci-lint attest keys: {message}", file=sys.stderr)
         if os.environ.get("GITHUB_ACTIONS") == "true":
             print(f"::warning title=ci-attestations side entries truncated::{message}")
@@ -213,8 +274,9 @@ def _cmd_resolve(args: argparse.Namespace) -> int:
             return 2
     required: frozenset[str] | None = None
     for gate in args.require_gate:
-        shas = frozenset(e.lineage.sha for e in (parse_key(k) for k in keys)
-                         if e is not None and e.family == gate_family(gate))
+        shas = frozenset(
+            e.lineage.sha for e in (parse_key(k) for k in keys) if e is not None and e.family == gate_family(gate)
+        )
         required = shas if required is None else required & shas
     result = resolve(repo, head, keys, family=args.family, required_shas=required)
     print(f"ci-lint attest resolve: {result.key or '(none)'} -- {result.reason}")
@@ -238,9 +300,24 @@ def register(sub: argparse._SubParsersAction) -> None:  # type: ignore[type-arg]
     v = at.add_parser("verify", help="check a commit's Ci-Attestation trailers against ci-attestations.yml")
     common(v)
     v.add_argument("--base", help="read the definition from this commit (a PR's base) instead of the work tree")
+    v.add_argument(
+        "--required",
+        action="append",
+        metavar="GATE[,GATE]",
+        help="also require these gates to be attested (repeatable, comma-separated)",
+    )
+    v.add_argument(
+        "--mode",
+        choices=("off", "warn", "enforce"),
+        default="off",
+        help="what a missing --required gate does: off prints nothing, warn annotates and exits 0, "
+        "enforce annotates and exits 1 (default: off)",
+    )
     v.set_defaults(func=_cmd_verify)
 
-    lin = at.add_parser("lineage", help="print the commit's ancestor-defining label (m<n>-<sha10> / m<b>-c<k>-<sha10>-pr-<N>)")
+    lin = at.add_parser(
+        "lineage", help="print the commit's ancestor-defining label (m<n>-<sha10> / m<b>-c<k>-<sha10>-pr-<N>)"
+    )
     common(lin)
     lineage_args(lin)
     lin.set_defaults(func=_cmd_lineage)
@@ -252,11 +329,19 @@ def register(sub: argparse._SubParsersAction) -> None:  # type: ignore[type-arg]
     k.add_argument("--base", help="read the definition from this commit (a PR's base)")
     k.add_argument("--out-dir", required=True)
     k.add_argument("--slots", type=int, default=8, help="max side entries (one cache-save step per slot)")
-    k.add_argument("--github-output", action="store_true",
-                   help="write key_<i> (full), stem_<i> (append ${{ env.PR_CACHE_TAG }}), path_<i>, count, lineage")
-    k.add_argument("--promote-merged-pr", action="store_true",
-                   help="on default-branch push, publish exact-tree trusted merged-PR evidence under main keys")
-    k.add_argument("--fetch-promotion-source", action="store_true", help="fetch missing merged PR head (bounded 60s read)")
+    k.add_argument(
+        "--github-output",
+        action="store_true",
+        help="write key_<i> (full), stem_<i> (append ${{ env.PR_CACHE_TAG }}), path_<i>, count, lineage",
+    )
+    k.add_argument(
+        "--promote-merged-pr",
+        action="store_true",
+        help="on default-branch push, publish exact-tree trusted merged-PR evidence under main keys",
+    )
+    k.add_argument(
+        "--fetch-promotion-source", action="store_true", help="fetch missing merged PR head (bounded 60s read)"
+    )
     k.add_argument("--github-repo", help="owner/name (default: GITHUB_REPOSITORY)")
     k.add_argument("--promotion-max-age-hours", type=int, default=24)
     k.set_defaults(func=_cmd_keys)
@@ -265,8 +350,12 @@ def register(sub: argparse._SubParsersAction) -> None:  # type: ignore[type-arg]
     common(r)
     lineage_args(r)
     r.add_argument("--family", required=True, help="cache key family, e.g. zccache-unit-v1-x86_64-unknown-linux-gnu")
-    r.add_argument("--require-gate", action="append", default=[],
-                   help="only hydrate from commits whose attestation side entry for this gate exists (repeatable)")
+    r.add_argument(
+        "--require-gate",
+        action="append",
+        default=[],
+        help="only hydrate from commits whose attestation side entry for this gate exists (repeatable)",
+    )
     r.add_argument("--keys-file", help="offline: one cache key per line instead of the live listing")
     r.add_argument("--github-repo", help="owner/name (default: GITHUB_REPOSITORY)")
     r.add_argument("--github-output", action="store_true", help="write restore_key/lineage outputs")
