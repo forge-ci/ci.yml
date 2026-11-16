@@ -7,7 +7,9 @@ queue entry is provably the exact tree a PR head already attested:
    `gh-readonly-queue/<base>/pr-<N>-<base-sha>`, the payload's `base_sha`
    equals `<base-sha>`, that commit is on `<base>` itself (a later entry of
    a multi-PR group is based on the previous entry's queue commit, which is
-   not), and the queue head's only parent is that base;
+   not), and the queue head is one commit on that base: its parents are
+   exactly `[base]` (squash or rebase queues) or `[base, PR head]` (a
+   `mergeMethod: MERGE` queue, which merges the PR head onto the base);
 2. the queue head's tree equals PR `<N>`'s current head tree (GET-only);
 3. PR `<N>`'s head passes the unchanged GATE-008 decision (`decide`) under
    the queue base's `[gate.trust]` -- attestation, lanes, surfaces, fork,
@@ -118,7 +120,7 @@ def _read_group(event: MergeGroupEvent, ref: QueueRef, *, fetch: FetchStatusFn,
         queue_commit = _get(fetch, token, f"/repos/{slug}/git/commits/{event.head_sha}")
         parents = queue_commit.get("parents")
         parent_shas = [_text(p, "sha") for p in parents] if isinstance(parents, list) else []
-        if parent_shas != [event.base_sha]:
+        if parent_shas[:1] != [event.base_sha] or len(parent_shas) > 2:
             return _no("multi-pr-group", f"queue head {event.head_sha[:12]} is not one commit on the group base", ref.pr)
         compare = _get(fetch, token, f"/repos/{slug}/compare/{quote(ref.base, safe='')}...{event.base_sha}")
         if compare.get("status") not in ("identical", "behind"):
@@ -130,6 +132,12 @@ def _read_group(event: MergeGroupEvent, ref: QueueRef, *, fetch: FetchStatusFn,
         if pull.get("state") != "open" or _text(pull, "base", "ref") != ref.base or pr_head is None \
                 or not _SHA.match(pr_head):
             return _no("queue-pr-mismatch", f"PR #{ref.pr} is not an open PR into {ref.base}", ref.pr)
+        # A merge-method queue commit's second parent is the merged PR head. Any
+        # other second parent is a different commit folded into the group.
+        if len(parent_shas) == 2 and parent_shas[1] != pr_head:
+            return _no("multi-pr-group",
+                       f"queue head {event.head_sha[:12]} merges {str(parent_shas[1])[:12]}, not PR #{ref.pr} head",
+                       ref.pr)
         pr_commit = _get(fetch, token, f"/repos/{slug}/git/commits/{pr_head}")
     except _Unreadable as exc:
         return _no("queue-unreadable", f"GitHub API unreadable, failing closed: {exc}", ref.pr)
