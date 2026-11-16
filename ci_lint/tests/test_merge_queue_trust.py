@@ -97,6 +97,15 @@ class MergeGroupTest(TrustCase):
         # Queue head is not a single commit on the base.
         self.assertReason(self.run_case(fetch=Replay(self.fixtures(parents=[self.base, other]))), "multi-pr-group")
 
+    def test_merge_method_queue_head_merging_the_pr_head_is_trusted(self) -> None:
+        # #538: a `mergeMethod: MERGE` queue builds `[base, PR head]` merge commits.
+        result = self.run_case(fetch=Replay(self.fixtures(parents=[self.base, self.head])))
+        self.assertReason(result, "trusted")
+        # A merge commit whose second parent is not the PR head, or with the base
+        # second, or with a third parent, still fails closed.
+        for parents in ([self.base, "c" * 40], [self.head, self.base], [self.base, self.head, "d" * 40]):
+            self.assertReason(self.run_case(fetch=Replay(self.fixtures(parents=parents))), "multi-pr-group")
+
     def test_tree_mismatch_fails_closed(self) -> None:
         self.assertReason(self.run_case(fetch=Replay(self.fixtures(queue_tree="c" * 40))), "tree-mismatch")
 
