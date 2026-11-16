@@ -86,7 +86,7 @@ These are the named repositories recoverable from the retained audit and validat
 | [zcmds_win32](https://github.com/zackees/zcmds_win32) | Recent PR history query | Inventory sample only |
 | [ledmapper](https://github.com/zackees/ledmapper) | Recent PR history query | Inventory sample only |
 | [hermes](https://github.com/zackees/hermes) | PR history query returned no runs | Insufficient PR timing evidence |
-| [forge](https://github.com/zackees/forge) | PR history query returned no runs | Insufficient PR timing evidence |
+| [forge](https://github.com/forge-ci/forge) | PR history query returned no runs | Insufficient PR timing evidence |
 
 ### FastLED
 
