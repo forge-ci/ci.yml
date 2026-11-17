@@ -10,7 +10,15 @@ queue entry is provably the exact tree a PR head already attested:
    not), and the queue head is one commit on that base: its parents are
    exactly `[base]` (squash or rebase queues) or `[base, PR head]` (a
    `mergeMethod: MERGE` queue, which merges the PR head onto the base);
-2. the queue head's tree equals PR `<N>`'s current head tree (GET-only);
+2. the queue head's tree equals PR `<N>`'s current head tree (GET-only),
+   **or** (#537, prooft parity) every path whose blob differs between the
+   PR head and the queue head lies outside the input set of every declared
+   `[gate.lanes]` lane and touches no trust surface. The group base may
+   then also be an earlier queue entry rather than `<base>` itself: what
+   the attested lanes read is byte-identical at the queue commit either
+   way. Lane inputs are exclusion-based (GATE-007), so a forgotten path
+   costs a missed credit, never a false one, and the push to `<base>`
+   still runs every job on the merged commit;
 3. PR `<N>`'s head passes the unchanged GATE-008 decision (`decide`) under
    the queue base's `[gate.trust]` -- attestation, lanes, surfaces, fork,
    author, labels, and the same deterministic per-PR-head audit sample.
@@ -105,10 +113,31 @@ def _text(obj: JsonValue, *keys: str) -> str | None:
 
 
 @dataclass(frozen=True)
+class _Inexact:
+    """An exact-identity clause that failed, kept for the no-credit decision."""
+
+    reason: str
+    detail: str
+
+
+@dataclass(frozen=True)
+class InputCredit:
+    """#537: whether every lane's inputs are unchanged, and why."""
+
+    unchanged: bool
+    detail: str
+
+
+@dataclass(frozen=True)
 class _GroupFacts:
     pull: dict[str, JsonValue]
     pr_head: str
     pr_tree: str
+    # The first exact-identity clause that failed (reason, detail), or None
+    # when the entry is the attested tree on the base itself. #537 credits
+    # such an entry only when the lane inputs are unchanged.
+    inexact: _Inexact | None = None
+    queue_tree: str = ""
 
 
 def _read_group(event: MergeGroupEvent, ref: QueueRef, *, fetch: FetchStatusFn,
@@ -123,10 +152,11 @@ def _read_group(event: MergeGroupEvent, ref: QueueRef, *, fetch: FetchStatusFn,
         if parent_shas[:1] != [event.base_sha] or len(parent_shas) > 2:
             return _no("multi-pr-group", f"queue head {event.head_sha[:12]} is not one commit on the group base", ref.pr)
         compare = _get(fetch, token, f"/repos/{slug}/compare/{quote(ref.base, safe='')}...{event.base_sha}")
+        inexact: _Inexact | None = None
         if compare.get("status") not in ("identical", "behind"):
-            return _no("multi-pr-group",
-                       f"group base {event.base_sha[:12]} is not on {ref.base} (an earlier queue entry precedes PR #{ref.pr})",
-                       ref.pr)
+            inexact = _Inexact("multi-pr-group",
+                               f"group base {event.base_sha[:12]} is not on {ref.base} "
+                               f"(an earlier queue entry precedes PR #{ref.pr})")
         pull = _get(fetch, token, f"/repos/{slug}/pulls/{ref.pr}")
         pr_head = _text(pull, "head", "sha")
         if pull.get("state") != "open" or _text(pull, "base", "ref") != ref.base or pr_head is None \
@@ -144,11 +174,41 @@ def _read_group(event: MergeGroupEvent, ref: QueueRef, *, fetch: FetchStatusFn,
     queue_tree, pr_tree = _text(queue_commit, "tree", "sha"), _text(pr_commit, "tree", "sha")
     if queue_tree is None or pr_tree is None:
         return _no("queue-unreadable", "a commit's tree is missing from the API response", ref.pr)
-    if queue_tree != pr_tree:
-        return _no("tree-mismatch",
-                   f"queue tree {queue_tree[:12]} != PR #{ref.pr} head tree {pr_tree[:12]}; the base moved, run everything",
-                   ref.pr)
-    return _GroupFacts(pull, pr_head, pr_tree)
+    if queue_tree != pr_tree and inexact is None:
+        inexact = _Inexact("tree-mismatch",
+                           f"queue tree {queue_tree[:12]} != PR #{ref.pr} head tree {pr_tree[:12]}; the base moved")
+    return _GroupFacts(pull, pr_head, pr_tree, inexact, queue_tree)
+
+
+def lane_inputs_unchanged(repo: Path, policy_rev: str, pr_head: str, queue_head: str, *,
+                          pr_tree: str, queue_tree: str) -> InputCredit:
+    """#537: True when no path that differs between the attested PR head and
+    the queue head is an input of any lane declared at `policy_rev`, or a
+    trust surface. Any doubt (no lanes, an unreadable diff) is False."""
+
+    from ci_lint.gate_trust import glob_matches, trust_surfaces  # noqa: PLC0415
+    from ci_lint.lane_cache import TreeEntry, lane_inputs  # noqa: PLC0415
+    from ci_lint.local_gate import GitError, _git, load_gate_config_at  # noqa: PLC0415
+
+    try:
+        changed = [p for p in _git(repo, "diff", "--name-only", "--no-renames", pr_head, queue_head).splitlines() if p]
+    except GitError as exc:
+        return InputCredit(False, f"cannot diff the PR head against the queue head: {exc}")
+    if not changed and pr_tree != queue_tree:
+        return InputCredit(False, "the API reports different trees but git finds no differing path")
+    base = load_gate_config_at(repo, policy_rev).config
+    if base is None or base.trust is None or not base.lanes:
+        return InputCredit(False, "the base declares no [gate.lanes], so every path is an input")
+    entries = [TreeEntry(path, "") for path in changed]
+    for lane in base.lanes:
+        read = lane_inputs(entries, lane, base.run, base.source)
+        if read:
+            return InputCredit(False, f"lane {lane.id} reads {read[0].path}, which differs from the attested head")
+    for path in changed:
+        for pattern in trust_surfaces(repo, policy_rev, base):
+            if path == pattern or glob_matches(pattern, path):
+                return InputCredit(False, f"{path} (surface {pattern}) differs from the attested head")
+    return InputCredit(True, f"{len(changed)} path(s) differ from the attested head, none a lane input or surface")
 
 
 def decide_merge_group(repo: Path, event_name: str, event: MergeGroupEvent | None, *,
@@ -168,6 +228,14 @@ def decide_merge_group(repo: Path, event_name: str, event: MergeGroupEvent | Non
     if isinstance(facts, MergeGroupDecision):
         return facts
     pull, pr_head, pr_tree = facts.pull, facts.pr_head, facts.pr_tree
+    credit = ""
+    if facts.inexact is not None:
+        inexact = facts.inexact
+        result = lane_inputs_unchanged(repo, event.base_sha, pr_head, event.head_sha,
+                                       pr_tree=pr_tree, queue_tree=facts.queue_tree)
+        if not result.unchanged:
+            return _no(inexact.reason, f"{inexact.detail}; {result.detail}, run everything", ref.pr)
+        credit = f" (lane inputs unchanged after {inexact.reason}: {result.detail})"
     raw_labels = pull.get("labels")
     labels = tuple(label["name"] for label in (raw_labels if isinstance(raw_labels, list) else [])
                    if isinstance(label, dict) and isinstance(label.get("name"), str))
@@ -181,6 +249,7 @@ def decide_merge_group(repo: Path, event_name: str, event: MergeGroupEvent | Non
         labels=labels,
     )
     inner = decide(repo, pr_input)
-    detail = f"PR #{ref.pr} head {pr_head[:12]} tree {pr_tree[:12]} == queue tree: {inner.detail}"
+    relation = "== queue tree" if not credit else "inputs == queue inputs"
+    detail = f"PR #{ref.pr} head {pr_head[:12]} tree {pr_tree[:12]} {relation}{credit}: {inner.detail}"
     return MergeGroupDecision(TrustDecision(inner.trusted, inner.would_trust, inner.reason, detail), pr_input, ref.pr,
                               pr_tree)

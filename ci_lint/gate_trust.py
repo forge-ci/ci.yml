@@ -27,11 +27,15 @@ from __future__ import annotations
 import hashlib
 import re
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 from pathlib import Path
 
 from ci_lint.finding import Finding, Status
 from ci_lint.gate_python_surfaces import python_surfaces
 from ci_lint.toml_cursor import Cursor, TomlValue
+
+if TYPE_CHECKING:
+    from ci_lint.local_gate import GateConfig
 
 TRUST_MODES: tuple[str, ...] = ("never", "shadow", "enforce")
 # `author_association` values of people who can push to the repository.
@@ -190,6 +194,16 @@ def automatic_surfaces(repo: Path, rev: str, config_source: str, gate_run: tuple
     return tuple(sorted(out))
 
 
+def trust_surfaces(repo: Path, rev: str, base: GateConfig) -> tuple[str, ...]:
+    """The declared plus automatic surfaces of the gate declared at `rev`."""
+
+    assert base.trust is not None
+    workflows = tuple(sorted({job.split(":", 1)[0] for job in base.trust.skip}
+                             | ({base.verify.workflow} if base.verify else set())))
+    return (*base.trust.surfaces, *automatic_surfaces(
+        repo, rev, base.source, base.run, tuple(lane.run for lane in base.lanes), workflows))
+
+
 def decide(repo: Path, inp: TrustInput) -> TrustDecision:  # noqa: C901
     from ci_lint.local_gate import (  # noqa: PLC0415 -- local_gate imports this module
         GitError,
@@ -237,10 +251,7 @@ def decide(repo: Path, inp: TrustInput) -> TrustDecision:  # noqa: C901
                    if lane.id not in provenance and not (lane.optional and lane.id in not_applicable)]
         if missing:
             return _no("lanes-missing", f"the trailer lacks base-declared lane(s) {', '.join(missing)}")
-    workflows = tuple(sorted({job.split(":", 1)[0] for job in trust.skip}
-                             | ({base.verify.workflow} if base.verify else set())))
-    surfaces = (*trust.surfaces, *automatic_surfaces(
-        repo, inp.base_sha, base.source, base.run, tuple(lane.run for lane in base.lanes), workflows))
+    surfaces = trust_surfaces(repo, inp.base_sha, base)
     try:
         changed = [p for p in _git(repo, "diff", "--name-only", merge_base, inp.head_sha).splitlines() if p]
     except GitError as exc:
