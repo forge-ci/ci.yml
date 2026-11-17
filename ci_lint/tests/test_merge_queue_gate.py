@@ -74,7 +74,9 @@ class MergeQueueGateTest(TrustCase):
         other = "b" * 40
         cases = {
             "multi-pr-group (ref base)": {"payload": self.payload(other)},
-            "multi-pr-group (base not on main)": {"fetch": Replay(self.fixtures(compare="ahead"))},
+            # A base not on main with the attested tree itself is credited since
+            # #537 (test_merge_queue_trust covers it); one that also moves a lane
+            # input stays refused there.
             "multi-pr-group (two parents)": {"fetch": Replay(self.fixtures(parents=[self.base, other]))},
             "tree-mismatch": {"fetch": Replay(self.fixtures(queue_tree="c" * 40))},
         }

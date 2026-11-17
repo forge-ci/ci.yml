@@ -46,12 +46,38 @@ class MergeGroupTest(TrustCase):
         fields.update(over)
         return MergeGroupEvent(**fields)
 
+    def exclude_docs(self) -> None:
+        """Rebase the fixture onto a base whose lanes exclude docs/** and .github/**."""
+        gate = (self.repo / "local-gate.toml").read_text(encoding="utf-8")
+        gate = gate.replace('tools = ["git"]\n', 'tools = ["git"]\nexclude = ["docs/**", ".github/**"]\n')
+        _git(self.repo, "checkout", "-q", self.base)
+        self.base = self.commit("lanes exclude docs", {"local-gate.toml": gate}, lanes=None)
+        self.head = self.commit("feature", {"src.txt": "two\n"})
+        self.tree = _git(self.repo, "rev-parse", f"{self.head}^{{tree}}")
+
+    def moved_queue(self, files: dict[str, str]) -> tuple[str, str]:
+        """(queue head, its tree): main moved by `files` since the PR's base,
+        then a merge-method queue commit merged the PR head onto it."""
+        _git(self.repo, "checkout", "-q", self.base)
+        moved_base = self.commit("main moved", files, lanes=None)
+        _git(self.repo, "checkout", "-q", moved_base)
+        (self.repo / "src.txt").write_text(_git(self.repo, "show", f"{self.head}:src.txt") + "\n", encoding="utf-8")
+        _git(self.repo, "add", "-A")
+        tree = _git(self.repo, "write-tree")
+        queue = _git(self.repo, "commit-tree", tree, "-p", moved_base, "-p", self.head, "-m", "Merge pull request #7")
+        _git(self.repo, "checkout", "-q", "-f", self.head)
+        self.base = moved_base
+        return queue, tree
+
     def fixtures(self, *, queue_tree: str | None = None, pr_state: str = "open",
-                 compare: str = "identical", parents: list[str] | None = None) -> dict[str, tuple[int, JsonValue]]:
+                 compare: str = "identical", parents: list[str] | None = None,
+                 queue: tuple[str, str] | None = None) -> dict[str, tuple[int, JsonValue]]:
+        head_sha, tree = queue if queue else (self.queue, queue_tree or self.tree)
+        default_parents = [self.base, self.head] if queue else [self.base]
         return {
-            f"{API}/git/commits/{self.queue}": (200, {
-                "sha": self.queue, "tree": {"sha": queue_tree or self.tree},
-                "parents": [{"sha": p} for p in (parents or [self.base])]}),
+            f"{API}/git/commits/{head_sha}": (200, {
+                "sha": head_sha, "tree": {"sha": tree},
+                "parents": [{"sha": p} for p in (parents or default_parents)]}),
             f"{API}/compare/main...{self.base}": (200, {"status": compare}),
             f"{API}/pulls/7": (200, {"state": pr_state, "author_association": "OWNER", "labels": [],
                                      "head": {"sha": self.head, "repo": {"full_name": "o/r"}},
@@ -91,9 +117,12 @@ class MergeGroupTest(TrustCase):
         other = "b" * 40
         self.assertReason(self.run_case(event=self.event(head_ref=f"gh-readonly-queue/main/pr-7-{other}")),
                           "multi-pr-group")
-        # Group base is an earlier queue entry, not on main.
-        self.assertReason(self.run_case(fetch=Replay(self.fixtures(compare="ahead"))), "multi-pr-group")
-        self.assertReason(self.run_case(fetch=Replay(self.fixtures(compare="diverged"))), "multi-pr-group")
+        # Group base is an earlier queue entry, not on main, and the queue head
+        # differs from the attested head under a lane input: no credit (#537).
+        moved = self.moved_queue({"other.txt": "three\n"})
+        for compare in ("ahead", "diverged"):
+            fetch = Replay(self.fixtures(compare=compare, queue=moved))
+            self.assertReason(self.run_case(event=self.event(head_sha=moved[0]), fetch=fetch), "multi-pr-group")
         # Queue head is not a single commit on the base.
         self.assertReason(self.run_case(fetch=Replay(self.fixtures(parents=[self.base, other]))), "multi-pr-group")
 
@@ -107,7 +136,37 @@ class MergeGroupTest(TrustCase):
             self.assertReason(self.run_case(fetch=Replay(self.fixtures(parents=parents))), "multi-pr-group")
 
     def test_tree_mismatch_fails_closed(self) -> None:
+        # The API's trees differ but git finds no differing path: contradictory.
         self.assertReason(self.run_case(fetch=Replay(self.fixtures(queue_tree="c" * 40))), "tree-mismatch")
+        # The base moved under a path a lane reads.
+        moved = self.moved_queue({"other.txt": "x\n"})
+        result = self.run_case(event=self.event(head_sha=moved[0]), fetch=Replay(self.fixtures(queue=moved)))
+        self.assertReason(result, "tree-mismatch")
+        self.assertIn("lane lint reads other.txt", result.decision.detail)
+
+    def test_base_moved_only_outside_lane_inputs_is_credited(self) -> None:
+        # #537: main moved under docs/**, which every lane excludes.
+        self.exclude_docs()
+        moved = self.moved_queue({"docs/a.md": "notes\n"})
+        result = self.run_case(event=self.event(head_sha=moved[0]), fetch=Replay(self.fixtures(queue=moved)))
+        self.assertReason(result, "trusted")
+        self.assertIn("lane inputs unchanged after tree-mismatch", result.decision.detail)
+        # The same move queued behind an earlier entry is credited too.
+        result = self.run_case(event=self.event(head_sha=moved[0]),
+                               fetch=Replay(self.fixtures(queue=moved, compare="ahead")))
+        self.assertReason(result, "trusted")
+        self.assertIn("after multi-pr-group", result.decision.detail)
+
+    def test_base_moved_under_a_surface_or_mandatory_input_is_not_credited(self) -> None:
+        self.exclude_docs()
+        # A workflow is a trust surface even when every lane excludes .github/.
+        moved = self.moved_queue({"docs/a.md": "n\n", ".github/workflows/ci.yml": "changed: true\n"})
+        result = self.run_case(event=self.event(head_sha=moved[0]), fetch=Replay(self.fixtures(queue=moved)))
+        self.assertReason(result, "tree-mismatch")
+        # The gate script a lane runs is a mandatory input despite its exclusion.
+        moved = self.moved_queue({"gate.py": "print('changed')\n"})
+        result = self.run_case(event=self.event(head_sha=moved[0]), fetch=Replay(self.fixtures(queue=moved)))
+        self.assertReason(result, "tree-mismatch")
 
     def test_unreadable_api_fails_closed(self) -> None:
         self.assertReason(self.run_case(fetch=Replay({}, broken=True)), "queue-unreadable")
