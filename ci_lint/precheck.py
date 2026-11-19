@@ -45,6 +45,7 @@ from ci_lint.rules.ghapi_reread import check_ghapi_001
 from ci_lint.rules.acceptance_evidence import check_rel_008
 from ci_lint.rules.macos_signing import check_rel_006
 from ci_lint.rules.release_recompute import check_rel_007
+from ci_lint.rules.release_channels import check_rel_009
 from ci_lint.rules.host_sweeps import check_gen_030
 from ci_lint.rules.status_badges import check_gen_026
 from ci_lint.rules.release_gate import check_group11
@@ -276,6 +277,7 @@ def run_precheck(repo_root: Path, *, title: str = "", local: bool = False, live:
         all_findings.extend(check_rel_006(repo_root))
         all_findings.extend(check_rel_007(repo_root))
         all_findings.extend(check_rel_008(repo_root))
+        all_findings.extend(check_rel_009(repo_root))
         all_findings.extend(check_gen_023(repo_root))
         all_findings.extend(check_gen_030(repo_root))
         all_findings.extend(check_gen_026(repo_root))

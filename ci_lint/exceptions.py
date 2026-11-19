@@ -19,8 +19,10 @@ from ci_lint.schema import CiToml, ExceptionEntry
 
 
 # CACHE-025 (Swatinem/rust-cache ban): maintainer decision 2026-10-02, no
-# exceptions of any kind.
-UNWAIVABLE_RULES: frozenset[str] = frozenset({"CACHE-025"})
+# exceptions of any kind. REL-009 (external package channels in a release):
+# owner directive 2026-11-19; an org-operated package manager can only be
+# admitted by amending the policy, never by a repository's `[[exceptions]]`.
+UNWAIVABLE_RULES: frozenset[str] = frozenset({"CACHE-025", "REL-009"})
 
 
 @dataclass(frozen=True)
