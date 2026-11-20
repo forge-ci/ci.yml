@@ -82,6 +82,15 @@ refuse publication before transport; a change detected after transport returns
 failure and names the qualified commit already published. See the
 [protocol's publication boundaries](designs/ci-tool-protocol.md#ownership-and-invocation).
 
+### `./push`: the repository's one publishing command (GATE-014)
+
+An attesting repository wraps the steps above in an executable root `./push`
+([policy](policy-general.md#the-push-entry-point-gate-014)): refuse a dirty or
+default-branch checkout, run the attesting gate on the committed HEAD with no
+bypass, verify the stamped head, push it with `--force-with-lease`, and open
+the PR. Its lanes cover at least the gates of the PR's format/lint, Clippy,
+Dylint and Linux host unit-test jobs, so those jobs skip on the PR.
+
 ## In CI
 
 1. **Verify job:** `ci-lint local-gate verify --trust --github-output`, with full history. Don't leave ci_lint inside the tree while repository checks run: a `.ci-lint/` directory trips repository-local static checks (zackees/clud's banned-imports check flagged ci_lint's subprocess use). `actions/checkout` refuses a `path` outside `GITHUB_WORKSPACE`, so either (a) check it out at `.ci-lint`, run the verify step, then remove it in an `if: always()` step (`rm -rf .ci-lint`; clud's `Drop ci_lint checkout`), or (b) skip `actions/checkout` and fetch the pinned SHA with `git` into `$RUNNER_TEMP/ci-lint`, invoking `PYTHONPATH=$RUNNER_TEMP/ci-lint`.
