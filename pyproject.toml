@@ -25,6 +25,11 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 include = ["ci_lint*"]
 
+# RUN-004's forge-quick action allowlist (a copy of forge-ci/soldrix
+# image/quick/allowlist.toml) ships with the package.
+[tool.setuptools.package-data]
+ci_lint = ["data/*.toml"]
+
 # PY-004 (zackees/ci.yml#229): the function-complexity ratchet, applied to
 # ci_lint itself. Only the ratchet's two rules are selected -- C901 at ruff's
 # default ceiling (max-complexity 10) and RUF100, which flags a `# noqa: C901`

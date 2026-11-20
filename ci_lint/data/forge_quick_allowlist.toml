@@ -1,0 +1,48 @@
+# forge-quick action allowlist (schema 1).
+#
+# The only actions a job on the `forge-quick` runner class may use. Two
+# consumers read this one file:
+#   - image/quick/seed-actions.py pre-seeds the runner's action archive cache
+#     (ACTIONS_RUNNER_ACTION_ARCHIVE_CACHE) with every entry, so a quick job
+#     downloads no action at start;
+#   - forge-ci/ci.yml's ci_lint rule RUN-004 fails a forge-quick job whose
+#     `uses:` is not listed here at exactly this sha. ci.yml keeps a
+#     byte-identical copy at ci_lint/data/forge_quick_allowlist.toml;
+#     sim/quick/check-allowlist-sync.sh fails when the two differ.
+#
+# Format: TOML (stdlib `tomllib` on Python >= 3.11, so both sides parse it
+# with no dependency). One [[action]] per pinned action:
+#   repo     owner/name on github.com
+#   path     subdirectory of the action inside the repo ("" = repo root)
+#   sha      full 40-hex commit sha; the only accepted ref
+#   version  human tag the sha was taken from (documentation only)
+#
+# Changing an entry means: edit here, rebuild the image, copy the file to
+# ci.yml, and bump the pin in any workflow that uses it.
+schema = 1
+
+[[action]]
+repo = "actions/checkout"
+path = ""
+sha = "3d3c42e5aac5ba805825da76410c181273ba90b1"
+version = "v7.0.1"
+
+[[action]]
+repo = "actions/create-github-app-token"
+path = ""
+sha = "f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc"
+version = "v3.4.0"
+
+[[action]]
+repo = "forge-ci/ci.yml"
+path = "actions/pool-select"
+sha = "c7ceb02207934e49ee50d01a5f7dd12b72ac8623"
+version = "PR #544 merge"
+
+# pool-select's composite step pins this exact sha (actions/pool-select/action.yml),
+# so the seed must hold it too; jobs may also use it directly.
+[[action]]
+repo = "astral-sh/setup-uv"
+path = ""
+sha = "1db35dd8eee11c5894872e0b383ae6c406cf738d"
+version = "v10.4.0"

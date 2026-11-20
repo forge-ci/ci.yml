@@ -58,6 +58,7 @@ from ci_lint.rules.rust_nocapture import check_rust_017
 from ci_lint.rules.test_parallelism import check_test_003
 from ci_lint.rules.rust_system_packages import check_rust_028
 from ci_lint.rules.lint_job_tests import check_gen_019
+from ci_lint.rules.forge_quick import check_run_004
 from ci_lint.rules.full_label import check_gen_031
 from ci_lint.rules.rust_double_check import check_rust_023
 from ci_lint.rules.rust_test_selectors import check_rust_015
@@ -141,7 +142,7 @@ YAML_DEPENDENT_RULES: tuple[str, ...] = (
     "GEN-012", "GEN-013", "GEN-014", "GEN-015", "GEN-016", "GEN-017", "GEN-018",
     "GEN-019", "GEN-021", "GEN-022", "GEN-023", "GEN-024", "GEN-025", "GEN-026",
     "GEN-031", "TAG-003", "SEC-001", "SEC-002", "SEC-003", "SEC-004", "RUN-001",
-    "RUN-002", "RUN-003", "WF-001", "WF-002", "WF-003", "WF-004", "CT-004",
+    "RUN-002", "RUN-003", "RUN-004", "WF-001", "WF-002", "WF-003", "WF-004", "CT-004",
     "TOOL-001", "TOOL-002", "TOOL-003", "RUST-001", "RUST-002", "RUST-008",
     "RUST-010", "RUST-015", "RUST-016", "RUST-017", "RUST-023", "RUST-024",
     "RUST-025", "RUST-027", "CACHE-001", "CACHE-002", "CACHE-007", "CACHE-009",
@@ -259,6 +260,7 @@ def run_precheck(repo_root: Path, *, title: str = "", local: bool = False, live:
         all_findings.extend(check_test_003(repo_root))
         all_findings.extend(check_gen_019(repo_root))
         all_findings.extend(check_gen_031(repo_root))
+        all_findings.extend(check_run_004(repo_root))
         all_findings.extend(check_rust_023(repo_root))
         all_findings.extend(check_cpp_001(repo_root))
         all_findings.extend(check_needs_graph(repo_root))
