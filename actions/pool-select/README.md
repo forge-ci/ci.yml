@@ -5,9 +5,12 @@ pool has idle capacity, and to GitHub-hosted runners otherwise. Any repository
 in an organization the pool serves (obs-rust, FastLED, forge-ci, talos-hq) can
 use it. It generalizes obs-rust/obs-studio's `ci/select_mq_runner.py`.
 
-A selector job runs the action on a hosted runner and publishes `runs-on`, a
-JSON value. The real job reads it with
-`runs-on: ${{ fromJSON(needs.pool.outputs.runs-on) }}`.
+A selector job runs the action and publishes `runs-on`, a JSON value. The
+real job reads it with `runs-on: ${{ fromJSON(needs.pool.outputs.runs-on) }}`.
+The selector itself runs on `forge-quick`, the self-hosted class for short
+administrative jobs, so the routing decision does not wait in the
+organization's hosted-runner queue; unset `FORGE_QUICK_LABELS` and it runs
+hosted again.
 
 ## Decision
 
@@ -72,7 +75,8 @@ fork PRs run hosted anyway.
 jobs:
   pool:
     name: Select runner
-    runs-on: ubuntu-latest
+    # forge-quick through the kill switch (RUN-004); e.g. FORGE_QUICK_LABELS = ["self-hosted","forge-quick"]
+    runs-on: ${{ vars.FORGE_QUICK_LABELS != '' && fromJSON(vars.FORGE_QUICK_LABELS) || 'ubuntu-latest' }}
     timeout-minutes: 2
     permissions: {}
     outputs:
@@ -90,7 +94,7 @@ jobs:
       - name: Select pool or hosted
         id: select
         continue-on-error: true
-        uses: forge-ci/ci.yml/actions/pool-select@<40-hex sha>
+        uses: forge-ci/ci.yml/actions/pool-select@c7ceb02207934e49ee50d01a5f7dd12b72ac8623
         with:
           labels: ${{ vars.FORGE_POOL_LABELS }}   # e.g. ["self-hosted","forge-pool"]
           token: ${{ steps.token.outputs.token }}
@@ -105,7 +109,21 @@ jobs:
 
 `continue-on-error` and the `|| '"ubuntu-latest"'` default keep the job on
 hosted runners even if the action itself cannot run. Keep the two fallbacks
-the same. Pin the action by commit SHA. Apart from that, it uses only
+the same. Pin the action by commit SHA.
+
+### Running the selector on forge-quick
+
+`ci_lint` rule `RUN-004` holds any job that can land on `forge-quick` to the
+class's limits: `timeout-minutes` of 2 or less; every `uses:` in the shared
+allowlist at its pinned sha (`ci_lint/data/forge_quick_allowlist.toml`, the
+same list the forge-quick image pre-seeds into its action cache, so the job
+downloads no action); no `container:` or `services:`; and `runs-on` through
+the `vars.FORGE_QUICK_LABELS` kill switch with a hosted fallback, as above.
+The example above passes it as written. The allowlist pins pool-select at
+`c7ceb022`; a newer pool-select sha must be added to the allowlist (and the
+image rebuilt) before a forge-quick job can use it. The forge-quick image
+also limits each job at run time (wall clock and memory; forge-ci/soldrix
+`image/quick/`). Apart from that, it uses only
 `astral-sh/setup-uv` (pinned) and a standard-library Python script run with
 `uv run`.
 
