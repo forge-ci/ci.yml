@@ -1,0 +1,84 @@
+name: Self-hosted pool selection
+description: >-
+  Route a job to the shared self-hosted runner pool when matching online
+  runners are idle, and to GitHub-hosted runners otherwise. Fork pull requests
+  and untrusted events always run hosted. Every failure (missing token, API
+  error, timeout, malformed data) selects the fallback with a warning, so a
+  pool outage never blocks CI.
+inputs:
+  labels:
+    description: >-
+      JSON array of pool runner labels, e.g. '["self-hosted","forge-pool"]'.
+      Empty (or '[]') means hosted.
+    required: false
+    default: ""
+  fallback:
+    description: Hosted runs-on value, a label string or a JSON array of labels.
+    required: false
+    default: ubuntu-latest
+  token:
+    description: >-
+      Token that can list the owner's organization runners (GitHub App with
+      organization "Self-hosted runners: read"). Empty selects the fallback
+      with a warning.
+    required: false
+    default: ""
+  min-idle:
+    description: Idle matching online runners required to pick the pool.
+    required: false
+    default: "1"
+  mode:
+    description: >-
+      Empty or 'idle': require min-idle idle runners. 'prefer': pick the pool
+      when any matching runner is online, even if all are busy (the job then
+      queues for it).
+    required: false
+    default: ""
+  trusted-only:
+    description: >-
+      'true' (default): use the pool only for push, merge_group,
+      workflow_dispatch, schedule and same-repository pull_request events.
+    required: false
+    default: "true"
+outputs:
+  runs-on:
+    description: JSON runs-on value; use it as fromJSON(needs.<job>.outputs.runs-on).
+    value: ${{ steps.select.outputs.runs-on || steps.fallback.outputs.runs-on }}
+  pool:
+    description: "'true' when the pool was selected, else 'false'."
+    value: ${{ steps.select.outputs.pool || 'false' }}
+runs:
+  using: composite
+  steps:
+    - name: Set up uv
+      id: uv
+      continue-on-error: true
+      uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+      with:
+        enable-cache: "false"
+    - name: Select runner
+      id: select
+      if: steps.uv.outcome == 'success'
+      continue-on-error: true
+      shell: bash
+      env:
+        POOL_LABELS: ${{ inputs.labels }}
+        POOL_FALLBACK: ${{ inputs.fallback }}
+        POOL_TOKEN: ${{ inputs.token }}
+        POOL_MIN_IDLE: ${{ inputs.min-idle }}
+        POOL_MODE: ${{ inputs.mode }}
+        POOL_TRUSTED_ONLY: ${{ inputs.trusted-only }}
+      run: uv run --no-project --script "${GITHUB_ACTION_PATH}/select_pool.py"
+    - name: Fall back to hosted runners
+      id: fallback
+      if: steps.select.outcome != 'success'
+      shell: bash
+      env:
+        POOL_FALLBACK: ${{ inputs.fallback }}
+      run: |
+        echo "::warning::pool-select: the selector could not run; using hosted runners."
+        value="$(jq -ce 'select(type == "array")' <<<"${POOL_FALLBACK}" 2>/dev/null \
+          || jq -cn --arg v "${POOL_FALLBACK:-ubuntu-latest}" '$v' 2>/dev/null \
+          || echo '"ubuntu-latest"')"
+        echo "runs-on=${value}" >> "${GITHUB_OUTPUT}"
+        printf '### Runner pool selection\n\nSelected **hosted** (`%s`): the selector could not run.\n' "${value}" >> "${GITHUB_STEP_SUMMARY}"
