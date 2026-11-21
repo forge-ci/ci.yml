@@ -80,8 +80,9 @@ class Allowlist:
         return any(name.lower() == a.uses.partition("@")[0].lower() and ref == a.sha for a in self.actions)
 
     def pinned_for(self, uses: str) -> str | None:
+        """The pin to suggest: the last entry for this action (newer pins are appended)."""
         name = uses.strip().partition("@")[0].lower()
-        for action in self.actions:
+        for action in reversed(self.actions):
             if action.uses.partition("@")[0].lower() == name:
                 return action.uses
         return None
