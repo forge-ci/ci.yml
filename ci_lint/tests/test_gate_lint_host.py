@@ -15,8 +15,11 @@ import unittest
 from pathlib import Path
 
 from ci_lint.cli import main
+from ci_lint.finding import Status
 from ci_lint.gate_lint_host import check_gate_016, lint_like, runs_lint_command
+from ci_lint.gate_lint_replay import lint_command_in
 from ci_lint.lane_cache import LaneConfig
+from ci_lint.tests.helpers import requires_yaml_tooling
 
 BOSN_RUN = ("bosn", "ci", "run", "--workspace", ".", "--trigger", "pr", "--wait", "--json")
 
@@ -160,6 +163,119 @@ class Gate016CliTest(unittest.TestCase):
             '[gate.lanes.lint]\nrun = ["soldr", "lint", "--check"]\ntools = ["soldr"]\n'
         )
         self.assertNotIn("[GATE-016]", out)
+
+
+# The ghd / template-python-rust-cmd shape (2026-11-21): the `fast` job's
+# steps run fmt/clippy/ruff/pylint, one of them behind an ACT-keyed `if:`;
+# `precheck` calls a local reusable workflow whose job runs ruff.
+CI_YML = """\
+name: ci
+on: [pull_request]
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: python3 -P -m ci_lint local-gate verify --repo . --trust
+  precheck:
+    needs: verify
+    uses: ./.github/workflows/ci-pre.yml
+  fast:
+    needs: precheck
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Format
+        if: ${{ env.ACT != 'true' }}
+        run: ./ci.py fmt
+      - name: Clippy
+        run: ./ci.py clippy
+      - name: Ruff
+        run: uv run --no-project --with ruff==0.15.18 ruff check src
+      - name: Tests
+        run: python3 ci/fast.py rust-test
+  unit:
+    needs: precheck
+    runs-on: ubuntu-24.04
+    steps:
+      - run: pip install ruff pylint
+      - run: python3 ci/fast.py python-test
+"""
+CI_PRE_YML = """\
+name: ci-pre
+on: {workflow_call: {}}
+jobs:
+  precheck:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: python3 -m ci_lint precheck --repo .
+      - run: uvx ruff format --check .
+"""
+
+
+class LintCommandTest(unittest.TestCase):
+    def test_step_lint_commands(self) -> None:
+        for run in ("./ci.py fmt", "python ci.py clippy --all", "uv run ruff check .", "uvx ruff format --check",
+                    "python3 -m pylint src", "pyright", "npx eslint .", "clang-tidy -p build a.cc",
+                    "set -e\nsoldr lint --check", "cargo \\\n  clippy --all-targets"):
+            self.assertIsNotNone(lint_command_in(run), run)
+        for run in ("pip install ruff pylint", "uv run --with ruff==1 pytest", "./ci.py test", "python3 -m ci_lint precheck",
+                    "python3 ci/fast.py rust-test", "# ruff check", "npm install eslint"):
+            self.assertIsNone(lint_command_in(run), run)
+
+
+@requires_yaml_tooling
+class Gate016ReplayTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = Path(tempfile.mkdtemp())
+        (self.tmp / ".github/workflows").mkdir(parents=True)
+        (self.tmp / ".github/workflows/ci.yml").write_text(CI_YML, encoding="utf-8")
+        (self.tmp / ".github/workflows/ci-pre.yml").write_text(CI_PRE_YML, encoding="utf-8")
+
+    def tearDown(self) -> None:
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_lane_job_replay_of_a_linting_job(self) -> None:
+        """`--job fast` is not lint-named, but the job runs `./ci.py fmt`
+        behind an ACT `if:` -- the guard does not exempt it."""
+
+        lanes = (_lane("fast", (*BOSN_RUN, "--workflow", ".github/workflows/ci.yml", "--job", "fast"), ("bosn",)),
+                 _lane("unit", (*BOSN_RUN, "--job", "unit"), ("bosn",)))
+        found = check_gate_016(self.tmp, (), lanes)
+        self.assertEqual([(f.path, f.line) for f in found], [(".github/workflows/ci.yml", 18)])
+        self.assertIn("job 'fast' runs lint (`./ci.py fmt`)", found[0].message)
+        self.assertIn("lane 'fast'", found[0].message)
+
+    def test_replay_jobs_declared_in_gate_replay(self) -> None:
+        """ghd/template today: the lane runs a wrapper script, the job is
+        named only by `[[gate.replay.jobs]] source-job`."""
+
+        lanes = (_lane("fast", ("uv", "run", "python", "ci/local_gate.py", "--lane", "fast"), ("bosn", "docker")),)
+        found = check_gate_016(self.tmp, ("uv", "run", "python", "ci/local_gate.py"), lanes,
+                               ("ci.yml:verify", "ci.yml:fast", ".github/workflows/ci.yml:fast"))
+        self.assertEqual(len(found), 1)
+        self.assertIn("[gate.replay] ci.yml:fast", found[0].message)
+
+    def test_whole_workflow_replay_follows_reusable_workflows(self) -> None:
+        """No `--job` (the gate's `run`, the `[gate.full-run]` command):
+        every job is replayed, and `precheck`'s callee runs ruff."""
+
+        found = check_gate_016(self.tmp, (*BOSN_RUN,))
+        self.assertEqual(sorted((f.path, f.line) for f in found),
+                         [(".github/workflows/ci-pre.yml", 8), (".github/workflows/ci.yml", 18)])
+        self.assertTrue(all("by the gate" in f.message for f in found))
+
+    def test_default_workflow_and_unknown_job(self) -> None:
+        def run(*extra: str) -> list[str]:
+            return [f.message for f in check_gate_016(self.tmp, (), (_lane("x", (*BOSN_RUN, *extra)),))]
+
+        self.assertEqual(len(run("--job", "fast")), 1)
+        self.assertEqual(run("--job", "nope"), [])
+        self.assertEqual(run("--workflow", "gone.yml"), [])
+
+    def test_unparseable_workflow_needs_review(self) -> None:
+        (self.tmp / ".github/workflows/ci.yml").write_text("jobs: [unclosed\n", encoding="utf-8")
+        found = check_gate_016(self.tmp, (*BOSN_RUN,))
+        self.assertEqual([f.status for f in found], [Status.NEEDS_REVIEW])
 
 
 if __name__ == "__main__":

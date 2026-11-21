@@ -28,7 +28,7 @@ from ci_lint.rules.complexity import check_complexity
 from ci_lint.rules.default_branch_skip import check_gen_021
 from ci_lint.rules.merge_queue import check_gen_022
 from ci_lint.gate_bare_tools import check_no_bare_rust
-from ci_lint.gate_lint_host import check_gate_016
+from ci_lint.gate_lint_host import check_gate_016, gate_replay_jobs
 from ci_lint.local_gate import GATE_FILE, check_gate_static
 from ci_lint.remote_only import check_gate_012
 from ci_lint.act_static import check_act_002, check_act_003
@@ -287,7 +287,8 @@ def run_precheck(repo_root: Path, *, title: str = "", local: bool = False, live:
         all_findings.extend(check_act_002(repo_root, gate_runs))
         all_findings.extend(check_act_003(repo_root))
         all_findings.extend(check_gate_016(repo_root, () if gate_cfg is None else gate_cfg.run,
-                                           () if gate_cfg is None else gate_cfg.lanes))
+                                           () if gate_cfg is None else gate_cfg.lanes,
+                                           gate_replay_jobs(None if gate_cfg is None else gate_cfg.replay)))
         if ci.local.gate is not None:
             all_findings.extend(check_gate_static(ci.local.gate, repo_root))
             all_findings.extend(check_no_bare_rust(repo_root, ci.local.gate.run, workflows=False))
