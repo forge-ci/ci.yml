@@ -14,7 +14,7 @@ from ci_lint.rules.forge_quick import ALLOWLIST_PATH, check_run_004, load_allowl
 from ci_lint.tests.helpers import requires_yaml_tooling
 
 KILL = "${{ vars.FORGE_QUICK_LABELS != '' && fromJSON(vars.FORGE_QUICK_LABELS) || 'ubuntu-latest' }}"
-POOL_SELECT = "forge-ci/ci.yml/actions/pool-select@c7ceb02207934e49ee50d01a5f7dd12b72ac8623"
+POOL_SELECT = "forge-ci/ci.yml/actions/pool-select@a36bc81ad6ada5fb17398e3e7ba38435cc67a951"
 APP_TOKEN = "actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc"
 README = Path(__file__).resolve().parents[2] / "actions" / "pool-select" / "README.md"
 
@@ -158,6 +158,16 @@ class Run004AllowlistTest(unittest.TestCase):
             parse_allowlist('schema = 2\n[[action]]\nrepo = "a/b"\nsha = "' + "0" * 40 + '"\n')
         with self.assertRaises(ValueError):
             parse_allowlist("schema = 1\n")
+
+    def test_several_pins_allowed_and_the_last_is_suggested(self) -> None:
+        old, new = "1" * 40, "2" * 40
+        allowlist = parse_allowlist(
+            "schema = 1\n"
+            f'[[action]]\nrepo = "a/b"\npath = "x"\nsha = "{old}"\n'
+            f'[[action]]\nrepo = "a/b"\npath = "x"\nsha = "{new}"\n'
+        )
+        self.assertTrue(allowlist.allows(f"a/b/x@{old}") and allowlist.allows(f"a/b/x@{new}"))
+        self.assertEqual(allowlist.pinned_for(f"a/b/x@{'3' * 40}"), f"a/b/x@{new}")
 
     def test_run_004_is_yaml_dependent(self) -> None:
         self.assertIn("RUN-004", YAML_DEPENDENT_RULES)
