@@ -17,10 +17,23 @@ from ci_lint.precheck import LOCAL_SKIPPED_CHECKS, has_violations, render_text, 
 from ci_lint.tests.helpers import fixture, requires_yaml_tooling
 
 
+def _load_factor() -> float:
+    """Scale a wall-clock budget by host oversubscription (forge-ci/ci.yml#546).
+
+    On an idle host or hosted CI this is 1.0, so the budget is unchanged; on a shared box
+    running more runnable work than it has CPUs, a slow precheck reflects the box, not ci_lint.
+    """
+    try:
+        load = os.getloadavg()[0]
+    except (AttributeError, OSError):  # Windows has no load average
+        return 1.0
+    return max(1.0, load / (os.cpu_count() or 1))
+
+
 class EndToEndGreenFixtureTest(unittest.TestCase):
     def test_precheck_is_fast_on_a_small_repo(self) -> None:
         result = run_precheck(fixture("_e2e", "green"), title="[ci-windows] x")
-        self.assertLess(result.elapsed_seconds, 5.0)
+        self.assertLess(result.elapsed_seconds, 5.0 * _load_factor())
 
     @requires_yaml_tooling
     def test_e2e_green_fixture_has_no_violations(self) -> None:
