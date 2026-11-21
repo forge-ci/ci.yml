@@ -133,7 +133,7 @@ class EventTrust(unittest.TestCase):
 class TokenAndErrors(unittest.TestCase):
     def test_no_token_is_hosted_with_warning_and_no_api(self) -> None:
         api = FakeApi(page(runner(1)))
-        decision, out = run(settings(token=""), api)
+        decision, out = run(settings(token="", source="github"), api)
         self.assertFalse(decision.pool)
         self.assertEqual(api.urls, [])
         self.assertIn("::warning::", out)
@@ -285,6 +285,192 @@ class Publish(unittest.TestCase):
         cfg = sp.settings_from_env({"GITHUB_REPOSITORY": "forge-ci/soldr", "POOL_MODE": " Prefer "})
         self.assertEqual((cfg.owner, cfg.mode, cfg.trusted_only), ("forge-ci", "prefer", "true"))
         self.assertEqual(cfg.api_url, "https://api.github.com")
+
+
+STATUS_URL = "https://signal.forge-ci.com/v1/pool"
+DELL = ["Linux", "X64", "dell-jw22zc3", "forge-pool", "nixos-host", "self-hosted", "ubuntu-2404"]
+DELL2 = ["Linux", "X64", "dell-fsx3mn2", "forge-pool", "nixos-host", "self-hosted", "ubuntu-2404"]
+QUICK = ["Linux", "forge-quick", "self-hosted"]
+
+
+def status(*groups: dict, org: str = "FastLED", state: str = "ok", age: object = 1.5, **top: object) -> dict:
+    entry = {"state": state, "error": None, "fetched_at": "2026-11-21T08:29:57Z", "age_s": age,
+             "runners": list(groups), "dispatcher": None}
+    doc = {"schema": "forge-ci.pool-status", "version": 1, "generated_at": "2026-11-21T08:29:58Z",
+           "ttl_s": 10, "max_age_s": 30, "orgs": {org: entry}}
+    doc.update(top)
+    return doc
+
+
+def group(labels: list[str], online: int, busy: int) -> dict:
+    return {"labels": labels, "online": online, "busy": busy}
+
+
+def signal(**overrides: str) -> sp.Settings:
+    return settings(token="", **overrides)
+
+
+class SignalSource(unittest.TestCase):
+    """source 'signal': the tokenless pool status at signal.forge-ci.com."""
+
+    def test_no_token_defaults_to_signal_and_sends_no_token(self) -> None:
+        api = FakeApi(status(group(DELL, 2, 1)))
+        decision, out = run(signal(), api)
+        self.assertTrue(decision.pool)
+        self.assertEqual(decision.runs_on, POOL)
+        self.assertEqual(api.urls, [f"{STATUS_URL}?org=FastLED"])
+        self.assertEqual(api.tokens, [""])
+        self.assertIn("source=signal", decision.reason)
+        self.assertNotIn("::warning::", out)
+
+    def test_token_keeps_the_github_probe_by_default(self) -> None:
+        api = FakeApi(page(runner(1)))
+        decision, _ = run(settings(), api)
+        self.assertTrue(decision.pool)
+        self.assertTrue(api.urls[0].startswith("https://api.github.com/orgs/FastLED/actions/runners"))
+        self.assertIn("source=github", decision.reason)
+
+    def test_explicit_signal_ignores_the_token(self) -> None:
+        api = FakeApi(status(group(DELL, 1, 0)))
+        decision, _ = run(settings(source="signal"), api)
+        self.assertTrue(decision.pool)
+        self.assertEqual(api.tokens, [""])
+
+    def test_status_url_override_and_owner_quoting(self) -> None:
+        api = FakeApi(status(group(DELL, 1, 0), org="talos-hq"))
+        run(signal(owner="talos-hq", status_url="https://example.test/v1/pool?x=1"), api)
+        self.assertEqual(api.urls, ["https://example.test/v1/pool?x=1&org=talos-hq"])
+
+    def test_non_https_status_url_is_hosted_without_a_request(self) -> None:
+        api = FakeApi(status(group(DELL, 1, 0)))
+        decision, out = run(signal(status_url="http://signal.forge-ci.com/v1/pool"), api)
+        self.assertFalse(decision.pool)
+        self.assertEqual(api.urls, [])
+        self.assertIn("::warning::", out)
+
+    def test_sums_every_matching_label_set(self) -> None:
+        doc = status(group(DELL, 4, 4), group(DELL2, 4, 3), group(QUICK, 4, 0))
+        decision, _ = run(signal(), FakeApi(doc))
+        self.assertTrue(decision.pool)
+        self.assertIn("online=8, busy=7, idle=1", decision.reason)
+
+    def test_all_busy_is_hosted_and_prefer_accepts_busy(self) -> None:
+        doc = status(group(DELL, 2, 2), group(QUICK, 4, 0))
+        decision, out = run(signal(), FakeApi(doc))
+        self.assertFalse(decision.pool)
+        self.assertIn("not enough pool capacity", decision.reason)
+        self.assertNotIn("::warning::", out)
+        self.assertTrue(run(signal(mode="prefer"), FakeApi(doc))[0].pool)
+
+    def test_min_idle_and_case_insensitive_subset(self) -> None:
+        doc = status(group(DELL, 3, 1))
+        self.assertTrue(run(signal(min_idle="2"), FakeApi(doc))[0].pool)
+        self.assertFalse(run(signal(min_idle="3"), FakeApi(doc))[0].pool)
+        self.assertTrue(run(signal(labels='["SELF-HOSTED","Forge-Pool","UBUNTU-2404"]'), FakeApi(doc))[0].pool)
+
+    def test_unrecognized_label_is_hosted(self) -> None:
+        doc = status(group(DELL, 4, 0), group(QUICK, 4, 0))
+        decision, out = run(signal(labels='["self-hosted","forge-pool","no-such-lane"]'), FakeApi(doc))
+        self.assertFalse(decision.pool)
+        self.assertIn("online=0", decision.reason)
+
+    def test_org_key_matches_owner_case_insensitively(self) -> None:
+        self.assertTrue(run(signal(owner="fastled"), FakeApi(status(group(DELL, 1, 0))))[0].pool)
+
+    def test_fork_pull_request_never_asks_the_signal(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "event.json"
+            path.write_text(json.dumps({"pull_request": {"head": {"repo": {"full_name": "x/FastLED"}}}}))
+            api = FakeApi(status(group(DELL, 1, 0)))
+            decision, _ = run(signal(event="pull_request", event_path=str(path)), api)
+        self.assertFalse(decision.pool)
+        self.assertEqual(api.urls, [])
+
+    def test_unknown_source_is_hosted(self) -> None:
+        api = FakeApi(status(group(DELL, 1, 0)))
+        decision, out = run(signal(source="ledger"), api)
+        self.assertFalse(decision.pool)
+        self.assertEqual(api.urls, [])
+        self.assertIn("::warning::", out)
+
+    def test_fail_closed_on_bad_or_stale_status(self) -> None:
+        good = group(DELL, 4, 0)
+        cases = {
+            "wrong schema": status(good, schema="something-else"),
+            "future version": status(good, version=2),
+            "string version": status(good, version="1"),
+            "org missing": status(good, org="obs-rust"),
+            "org in error": status(good, state="error"),
+            "stale": status(good, age=31),
+            "stale by server max": status(good, age=12, max_age_s=10),
+            "no age": status(good, age=None),
+            "negative age": status(good, age=-1),
+            "bool age": status(good, age=True),
+            "runners not a list": {**status(), "orgs": {"FastLED": {"state": "ok", "age_s": 1, "runners": {}}}},
+            "busy > online": status(group(DELL, 1, 2)),
+            "negative count": status(group(DELL, -1, 0)),
+            "labels not strings": status(group([1, 2], 1, 0)),  # type: ignore[list-item]
+            "orgs not a map": status(good, orgs=[]),
+            "not an object": [],
+        }
+        for name, doc in cases.items():
+            with self.subTest(case=name):
+                decision, out = run(signal(), FakeApi(doc))
+                self.assertFalse(decision.pool)
+                self.assertEqual(decision.runs_on, '"ubuntu-latest"')
+                self.assertIn("::warning::", out)
+
+    def test_http_errors_and_timeouts_are_hosted(self) -> None:
+        for error in (HTTPError(STATUS_URL, 503, "unavailable", None, None), HTTPError(STATUS_URL, 502, "x", None, None),
+                      URLError("refused"), TimeoutError("slow")):
+            with self.subTest(error=type(error).__name__):
+                decision, out = run(signal(), FakeApi(error=error))
+                self.assertFalse(decision.pool)
+                self.assertIn("::warning::", out)
+                self.assertNotIn("unavailable", out)
+
+    def test_dispatcher_and_unknown_fields_are_ignored(self) -> None:
+        doc = status(group(DELL, 1, 0), extra="new")
+        doc["orgs"]["FastLED"]["dispatcher"] = {"hosts": [{"host": "dell-jw22zc3", "free_slots": 3}]}
+        doc["orgs"]["FastLED"]["runners"][0]["new_field"] = 1
+        self.assertTrue(run(signal(), FakeApi(doc))[0].pool)
+
+    def test_settings_from_env_reads_source_and_url(self) -> None:
+        cfg = sp.settings_from_env({"GITHUB_REPOSITORY": "forge-ci/soldr", "POOL_SOURCE": "signal",
+                                    "POOL_STATUS_URL": "https://x.test/v1/pool"})
+        self.assertEqual((cfg.source, cfg.status_url), ("signal", "https://x.test/v1/pool"))
+
+    def test_github_fetch_sends_no_authorization_without_token(self) -> None:
+        seen: list[dict[str, str]] = []
+
+        class Resp(io.BytesIO):
+            def __enter__(self) -> "Resp":
+                return self
+
+            def __exit__(self, *exc: object) -> None:
+                return None
+
+        def fake_urlopen(request: object, timeout: float) -> Resp:
+            seen.append(dict(request.header_items()))  # type: ignore[attr-defined]
+            return Resp(b"{}")
+
+        original = sp.urlopen
+        sp.urlopen = fake_urlopen  # type: ignore[assignment]
+        try:
+            sp.github_fetch(STATUS_URL, "")
+            sp.github_fetch("https://api.github.com/x", TOKEN)
+        finally:
+            sp.urlopen = original
+        self.assertNotIn("Authorization", seen[0])
+        self.assertEqual(seen[1]["Authorization"], f"Bearer {TOKEN}")
+
+    def test_action_wires_source_and_status_url(self) -> None:
+        action = (Path(__file__).resolve().parents[2] / "actions" / "pool-select" / "action.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('default: "https://signal.forge-ci.com/v1/pool"', action)
+        self.assertIn("POOL_SOURCE: ${{ inputs.source }}", action)
+        self.assertIn("POOL_STATUS_URL: ${{ inputs.status-url }}", action)
 
 
 if __name__ == "__main__":

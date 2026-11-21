@@ -6,9 +6,19 @@
 """Route a job to the shared self-hosted pool when it has idle capacity.
 
 Ported and generalized from obs-rust/obs-studio `ci/select_mq_runner.py`.
+Capacity comes from one of two sources:
+
+- `signal` (the default with no token): the tokenless read-only pool status
+  `GET https://signal.forge-ci.com/v1/pool?org=<owner>` (schema
+  `forge-ci.pool-status` version 1, forge-ci/signal.forge-ci.com
+  docs/droplet.md), which lists each org's online runners as label sets;
+- `github` (the default when a token is given): `GET /orgs/{owner}/actions/runners`
+  with that token.
+
 Every unknown state selects the hosted fallback: a missing token, an
-untrusted event, a fork pull request, an API error or timeout, malformed
-data, or too little idle capacity. A pool outage never blocks CI.
+untrusted event, a fork pull request, an API or status error or timeout,
+malformed or stale data, or too little idle capacity. A pool outage never
+blocks CI.
 
 Only fixed diagnostics and counts are printed, never API text, exception
 messages or tokens. Standard library only.
@@ -23,6 +33,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TypeAlias
 from urllib.error import HTTPError
+from urllib.parse import quote
 from urllib.request import Request, urlopen
 
 JsonValue: TypeAlias = "None | bool | int | float | str | list[JsonValue] | dict[str, JsonValue]"
@@ -36,6 +47,12 @@ DEFAULT_FALLBACK = "ubuntu-latest"
 TRUSTED_EVENTS = frozenset({"push", "merge_group", "workflow_dispatch", "schedule"})
 PR_EVENTS = frozenset({"pull_request", "pull_request_target"})
 MODES = frozenset({"", "idle", "prefer"})
+SOURCES = frozenset({"", "auto", "signal", "github"})
+DEFAULT_STATUS_URL = "https://signal.forge-ci.com/v1/pool"
+STATUS_SCHEMA = "forge-ci.pool-status"
+STATUS_VERSION = 1
+# Oldest status data the selector accepts, whatever the server's max_age_s says.
+STATUS_MAX_AGE_S = 30
 
 # fetch(url, token) -> parsed JSON page. Injected so tests never touch the network.
 Fetch: TypeAlias = Callable[[str, str], "JsonValue"]
@@ -58,6 +75,8 @@ class Settings:
     repository: str
     owner: str
     api_url: str
+    source: str = ""
+    status_url: str = ""
 
 
 @dataclass(frozen=True)
@@ -77,6 +96,15 @@ class RunnerState:
 class RunnersPage:
     runners: list[JsonValue]
     total: int
+
+
+@dataclass(frozen=True)
+class StatusGroup:
+    """One label set from the pool status: how many such runners are online and busy."""
+
+    labels: frozenset[str]
+    online: int
+    busy: int
 
 
 @dataclass(frozen=True)
@@ -220,6 +248,69 @@ def count_capacity(fetch: Fetch, settings: Settings, wanted: set[str]) -> Capaci
     return Capacity(online=len(matched), busy=sum(matched.values()))
 
 
+def resolve_source(settings: Settings) -> str:
+    """`signal` or `github`. Empty/`auto` means github with a token, signal without."""
+    source = settings.source.strip().casefold()
+    if source not in SOURCES:
+        raise ProbeError("unknown source (expected empty, 'auto', 'signal' or 'github')")
+    if source in {"", "auto"}:
+        return "github" if settings.token.strip() else "signal"
+    return source
+
+
+def status_url(settings: Settings) -> str:
+    base = settings.status_url.strip() or DEFAULT_STATUS_URL
+    if not base.startswith("https://"):
+        raise ProbeError("status-url must be an https URL")
+    return f"{base}{'&' if '?' in base else '?'}org={quote(settings.owner, safe='')}"
+
+
+def _count(value: JsonValue) -> int:
+    if type(value) is not int or value < 0:
+        raise ProbeError("malformed pool status")
+    return value
+
+
+def status_group(value: JsonValue) -> StatusGroup:
+    if not isinstance(value, dict):
+        raise ProbeError("malformed pool status")
+    labels, online, busy = value.get("labels"), _count(value.get("online")), _count(value.get("busy"))
+    if not isinstance(labels, list) or any(not isinstance(label, str) for label in labels) or busy > online:
+        raise ProbeError("malformed pool status")
+    return StatusGroup(frozenset(str(label).casefold() for label in labels), online, busy)
+
+
+def org_status(document: JsonValue, owner: str) -> list[StatusGroup]:
+    """The owner's runner groups from a v1 pool status, or a fixed reason to run hosted."""
+    if not isinstance(document, dict) or document.get("schema") != STATUS_SCHEMA:
+        raise ProbeError("pool status has an unknown schema")
+    if document.get("version") != STATUS_VERSION:
+        raise ProbeError("pool status has an unsupported version")
+    orgs = document.get("orgs")
+    if not isinstance(orgs, dict):
+        raise ProbeError("malformed pool status")
+    entry = next((v for k, v in orgs.items() if k.casefold() == owner.casefold()), None)
+    if not isinstance(entry, dict):
+        raise ProbeError("pool status has no entry for this organization")
+    if entry.get("state") != "ok":
+        raise ProbeError("pool status reports an error for this organization")
+    age, server_max = entry.get("age_s"), document.get("max_age_s")
+    limit = min(STATUS_MAX_AGE_S, server_max) if type(server_max) is int else STATUS_MAX_AGE_S
+    if not isinstance(age, (int, float)) or isinstance(age, bool) or not 0 <= age <= limit:
+        raise ProbeError("pool status is stale")
+    groups = entry.get("runners")
+    if not isinstance(groups, list):
+        raise ProbeError("malformed pool status")
+    return [status_group(group) for group in groups]
+
+
+def signal_capacity(fetch: Fetch, settings: Settings, wanted: set[str]) -> Capacity:
+    """Sum the online and busy counts of every label set carrying all wanted labels. No token is sent."""
+    groups = org_status(fetch(status_url(settings), ""), settings.owner)
+    matched = [group for group in groups if wanted.issubset(group.labels)]
+    return Capacity(online=sum(g.online for g in matched), busy=sum(g.busy for g in matched))
+
+
 def describe_error(error: Exception) -> str:
     """Error class and HTTP status only: messages may carry server text or secrets."""
     if isinstance(error, ProbeError):
@@ -230,14 +321,21 @@ def describe_error(error: Exception) -> str:
 
 def probe(fetch: Fetch, settings: Settings, labels: list[str], fallback: str) -> Decision:
     required = required_idle(settings.min_idle, settings.mode)
-    if not settings.token.strip():
+    source = resolve_source(settings)
+    if source == "github" and not settings.token.strip():
         warning("no token; using hosted runners")
         return Decision(fallback, False, "no runner probe token")
     if not settings.owner:
         raise ProbeError("repository owner is unknown")
-    capacity = count_capacity(fetch, settings, {label.casefold() for label in labels})
+    wanted = {label.casefold() for label in labels}
+    if source == "signal":
+        capacity = signal_capacity(fetch, settings, wanted)
+    else:
+        capacity = count_capacity(fetch, settings, wanted)
     available = capacity.online if settings.mode == "prefer" else capacity.idle
-    counts = f"online={capacity.online}, busy={capacity.busy}, idle={capacity.idle}, required={required}"
+    counts = (
+        f"source={source}, online={capacity.online}, busy={capacity.busy}, idle={capacity.idle}, required={required}"
+    )
     if available >= required:
         what = "matching online runner (prefer mode)" if settings.mode == "prefer" else "idle pool capacity"
         return Decision(compact(labels), True, f"{what} ({counts})")
@@ -262,16 +360,16 @@ def select(settings: Settings, fetch: Fetch) -> Decision:
 
 
 def github_fetch(url: str, token: str) -> JsonValue:
-    request = Request(
-        url,
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Accept": "application/vnd.github+json",
-            "X-GitHub-Api-Version": "2022-11-28",
-            "User-Agent": "forge-ci-pool-select",
-        },
-    )
-    with urlopen(request, timeout=API_TIMEOUT) as response:  # noqa: S310 -- fixed https API URL
+    """GET JSON. The pool status is read with no token: no Authorization header at all."""
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": "forge-ci-pool-select",
+    }
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    request = Request(url, headers=headers)
+    with urlopen(request, timeout=API_TIMEOUT) as response:  # noqa: S310 -- https only (status_url checks)
         return json.load(response)
 
 
@@ -289,6 +387,8 @@ def settings_from_env(env: dict[str, str]) -> Settings:
         repository=repository,
         owner=env.get("GITHUB_REPOSITORY_OWNER", "") or repository.partition("/")[0],
         api_url=env.get("GITHUB_API_URL", "") or "https://api.github.com",
+        source=env.get("POOL_SOURCE", ""),
+        status_url=env.get("POOL_STATUS_URL", ""),
     )
 
 

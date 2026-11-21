@@ -1,10 +1,12 @@
 name: Self-hosted pool selection
 description: >-
   Route a job to the shared self-hosted runner pool when matching online
-  runners are idle, and to GitHub-hosted runners otherwise. Fork pull requests
-  and untrusted events always run hosted. Every failure (missing token, API
-  error, timeout, malformed data) selects the fallback with a warning, so a
-  pool outage never blocks CI.
+  runners are idle, and to GitHub-hosted runners otherwise. With no token it
+  reads the tokenless pool status at signal.forge-ci.com; with a token it
+  lists the organization's runners itself. Fork pull requests and untrusted
+  events always run hosted. Every failure (status or API error, timeout,
+  malformed or stale data) selects the fallback with a warning, so a pool
+  outage never blocks CI.
 inputs:
   labels:
     description: >-
@@ -19,10 +21,23 @@ inputs:
   token:
     description: >-
       Token that can list the owner's organization runners (GitHub App with
-      organization "Self-hosted runners: read"). Empty selects the fallback
-      with a warning.
+      organization "Self-hosted runners: read"). With the default source, a
+      token selects the GitHub API probe and no token selects the signal.
     required: false
     default: ""
+  source:
+    description: >-
+      Where capacity comes from. Empty or 'auto' (default): 'github' when a
+      token is given, else 'signal'. 'signal': GET status-url?org=<owner>, no
+      token. 'github': list the org's runners with token (no token: hosted).
+    required: false
+    default: ""
+  status-url:
+    description: >-
+      Pool status endpoint for source 'signal' (https only; schema
+      forge-ci.pool-status v1).
+    required: false
+    default: "https://signal.forge-ci.com/v1/pool"
   min-idle:
     description: Idle matching online runners required to pick the pool.
     required: false
@@ -71,6 +86,8 @@ runs:
         POOL_MIN_IDLE: ${{ inputs.min-idle }}
         POOL_MODE: ${{ inputs.mode }}
         POOL_TRUSTED_ONLY: ${{ inputs.trusted-only }}
+        POOL_SOURCE: ${{ inputs.source }}
+        POOL_STATUS_URL: ${{ inputs.status-url }}
       run: uv run --no-project --script "${GITHUB_ACTION_PATH}/select_pool.py"
     - name: Fall back to hosted runners
       id: fallback
