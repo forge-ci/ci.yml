@@ -289,3 +289,19 @@ class Publish(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# The uv release the forge-quick image seeds into its tool cache (forge-ci/soldrix
+# image/quick/Dockerfile). An unpinned setup-uv resolves "latest", downloads it into the
+# job's memory-backed tmpfs and peaked at 253 MiB on a real forge-quick job, where
+# memguard kills it at 85% of 256 MiB; the selector then silently ran hosted every time.
+FORGE_QUICK_SEEDED_UV = "0.13.7"
+
+
+class ActionPinsSeededUvTest(unittest.TestCase):
+    def test_setup_uv_step_pins_the_seeded_uv_version(self) -> None:
+        action = (Path(__file__).resolve().parents[2] / "actions" / "pool-select" / "action.yml").read_text(
+            encoding="utf-8"
+        )
+        step = action.split("uses: astral-sh/setup-uv@", 1)[1].split("\n    - ", 1)[0]
+        self.assertIn(f'version: "{FORGE_QUICK_SEEDED_UV}"', step)

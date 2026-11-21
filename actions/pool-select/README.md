@@ -113,6 +113,10 @@ the same. Pin the action by commit SHA.
 
 ### Running the selector on forge-quick
 
+The action pins `setup-uv` to uv `0.13.7`, the release the forge-quick image seeds in its
+tool cache, so the selector downloads nothing and stays inside the 256 MiB budget. Bump it
+together with soldrix `image/quick/Dockerfile`.
+
 `ci_lint` rule `RUN-004` holds any job that can land on `forge-quick` to the
 class's limits: `timeout-minutes` of 2 or less; every `uses:` in the shared
 allowlist at its pinned sha (`ci_lint/data/forge_quick_allowlist.toml`, the

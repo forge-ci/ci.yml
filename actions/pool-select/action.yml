@@ -55,6 +55,9 @@ runs:
       continue-on-error: true
       uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
       with:
+        # The uv the forge-quick image seeds in its tool cache: no download, and it fits the
+        # 256 MiB budget (unpinned "latest" peaked at 253 MiB and memguard killed it).
+        version: "0.13.7"
         enable-cache: "false"
     - name: Select runner
       id: select
