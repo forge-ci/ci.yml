@@ -14,7 +14,7 @@ from ci_lint.rules.forge_quick import ALLOWLIST_PATH, check_run_004, load_allowl
 from ci_lint.tests.helpers import requires_yaml_tooling
 
 KILL = "${{ vars.FORGE_QUICK_LABELS != '' && fromJSON(vars.FORGE_QUICK_LABELS) || 'ubuntu-latest' }}"
-POOL_SELECT = "forge-ci/ci.yml/actions/pool-select@c7ceb02207934e49ee50d01a5f7dd12b72ac8623"
+POOL_SELECT = "forge-ci/ci.yml/actions/pool-select@b53af98264b9f2b60cddb62d373dd879088376d9"
 APP_TOKEN = "actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc"
 README = Path(__file__).resolve().parents[2] / "actions" / "pool-select" / "README.md"
 
@@ -150,6 +150,12 @@ class Run004AllowlistTest(unittest.TestCase):
         self.assertTrue(allowlist.allows("astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d"))
         self.assertFalse(allowlist.allows("actions/checkout@v7.0.1"))
         self.assertTrue(ALLOWLIST_PATH.is_file())
+
+    def test_shipped_allowlist_retires_pool_select_without_uv_pin(self) -> None:
+        # c7ceb022 called setup-uv without `version:`; on forge-quick it downloaded
+        # the latest uv, peaked at 253 MiB and memguard killed it (#549).
+        allowlist = load_allowlist()
+        self.assertFalse(allowlist.allows("forge-ci/ci.yml/actions/pool-select@c7ceb02207934e49ee50d01a5f7dd12b72ac8623"))
 
     def test_allowlist_rejects_unpinned_or_malformed(self) -> None:
         with self.assertRaises(ValueError):

@@ -36,8 +36,8 @@ version = "v3.4.0"
 [[action]]
 repo = "forge-ci/ci.yml"
 path = "actions/pool-select"
-sha = "c7ceb02207934e49ee50d01a5f7dd12b72ac8623"
-version = "PR #544 merge"
+sha = "b53af98264b9f2b60cddb62d373dd879088376d9"
+version = "PR #549 merge"
 
 # pool-select's composite step pins this exact sha (actions/pool-select/action.yml),
 # so the seed must hold it too; jobs may also use it directly.

@@ -94,7 +94,7 @@ jobs:
       - name: Select pool or hosted
         id: select
         continue-on-error: true
-        uses: forge-ci/ci.yml/actions/pool-select@c7ceb02207934e49ee50d01a5f7dd12b72ac8623
+        uses: forge-ci/ci.yml/actions/pool-select@b53af98264b9f2b60cddb62d373dd879088376d9
         with:
           labels: ${{ vars.FORGE_POOL_LABELS }}   # e.g. ["self-hosted","forge-pool"]
           token: ${{ steps.token.outputs.token }}
@@ -124,8 +124,8 @@ same list the forge-quick image pre-seeds into its action cache, so the job
 downloads no action); no `container:` or `services:`; and `runs-on` through
 the `vars.FORGE_QUICK_LABELS` kill switch with a hosted fallback, as above.
 The example above passes it as written. The allowlist pins pool-select at
-`c7ceb022`; a newer pool-select sha must be added to the allowlist (and the
-image rebuilt) before a forge-quick job can use it. The forge-quick image
+`b53af982` (#549, the first sha with the uv pin); a newer pool-select sha must be
+added to the allowlist (and the image rebuilt) before a forge-quick job can use it. The forge-quick image
 also limits each job at run time (wall clock and memory; forge-ci/soldrix
 `image/quick/`). Apart from that, it uses only
 `astral-sh/setup-uv` (pinned) and a standard-library Python script run with
