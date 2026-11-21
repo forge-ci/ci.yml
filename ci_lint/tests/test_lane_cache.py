@@ -60,8 +60,11 @@ log = pathlib.Path(sys.argv[sys.argv.index("--log") + 1])
 with log.open("a") as fh:  # append: concurrent lanes must not lose a line
     fh.write(lane + "\\n")
 import time
+start = time.monotonic()
 if pathlib.Path("sleep").exists():
     time.sleep(float(pathlib.Path("sleep").read_text()))
+with pathlib.Path(str(log) + ".spans").open("a") as fh:
+    fh.write(f"{lane} {start} {time.monotonic()}\\n")
 if pathlib.Path("fail-" + lane).exists():
     raise SystemExit(4)
 if pathlib.Path("na-" + lane).exists():
@@ -118,8 +121,31 @@ class LanedRepo(unittest.TestCase):
     def runs(self) -> list[str]:
         return self.log.read_text().split() if self.log.exists() else []
 
+    def spans(self) -> dict[str, tuple[float, float]]:
+        """Each lane's (start, end) on the shared monotonic clock, as the lane recorded it.
+
+        Overlap is asserted on these intervals, not on total wall time, so a loaded host
+        that slows every lane cannot fail a parallelism test (forge-ci/ci.yml#546).
+        """
+        spans_log = Path(str(self.log) + ".spans")
+        out: dict[str, tuple[float, float]] = {}
+        for line in spans_log.read_text().splitlines() if spans_log.exists() else []:
+            lane, start, end = line.split()
+            out[lane] = (float(start), float(end))
+        return out
+
+    def assert_overlap(self, first: str, second: str) -> None:
+        spans = self.spans()
+        (a0, a1), (b0, b1) = spans[first], spans[second]
+        self.assertLess(max(a0, b0), min(a1, b1), f"{first} {spans[first]} and {second} {spans[second]} ran one after the other")
+
+    def assert_sequential(self, first: str, second: str) -> None:
+        spans = self.spans()
+        self.assertLessEqual(spans[first][1], spans[second][0], f"{second} started before {first} ended: {spans}")
+
     def gate(self, **kw: bool) -> str:
         self.log.unlink(missing_ok=True)
+        Path(str(self.log) + ".spans").unlink(missing_ok=True)
         outcome = run_gate(self.repo, self.config(), **kw)
         self.assertEqual(outcome.exit_code, 0, outcome.message)
         att = parse_attestation(_git(self.repo, "log", "-1", "--format=%B"))
@@ -301,15 +327,15 @@ class ParallelTest(LanedRepo):
 
     def test_light_lanes_overlap_the_heavy_chain(self) -> None:
         self._three_lanes(light=True)
-        start = time.monotonic()
         self.assertEqual(self.gate(), "a:run,b:run,heavy:run")  # provenance keeps declared order
-        self.assertLess(time.monotonic() - start, 3.5)  # sequential would be >= 4.5 s
+        self.assert_overlap("a", "heavy")
+        self.assert_overlap("b", "heavy")
 
     def test_heavy_lanes_stay_sequential(self) -> None:
         self._three_lanes(light=False)
-        start = time.monotonic()
         self.gate()
-        self.assertGreaterEqual(time.monotonic() - start, 4.4)
+        self.assert_sequential("a", "b")
+        self.assert_sequential("b", "heavy")
 
     def test_passing_lanes_are_cached_even_when_another_lane_fails(self) -> None:
         self._three_lanes(light=True)
@@ -440,15 +466,13 @@ class HeavyGroupTest(LanedRepo):
 
     def test_independent_groups_overlap(self) -> None:
         self._lanes({"rust": None, "tests": "isolated"})
-        start = time.monotonic()
         self.assertEqual(self.gate(), "rust:run,tests:run")
-        self.assertLess(time.monotonic() - start, 2.8)  # one chain would be >= 3.0 s
+        self.assert_overlap("rust", "tests")
 
     def test_lanes_in_one_group_stay_sequential(self) -> None:
         self._lanes({"rust": None, "cross": None, "tests": "isolated"})
-        start = time.monotonic()
         self.assertEqual(self.gate(), "rust:run,cross:run,tests:run")
-        self.assertGreaterEqual(time.monotonic() - start, 2.9)  # rust then cross
+        self.assert_sequential("rust", "cross")
 
     def test_a_failure_stops_only_its_own_group(self) -> None:
         self._lanes({"rust": None, "cross": None, "tests": "isolated"})
