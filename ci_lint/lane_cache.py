@@ -530,6 +530,22 @@ def prune(directory: Path, *, keep: int) -> None:
 
 # ── static checks (GATE-007) ─────────────────────────────────────────────────
 
+SOLDR_COMMANDS: frozenset[str] = frozenset({"soldr", "soldr.exe"})
+LANE_SHAPE_FIX = (
+    "make every lane a slice of the one gate command (e.g. `<gate> --lane <id>`), so the union of the lanes is "
+    "the gate the remote jobs mirror -- or, for lint, a host soldr lane (`run = [\"soldr\", \"lint\", \"--check\"]`, "
+    "`tools = [\"soldr\"]`), which GATE-016 requires and GATE-007 accepts"
+)
+
+
+def is_host_soldr_lane(run: tuple[str, ...]) -> bool:
+    """A lane that drives soldr directly on the host (`soldr lint --check`,
+    `soldr lint rust --check --cross-dylint`, `soldr cargo clippy ...`). GATE-016
+    puts lint here, outside bosn, so it is a sanctioned lane shape beside the
+    gate command's own lanes."""
+
+    return bool(run) and run[0].replace("\\", "/").rsplit("/", 1)[-1].lower() in SOLDR_COMMANDS
+
 
 def check_lanes_static(
     lanes: tuple[LaneConfig, ...], gate_run: tuple[str, ...], gate_source: str, repo_root: Path
@@ -544,15 +560,14 @@ def check_lanes_static(
                         message="cannot list HEAD's tree to check lane exclusions", fix="run inside a git checkout")]
     paths = {e.path for e in entries}
     for lane in lanes:
-        if tuple(lane.run[: len(gate_run)]) != gate_run:
+        if tuple(lane.run[: len(gate_run)]) != gate_run and not is_host_soldr_lane(lane.run):
             findings.append(
                 Finding(
                     rule="GATE-007",
                     path=gate_source,
                     message=f"lane '{lane.id}' runs `{' '.join(lane.run)}`, which is not the gate command "
-                    f"`{' '.join(gate_run)}` plus arguments",
-                    fix="make every lane a slice of the one gate command (e.g. `<gate> --lane <id>`), so the union "
-                    "of the lanes is the gate the remote jobs mirror",
+                    f"`{' '.join(gate_run)}` plus arguments, nor a host soldr lane",
+                    fix=LANE_SHAPE_FIX,
                 )
             )
         # Mandatory inputs are re-included at runtime whatever the globs say, so

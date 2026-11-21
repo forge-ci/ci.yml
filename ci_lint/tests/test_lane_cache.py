@@ -827,6 +827,24 @@ class StaticTest(LanedRepo):
         statuses = sorted(f.status.value for f in check_lanes_static(lanes, cfg.run, cfg.source, self.repo))
         self.assertEqual(statuses, [Status.NEEDS_REVIEW.value, Status.VIOLATION.value])
 
+    def test_host_soldr_lanes_are_a_sanctioned_shape(self) -> None:
+        """talos-hq/clud: the gate is `bosn ci run ...`, while lint runs as host
+        soldr lanes because GATE-016 forbids it under bosn. GATE-007 must accept
+        them, and both rules' fixes name the same lane shape."""
+
+        cfg = self.config()
+        lanes = (
+            LaneConfig("dylint", ("soldr", "lint", "rust", "--check", "--cross-dylint"), tools=("soldr",)),
+            LaneConfig("clippy", ("/opt/bin/soldr", "cargo", "clippy", "--all-targets"), tools=("soldr",)),
+            LaneConfig("doctest", ("soldr", "cargo", "test", "--doc"), tools=("soldr",)),
+            LaneConfig("other", ("bosn", "run", "--task", "x"), tools=("bosn",)),
+        )
+        findings = check_lanes_static(lanes, cfg.run, cfg.source, self.repo)
+        self.assertEqual([f.message.split("`")[0] for f in findings], ["lane 'other' runs "])
+        self.assertIn('run = ["soldr", "lint", "--check"]', findings[0].fix)
+        from ci_lint.gate_lint_host import FIX  # noqa: PLC0415
+        self.assertIn('run = ["soldr", "lint", "--check"]', FIX)
+
     def test_unknown_lane_key_is_ct_001(self) -> None:
         text = (self.repo / "local-gate.toml").read_text(encoding="utf-8") + "bogus = 1\n"
         (self.repo / "local-gate.toml").write_text(text, encoding="utf-8")

@@ -40,6 +40,7 @@ from pathlib import Path
 
 from ci_lint.finding import Finding
 from ci_lint.lane_cache import LaneConfig
+from ci_lint.workflow_replay_config import ReplayConfig
 
 RULE = "GATE-016"
 LINT_WORDS: frozenset[str] = frozenset(
@@ -54,8 +55,10 @@ NAME_FLAGS: frozenset[str] = frozenset({"--lane", "--job"})
 # run; its cmd is still checked.
 TEST_WORDS: frozenset[str] = frozenset({"test", "tests", "testing", "ui", "e2e", "smoke"})
 FIX = (
-    "run lint on the host through `soldr lint` (formatting, Clippy and the configured Dylint in one "
-    "command; `soldr lint --check` in CI), never in a bosn or bosn -> act container; bosn stays for tests and builds"
+    "run lint on the host through `soldr lint` (formatting, Clippy and the configured Dylint in one command; "
+    "`soldr lint --check` in CI) as a host soldr lane (`run = [\"soldr\", \"lint\", \"--check\"]`, `tools = [\"soldr\"]`), "
+    "which GATE-007 accepts beside the gate command's lanes; never in a bosn or bosn -> act container -- "
+    "bosn stays for tests and builds"
 )
 _WORD_SPLIT = re.compile(r"[^a-z0-9]+")
 # The checker's own name is not a lint lane: `python3 -m ci_lint precheck`.
@@ -79,7 +82,7 @@ class _Subject:
     tools: tuple[str, ...]
 
 
-def _cmd_name(token: str) -> str:
+def cmd_name(token: str) -> str:
     return token.replace("\\", "/").rsplit("/", 1)[-1].lower()
 
 
@@ -115,30 +118,41 @@ def _flag_values(argv: Sequence[str], flags: frozenset[str]) -> tuple[str, ...]:
 
 def _bosn_index(argv: Sequence[str]) -> int | None:
     for i, token in enumerate(argv):
-        if _cmd_name(token) in BOSN_COMMANDS:
+        if cmd_name(token) in BOSN_COMMANDS:
             return i
     return None
+
+
+def bosn_ci_run_args(argv: Sequence[str]) -> tuple[str, ...] | None:
+    """The arguments after `bosn ci run`; None when argv is not one."""
+
+    start = _bosn_index(argv)
+    if start is None or tuple(argv[start + 1:start + 3]) != ("ci", "run"):
+        return None
+    return tuple(argv[start + 3:])
 
 
 def _bosn_ci_run_jobs(argv: Sequence[str]) -> tuple[str, ...]:
     """The `--job` ids of a `bosn ci run ...` argv; () when it is not one."""
 
-    start = _bosn_index(argv)
-    if start is None or tuple(argv[start + 1:start + 3]) != ("ci", "run"):
-        return ()
-    return _flag_values(argv[start + 3:], frozenset({"--job"}))
+    args = bosn_ci_run_args(argv)
+    return () if args is None else _flag_values(args, frozenset({"--job"}))
+
+
+def script_lint_like(token: str) -> bool:
+    """`ci/dylint_gate.py`, `scripts/lint.sh`: a script named for lint."""
+
+    return token.lower().endswith(SCRIPT_SUFFIXES) and lint_like(Path(cmd_name(token)).stem)
 
 
 def _run_lint_like(argv: Sequence[str]) -> bool:
-    if any(_cmd_name(token) in LINT_COMMANDS for token in argv):
+    if any(cmd_name(token) in LINT_COMMANDS for token in argv):
         return True
     if runs_lint_command(shlex.join(argv)):
         return True
     if any(lint_like(value) for value in _flag_values(argv, NAME_FLAGS)):
         return True
-    return any(
-        lint_like(Path(_cmd_name(token)).stem) for token in argv if token.lower().endswith(SCRIPT_SUFFIXES)
-    )
+    return any(script_lint_like(token) for token in argv)
 
 
 def _subject_finding(subject: _Subject) -> Finding | None:
@@ -149,7 +163,7 @@ def _subject_finding(subject: _Subject) -> Finding | None:
     if not (lint_like(subject.name) or _run_lint_like(subject.run)):
         return None
     reasons = []
-    if any(_cmd_name(tool) in BOSN_COMMANDS for tool in subject.tools):
+    if any(cmd_name(tool) in BOSN_COMMANDS for tool in subject.tools):
         reasons.append("declares 'bosn' in tools")
     if _bosn_index(subject.run) is not None:
         reasons.append("its run invokes bosn")
@@ -201,12 +215,27 @@ def _bosn_task_findings(repo_root: Path) -> list[Finding]:
 
 
 def check_gate_016(repo_root: Path, gate_run: Sequence[str] = (),
-                   lanes: Sequence[LaneConfig] = ()) -> list[Finding]:
-    """`gate_run`: the gate's own `run` argv; `lanes`: its declared lanes.
-    The `bosn.toml` clause applies whether or not a gate is declared."""
+                   lanes: Sequence[LaneConfig] = (), replay_jobs: Sequence[str] = ()) -> list[Finding]:
+    """`gate_run`: the gate's own `run` argv; `lanes`: its declared lanes;
+    `replay_jobs`: `[gate.replay]` job refs (`ci.yml:fast`). The `bosn.toml`
+    clause applies whether or not a gate is declared."""
+
+    from ci_lint.gate_lint_replay import argv_refs, check_replayed_jobs, replay_refs  # noqa: PLC0415
 
     subjects = [_Subject("the gate", "", tuple(gate_run), ())] if gate_run else []
     subjects.extend(_Subject(f"lane '{lane.id}'", lane.id, tuple(lane.run), tuple(lane.tools)) for lane in lanes)
     findings = [f for f in (_subject_finding(s) for s in subjects) if f is not None]
+    refs = [ref for s in subjects for ref in argv_refs(s.run, s.where)]
+    findings.extend(check_replayed_jobs(repo_root, [*refs, *replay_refs(replay_jobs)]))
     findings.extend(_bosn_task_findings(repo_root))
     return findings
+
+
+def gate_replay_jobs(replay: ReplayConfig | None) -> tuple[str, ...]:
+    """Every `[[gate.replay.jobs]]` source-job and selection, as `wf:job`."""
+
+    if replay is None:
+        return ()
+    selected = tuple(sel.selected_job if ":" in sel.selected_job else f"{sel.workflow or replay.workflow}:{sel.selected_job}"
+                     for sel in replay.selections if sel.selected_job)
+    return tuple(job.source_job for job in replay.jobs) + selected
