@@ -55,8 +55,10 @@ NAME_FLAGS: frozenset[str] = frozenset({"--lane", "--job"})
 # run; its cmd is still checked.
 TEST_WORDS: frozenset[str] = frozenset({"test", "tests", "testing", "ui", "e2e", "smoke"})
 FIX = (
-    "run lint on the host through `soldr lint` (formatting, Clippy and the configured Dylint in one "
-    "command; `soldr lint --check` in CI), never in a bosn or bosn -> act container; bosn stays for tests and builds"
+    "run lint on the host through `soldr lint` (formatting, Clippy and the configured Dylint in one command; "
+    "`soldr lint --check` in CI) as a host soldr lane (`run = [\"soldr\", \"lint\", \"--check\"]`, `tools = [\"soldr\"]`), "
+    "which GATE-007 accepts beside the gate command's lanes; never in a bosn or bosn -> act container -- "
+    "bosn stays for tests and builds"
 )
 _WORD_SPLIT = re.compile(r"[^a-z0-9]+")
 # The checker's own name is not a lint lane: `python3 -m ci_lint precheck`.

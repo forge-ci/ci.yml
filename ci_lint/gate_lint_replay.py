@@ -69,6 +69,8 @@ def _tool_runs(tokens: Sequence[str]) -> bool:
             return True
         if name == "ci.py" and i + 1 < len(tokens) and tokens[i + 1] in CI_PY_LINT:
             return True
+        if token == "-m" and i + 1 < len(tokens) and lint_like(tokens[i + 1]):
+            return True  # `python -m ci.lint`, `python -m pylint` (never `-m ci_lint`)
     return False
 
 
@@ -173,12 +175,12 @@ class _Scan:
         job = jobs_of(doc).get(job_id) if doc is not None else None
         if job is None:
             return []
+        out = [LintStep(rel, job_id, LINT_NAMED)] if _lint_named_job(job_id) else []
         uses = job.get("uses")
         if isinstance(uses, str) and uses.startswith("./") and depth < 2:
             callee = uses[2:].split("@", 1)[0]
             callee_doc = self.doc(callee) if (self.repo_root / callee).is_file() else None
-            return [s for sub in jobs_of(callee_doc or {}) for s in self.lint_steps(callee, sub, depth + 1)]
-        out = [LintStep(rel, job_id, LINT_NAMED)] if _lint_named_job(job_id) else []
+            return out + [s for sub in jobs_of(callee_doc or {}) for s in self.lint_steps(callee, sub, depth + 1)]
         for step in steps_of(job):
             run = step.get("run")
             hit = lint_command_in(run) if isinstance(run, str) else None

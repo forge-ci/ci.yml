@@ -216,10 +216,12 @@ class LintCommandTest(unittest.TestCase):
     def test_step_lint_commands(self) -> None:
         for run in ("./ci.py fmt", "python ci.py clippy --all", "uv run ruff check .", "uvx ruff format --check",
                     "python3 -m pylint src", "pyright", "npx eslint .", "clang-tidy -p build a.cc",
-                    "set -e\nsoldr lint --check", "cargo \\\n  clippy --all-targets"):
+                    "set -e\nsoldr lint --check", "cargo \\\n  clippy --all-targets",
+                    ".venv/bin/python -m ci.lint --static-only"):
             self.assertIsNotNone(lint_command_in(run), run)
         for run in ("pip install ruff pylint", "uv run --with ruff==1 pytest", "./ci.py test", "python3 -m ci_lint precheck",
-                    "python3 ci/fast.py rust-test", "# ruff check", "npm install eslint"):
+                    "python3 ci/fast.py rust-test", "# ruff check", "npm install eslint",
+                    "python -P -m ci_lint cache janitor --repo ."):
             self.assertIsNone(lint_command_in(run), run)
 
 
@@ -271,6 +273,43 @@ class Gate016ReplayTest(unittest.TestCase):
         self.assertEqual(len(run("--job", "fast")), 1)
         self.assertEqual(run("--job", "nope"), [])
         self.assertEqual(run("--workflow", "gone.yml"), [])
+
+    def test_gate_run_whole_workflow_via_local_gate_lint(self) -> None:
+        """talos-hq/clud: `[gate] run` is `bosn ci run` with no `--job`, over a
+        workflow whose `dylint` job (lint-named, its steps only a script) and
+        `fast` job (`./ci.py fmt`) lint. The default whole-gate command is
+        flagged even though every lane is a host soldr lane."""
+
+        (self.tmp / ".github/workflows/ci.yml").write_text(CI_YML + (
+            "  dylint:\n    runs-on: ubuntu-24.04\n    steps:\n      - run: python3 ci/dylint.py --shape multi-target\n"
+        ), encoding="utf-8")
+        (self.tmp / "local-gate.toml").write_text(
+            '[gate]\nmode = "shadow"\nrun = ["bosn", "ci", "run", "--workspace", ".", "--trigger", "pr", "--wait"]\n'
+            '[gate.lanes.lint]\nrun = ["soldr", "lint", "rust", "--check", "--cross-dylint"]\ntools = ["soldr"]\n',
+            encoding="utf-8")
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
+            main(["local-gate", "lint", "--repo", str(self.tmp)])
+        gate016 = [line for line in out.getvalue().splitlines() if "what:" in line and "replayed through bosn" in line]
+        self.assertEqual(len(gate016), 3, out.getvalue())
+        self.assertTrue(any("job 'dylint' is lint-named and is replayed through bosn by the gate" in g for g in gate016))
+        self.assertTrue(any("job 'fast' runs lint (`./ci.py fmt`)" in g for g in gate016))
+
+    def test_lint_named_caller_of_a_reusable_workflow(self) -> None:
+        """clud's `lint-linux-x64` (Clippy) and `build-linux-x64` both call
+        `_build-target.yml`, whose steps only run a script: the lint-named
+        caller is the finding, the build caller is not."""
+
+        (self.tmp / ".github/workflows/ci.yml").write_text(
+            "on: [pull_request]\njobs:\n"
+            "  lint-linux-x64:\n    uses: ./.github/workflows/_build-target.yml\n"
+            "  build-linux-x64:\n    uses: ./.github/workflows/_build-target.yml\n", encoding="utf-8")
+        (self.tmp / ".github/workflows/_build-target.yml").write_text(
+            "on: {workflow_call: {}}\njobs:\n  build:\n    runs-on: ubuntu-24.04\n"
+            "    steps:\n      - run: python3 ci/build_target.py\n", encoding="utf-8")
+        found = check_gate_016(self.tmp, (*BOSN_RUN,))
+        self.assertEqual([(f.path, f.line) for f in found], [(".github/workflows/ci.yml", 3)])
+        self.assertIn("job 'lint-linux-x64' is lint-named", found[0].message)
 
     def test_unparseable_workflow_needs_review(self) -> None:
         (self.tmp / ".github/workflows/ci.yml").write_text("jobs: [unclosed\n", encoding="utf-8")
