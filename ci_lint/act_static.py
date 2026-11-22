@@ -38,6 +38,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ci_lint.finding import Finding, Status
+from ci_lint.repo_files import list_repo_files, read_source_text
 from ci_lint.rules.test_invocations import allowed, split_commands
 
 RULE = "ACT-002"
@@ -130,9 +131,11 @@ def _python_findings(text: str, path: str) -> list[Finding]:
 
 def _file_findings(path: Path, rel: str) -> list[Finding]:
     try:
-        text = path.read_text(encoding="utf-8", errors="replace")
+        text = read_source_text(path)
     except OSError:
         return []
+    if text is None:
+        return []  # binary or oversized: build output, not a script
     if path.suffix == ".py":
         return _python_findings(text, rel)
     return _text_findings(text, _Site(rel, None, "script"), words=True)
@@ -151,14 +154,16 @@ def _argv_findings(argv: Sequence[str], where: str) -> list[Finding]:
 
 
 def _script_files(repo_root: Path) -> list[Path]:
+    """Tracked (or untracked but not gitignored) scripts under SCRIPT_DIRS --
+    never gitignored build output such as fbuild's `ci/bin/fbuild`."""
+
     files: list[Path] = []
-    for name in SCRIPT_DIRS:
-        base = repo_root / name
-        if not base.is_dir():
+    for rel in list_repo_files(repo_root):
+        if rel.split("/", 1)[0] not in SCRIPT_DIRS or "/." in "/" + rel:
             continue
-        for path in sorted(base.rglob("*")):
-            if path.is_file() and path.suffix.lower() in SCRIPT_SUFFIXES and "/." not in "/" + path.relative_to(repo_root).as_posix():
-                files.append(path)
+        path = repo_root / rel
+        if path.suffix.lower() in SCRIPT_SUFFIXES and path.is_file():
+            files.append(path)
     return files
 
 

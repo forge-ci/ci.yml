@@ -19,6 +19,7 @@ and build noise: `.git`, `target`, `.venv*`, `.cargo/registry`,
 
 from __future__ import annotations
 
+import fnmatch
 from pathlib import Path
 
 from ci_lint.proc import run_captured
@@ -36,6 +37,53 @@ WALK_EXCLUDED_DIR_NAMES: frozenset[str] = frozenset(
 )
 WALK_EXCLUDED_PART_PREFIXES: tuple[str, ...] = (".venv",)
 CARGO_REGISTRY_PREFIX = ".cargo/registry/"
+# Text scanners read source, never build output: a script above this size or
+# with a NUL byte in its first BINARY_SNIFF_BYTES is skipped. fbuild's
+# gitignored `ci/bin/fbuild` (137 MB) once kept ACT-002's regexes busy for
+# hours.
+MAX_SOURCE_BYTES = 2 * 1024 * 1024
+BINARY_SNIFF_BYTES = 8192
+
+
+def read_source_text(path: Path, limit: int = MAX_SOURCE_BYTES) -> str | None:
+    """`path`'s text, or None when it is unreadable, larger than `limit`, or
+    binary (a NUL in its first 8 KB)."""
+
+    try:
+        if path.stat().st_size > limit:
+            return None
+        with path.open("rb") as fh:
+            if b"\0" in fh.read(BINARY_SNIFF_BYTES):
+                return None
+        return path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+
+
+def _gitignore_patterns(repo_root: Path) -> list[str]:
+    try:
+        lines = (repo_root / ".gitignore").read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return []
+    return [line.strip() for line in lines if line.strip() and not line.lstrip().startswith(("#", "!"))]
+
+
+def _ignored(rel: str, patterns: list[str]) -> bool:
+    """A best-effort `.gitignore` match (root file only, no negation): a
+    pattern matches the path, any parent directory, or any path component."""
+
+    parts = rel.split("/")
+    prefixes = ["/".join(parts[: i + 1]) for i in range(len(parts))]
+    for raw in patterns:
+        pattern = raw.rstrip("/")
+        anchored = pattern.startswith("/") or "/" in pattern
+        pattern = pattern.lstrip("/")
+        if anchored:
+            if any(fnmatch.fnmatchcase(prefix, pattern) for prefix in prefixes):
+                return True
+        elif any(fnmatch.fnmatchcase(part, pattern) for part in parts):
+            return True
+    return False
 
 
 def _is_git_work_tree(repo_root: Path) -> bool:
@@ -66,6 +114,7 @@ def _git_tracked_files(repo_root: Path) -> list[str] | None:
 
 
 def _walk_files(repo_root: Path) -> list[str]:
+    ignore = _gitignore_patterns(repo_root)
     out: list[str] = []
     for path in repo_root.rglob("*"):
         if not path.is_file():
@@ -78,6 +127,8 @@ def _walk_files(repo_root: Path) -> list[str]:
             continue
         rel_posix = rel.as_posix()
         if rel_posix.startswith(CARGO_REGISTRY_PREFIX) or f"/{CARGO_REGISTRY_PREFIX}" in rel_posix:
+            continue
+        if ignore and _ignored(rel_posix, ignore):
             continue
         out.append(rel_posix)
     return sorted(out)
