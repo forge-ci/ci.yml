@@ -215,20 +215,39 @@ def _bosn_task_findings(repo_root: Path) -> list[Finding]:
 
 
 def check_gate_016(repo_root: Path, gate_run: Sequence[str] = (),
-                   lanes: Sequence[LaneConfig] = (), replay_jobs: Sequence[str] = ()) -> list[Finding]:
+                   lanes: Sequence[LaneConfig] = (), replay_jobs: Sequence[str] = (),
+                   replay_lanes: Sequence[str] = (), full_run: bool = False) -> list[Finding]:
     """`gate_run`: the gate's own `run` argv; `lanes`: its declared lanes;
-    `replay_jobs`: `[gate.replay]` job refs (`ci.yml:fast`). The `bosn.toml`
+    `replay_jobs`: `[gate.replay]` job refs (`ci.yml:fast`); `replay_lanes`:
+    the lanes those declarations cover; `full_run`: a `[gate.full-run]` is
+    declared. With lanes and no full-run, `local-gate run` executes only the
+    lanes, so the gate's own `run` is a template (bosn rejects a second
+    `--job`): only the jobs the lanes select are replayed, and a whole-workflow
+    gate `run` is inspected only when it really runs. The `bosn.toml`
     clause applies whether or not a gate is declared."""
 
-    from ci_lint.gate_lint_replay import argv_refs, check_replayed_jobs, replay_refs  # noqa: PLC0415
+    from ci_lint.gate_lint_replay import argv_refs, check_replayed_jobs, replay_refs, script_replays  # noqa: PLC0415
 
     subjects = [_Subject("the gate", "", tuple(gate_run), ())] if gate_run else []
     subjects.extend(_Subject(f"lane '{lane.id}'", lane.id, tuple(lane.run), tuple(lane.tools)) for lane in lanes)
-    findings = [f for f in (_subject_finding(s) for s in subjects) if f is not None]
-    refs = [ref for s in subjects for ref in argv_refs(s.run, s.where)]
-    findings.extend(check_replayed_jobs(repo_root, [*refs, *replay_refs(replay_jobs)]))
+    flagged = [(s, f) for s, f in ((s, _subject_finding(s)) for s in subjects) if f is not None]
+    findings = [f for _, f in flagged]
+    template = bool(lanes) and not full_run
+    refs = [ref for s in subjects if not (template and s.where == "the gate") for ref in argv_refs(s.run, s.where)]
+    hidden = script_replays(repo_root, lanes, replay_lanes, [s.name for s, _ in flagged if s.name])
+    findings.extend(check_replayed_jobs(repo_root, [*refs, *replay_refs(replay_jobs), *hidden.refs]))
+    findings.extend(hidden.findings)
     findings.extend(_bosn_task_findings(repo_root))
     return findings
+
+
+def gate_replay_lanes(replay: ReplayConfig | None) -> tuple[str, ...]:
+    """The lanes a `[gate.replay]` declaration names a replayed job for."""
+
+    if replay is None:
+        return ()
+    return tuple(dict.fromkeys([*(lane for job in replay.jobs for lane in job.lanes),
+                                *(sel.lane for sel in replay.selections if sel.selected_job)]))
 
 
 def gate_replay_jobs(replay: ReplayConfig | None) -> tuple[str, ...]:

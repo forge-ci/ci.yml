@@ -38,7 +38,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ci_lint.finding import Finding, Status
-from ci_lint.lane_cache import LaneConfig
+from ci_lint.lane_cache import LaneConfig, is_host_soldr_lane
 from ci_lint.proc import run_captured
 from ci_lint.toml_cursor import Cursor, TomlValue
 from ci_lint.workflow_replay_config import ReplayConfig
@@ -173,11 +173,14 @@ def _shared_replay(iso: IsolationConfig, gate_run: tuple[str, ...], replay: Repl
     parser. An exit code alone, a file-forwarding wrapper or legacy replay
     cannot supply this proof.
     """
+    # Host soldr lanes (`soldr lint ...`, GATE-007/GATE-016) run nothing under
+    # bosn, so they need no bosn receipt and are not part of the replay.
+    replayed = [lane for lane in lanes if not is_host_soldr_lane(lane.run)]
     return bool(_is_bosn_ci(iso.runner) and gate_run[:len(iso.runner)] == iso.runner
                 and replay is not None and replay.qualified and replay.provider_query
                 and replay.report_source == "stdout"
-                and {lane.id for lane in lanes}.issubset({lane for job in replay.jobs for lane in job.lanes})
-                and all(lane.run[:len(iso.runner)] == iso.runner for lane in lanes))
+                and {lane.id for lane in replayed}.issubset({lane for job in replay.jobs for lane in job.lanes})
+                and all(lane.run[:len(iso.runner)] == iso.runner for lane in replayed))
 
 
 def check_isolation(isolation: IsolationConfig | None, gate_run: tuple[str, ...], repo_root: Path, source: str,

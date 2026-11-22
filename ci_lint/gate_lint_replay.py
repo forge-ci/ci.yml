@@ -24,12 +24,17 @@ job.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+import ast
+import re
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
 from ci_lint.finding import Finding, Status
-from ci_lint.gate_lint_host import FIX, RULE, TEST_WORDS, bosn_ci_run_args, cmd_name, lint_like, runs_lint_command
+from ci_lint.gate_lint_host import (
+    BOSN_COMMANDS, FIX, RULE, TEST_WORDS, bosn_ci_run_args, cmd_name, lint_like, runs_lint_command,
+)
+from ci_lint.lane_cache import LaneConfig
 from ci_lint.rules.test_invocations import split_commands
 from ci_lint.workflow_scan import as_dict, jobs_of, steps_of
 from ci_lint.yaml_io import LoadStatus, YamlValue, load_yaml_file
@@ -245,3 +250,209 @@ def check_replayed_jobs(repo_root: Path, refs: Sequence[JobRef]) -> list[Finding
             message=(f"job '{hit.job}' {'is lint-named' if cmd == LINT_NAMED else f'runs lint (`{cmd[:100]}`)'} "
                      f"and is replayed through bosn by {', '.join(hit.by)}")))
     return scan.findings
+
+
+
+# ── replay targets hidden inside a bosn-tooled lane's script ─────────────────
+# zccache's `ci/local_gate.py --lane check` (tools = ["bosn"]) launches
+# `bosn ci run --workflow .github/workflows/ci.yml --job msrv` itself, so the
+# lane argv names no workflow job. The targets are read statically from the
+# script: argv sequences carrying `--workflow`/`--job` literals, and calls or
+# dicts pairing a workflow-file literal with a job literal under `*workflow`/
+# `*job` names (`bosn_workflow=`, `bosn_job=`), plus the same in the script's
+# local imports (one level).
+
+SCRIPT_SUFFIXES: tuple[str, ...] = (".py", ".sh", ".bash")
+_SHELL_FLAG_RE = re.compile(r"--(workflow|job)(?:=|\s+)[\"']?([A-Za-z0-9_./-]+)")
+
+
+@dataclass(frozen=True)
+class Target:
+    workflow: str
+    job: str
+
+
+@dataclass(frozen=True)
+class _PyScan:
+    targets: frozenset[Target]
+    imports: frozenset[str]
+
+
+@dataclass(frozen=True)
+class ScriptReplays:
+    refs: tuple[JobRef, ...]
+    findings: tuple[Finding, ...]
+
+
+class _Consts:
+    """Module-level `NAME = "literal"` assignments (`WORKFLOW = "..."`)."""
+
+    def __init__(self, names: Mapping[str, str]) -> None:
+        self._names = dict(names)
+
+    def text(self, node: ast.AST | None) -> str | None:
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            return node.value
+        if isinstance(node, ast.Name):
+            return self._names.get(node.id)
+        return None
+
+
+def _module_consts(tree: ast.Module) -> _Consts:
+    names: dict[str, str] = {}
+    for stmt in tree.body:
+        target = value = None
+        if isinstance(stmt, ast.Assign) and len(stmt.targets) == 1:
+            target, value = stmt.targets[0], stmt.value
+        elif isinstance(stmt, ast.AnnAssign):
+            target, value = stmt.target, stmt.value
+        if isinstance(target, ast.Name) and isinstance(value, ast.Constant) and isinstance(value.value, str):
+            names[target.id] = value.value
+    return _Consts(names)
+
+
+def _is_workflow_file(text: str) -> bool:
+    return text.endswith((".yml", ".yaml"))
+
+
+def _seq_target(elts: Sequence[ast.AST], consts: _Consts) -> Target | None:
+    """`(..., "--workflow", W, "--job", J, ...)`; a flag whose value is not a
+    literal (or a module-level string constant) makes it unresolvable."""
+
+    values = [consts.text(e) for e in elts]
+    if "--workflow" not in values and "--job" not in values:
+        return None
+    found = {"--workflow": "", "--job": ""}
+    for i, value in enumerate(values):
+        if value in found:
+            nxt = values[i + 1] if i + 1 < len(values) else None
+            if nxt is None:
+                return None
+            found[value] = nxt
+    return Target(found["--workflow"], found["--job"])
+
+
+def _pair_target(keys: Sequence[str | None], values: Sequence[ast.AST], consts: _Consts) -> Target | None:
+    workflow = job = ""
+    for key, value in zip(keys, values):
+        text = consts.text(value)
+        if key is None or text is None:
+            continue
+        if key.lower().endswith("workflow") and _is_workflow_file(text):
+            workflow = text
+        elif key.lower().endswith("job"):
+            job = text
+    return Target(workflow, job) if workflow and job else None
+
+
+def _node_target(node: ast.AST, consts: _Consts) -> Target | None:
+    if isinstance(node, (ast.List, ast.Tuple)):
+        return _seq_target(node.elts, consts)
+    if isinstance(node, ast.Call):
+        return _pair_target([kw.arg for kw in node.keywords], [kw.value for kw in node.keywords], consts)
+    if isinstance(node, ast.Dict):
+        return _pair_target([consts.text(k) for k in node.keys], node.values, consts)
+    return None
+
+
+def _python_scan(text: str) -> _PyScan:
+    try:
+        tree = ast.parse(text)
+    except SyntaxError:
+        return _PyScan(frozenset(), frozenset())
+    consts = _module_consts(tree)
+    targets: set[Target] = set()
+    imports: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
+            imports.add(node.module)
+        elif isinstance(node, ast.Import):
+            imports.update(alias.name for alias in node.names)
+        hit = _node_target(node, consts)
+        if hit is not None:
+            targets.add(hit)
+    return _PyScan(frozenset(targets), frozenset(imports))
+
+
+def _shell_targets(text: str) -> frozenset[Target]:
+    targets: set[Target] = set()
+    for line in text.splitlines():
+        flags = {name: value for name, value in _SHELL_FLAG_RE.findall(line)}
+        if "bosn" in line and flags:
+            targets.add(Target(flags.get("workflow", ""), flags.get("job", "")))
+    return frozenset(targets)
+
+
+def _module_file(repo_root: Path, module: str) -> Path | None:
+    base = repo_root.joinpath(*module.split("."))
+    for path in (base.with_suffix(".py"), base / "__init__.py"):
+        if path.is_file():
+            return path
+    return None
+
+
+def _lane_script(repo_root: Path, argv: Sequence[str]) -> Path | None:
+    for i, token in enumerate(argv):
+        if token == "-m" and i + 1 < len(argv):
+            return _module_file(repo_root, argv[i + 1])
+        if token.endswith(SCRIPT_SUFFIXES) and (repo_root / token).is_file():
+            return repo_root / token
+    return None
+
+
+def script_targets(repo_root: Path, script: Path) -> frozenset[Target]:
+    """Replay targets in `script` and, for Python, its local imports."""
+
+    text = script.read_text(encoding="utf-8", errors="replace")
+    if script.suffix != ".py":
+        return _shell_targets(text)
+    scan = _python_scan(text)
+    targets = set(scan.targets)
+    for module in scan.imports:
+        path = _module_file(repo_root, module)
+        if path is not None and path != script:
+            targets.update(_python_scan(path.read_text(encoding="utf-8", errors="replace")).targets)
+    return frozenset(targets)
+
+
+def _bosn_script_lanes(repo_root: Path, lanes: Sequence[LaneConfig]) -> list[LaneConfig]:
+    """bosn in `tools`, but bosn is not the lane's own argv: a wrapper script
+    launches it. (A lane that runs `bosn ci run` is read from its argv; one
+    that runs `bosn run --task` is a bosn.toml task, clause 3.)"""
+
+    return [lane for lane in lanes
+            if any(cmd_name(tool) in BOSN_COMMANDS for tool in lane.tools)
+            and not any(cmd_name(token) in BOSN_COMMANDS for token in lane.run)]
+
+
+def _unresolved(lane: LaneConfig) -> Finding:
+    return Finding(
+        rule=RULE, path="local gate", status=Status.NEEDS_REVIEW,
+        message=(f"lane '{lane.id}' declares bosn in tools but no workflow job it replays could be read from "
+                 f"`{' '.join(lane.run)[:100]}`, so its replayed steps are unchecked for lint"),
+        fix=("declare the jobs the lane replays in [[gate.replay.jobs]] (source-job = \"ci.yml:<job>\", lanes = [...]) "
+             "or [[gate.replay.selections]], or make the lane's run the `bosn ci run --workflow W --job J` argv"))
+
+
+def script_replays(repo_root: Path, lanes: Sequence[LaneConfig], declared_lanes: Sequence[str] = (),
+                   reported_lanes: Sequence[str] = ()) -> ScriptReplays:
+    """Every bosn-tooled lane whose own `run` is not a `bosn ci run` argv: the
+    replay targets its script launches. A script shared by several lanes
+    cannot be split per lane statically, so its targets are attributed to the
+    script and its bosn lanes together. A lane with no readable target and no
+    `[gate.replay]` declaration covering it is needs_review."""
+
+    by_script: dict[str, list[str]] = {}
+    findings: list[Finding] = []
+    for lane in _bosn_script_lanes(repo_root, lanes):
+        script = _lane_script(repo_root, lane.run)
+        if script is not None and script_targets(repo_root, script):
+            by_script.setdefault(script.relative_to(repo_root).as_posix(), []).append(lane.id)
+        elif lane.id not in declared_lanes and lane.id not in reported_lanes:
+            findings.append(_unresolved(lane))
+    refs: list[JobRef] = []
+    for rel, lane_ids in by_script.items():
+        label = f"{rel} (bosn lanes: {', '.join(lane_ids)})"
+        refs.extend(JobRef(t.workflow, t.job, label)
+                    for t in sorted(script_targets(repo_root, repo_root / rel), key=lambda t: (t.workflow, t.job)))
+    return ScriptReplays(tuple(refs), tuple(findings))

@@ -148,6 +148,12 @@ Required when `profile = "rust-pypi-app"`.
 | `max-total` | string (size) | Informational in round 1A. |
 | `binaries` | array of strings | The declared test-binary names, in the form `<crate>:lib`, `<crate>:bin:<name>`, or `<crate>:test:<name>` -- see `RUST-005`/`RUST-012` below. This is the fan-out budget: every test binary Cargo would actually build must appear here, and every entry here must correspond to something Cargo actually builds. |
 
+## `[lint]`
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `job` | string (optional) | A host-run lint job id (e.g. `"lint"`) that `ci-lint plan` adds to `required_jobs`, so `ci-ok` requires it. `GEN-004` accepts Ruff/Pylint there instead of in the bosn-replayed `fast` job (`GATE-016`). With `job` set, `[lint.dylint]` is optional. |
+
 ## `[lint.dylint]`
 
 | Field | Type | Meaning |
@@ -1023,7 +1029,7 @@ when neither PyYAML nor `yq` is available).
 | `TAG-003` | `on.pull_request.types` omits `edited`. | Add `edited` to the `types` list. |
 | `GEN-001` | `.github/workflows/ci.yml` is missing or lacks `on.pull_request`. | Add it as the PR entry point. |
 | `GEN-002` | A job with a non-Linux runner has no `if:`/`strategy.matrix` referencing `needs.precheck.outputs`. | Gate the job on the precheck plan's output. |
-| `GEN-004` | (round-4B) The repo has Python sources but the `fast` job (directly in a `run:` line, or one level into a tracked `ci/*.py` script it calls) does not invoke `ruff check`, `ruff format --check`, and `pylint`; a standalone `black`/`isort` invocation is also `GEN-004`. An unresolvable script reference (missing file, parse error) is `needs_review`, never a silent pass. | Add the missing Ruff/Pylint invocation(s) to the `fast` job (directly or via a `ci/*.py` script); remove any Black/isort call. |
+| `GEN-004` | (round-4B) The repo has Python sources but neither the `fast` job nor a plan-required lint job (`dylint` when `[lint.dylint]` is declared, `[lint] job`; lint never runs under bosn, GATE-016) -- directly in a `run:` line, or one level into a tracked `ci/*.py` script it calls) does not invoke `ruff check`, `ruff format --check`, and `pylint`; a standalone `black`/`isort` invocation is also `GEN-004`. An unresolvable script reference (missing file, parse error) is `needs_review`, never a silent pass. | Add the missing Ruff/Pylint invocation(s) to the `fast` job or the plan-required lint job (directly or via a `ci/*.py` script); remove any Black/isort call. |
 | `GEN-005` | A `run:` step longer than one line, shell control syntax, a banned `shell:`, or a tracked `.sh/.ps1/.bat/.cmd`/shebang script file. One `cmake -S/-B`/`cmake --preset`, `cmake --build` or `ctest` command may span trailing-backslash continuation lines (#393, [policy-cpp.md](policy-cpp.md)). | Move the logic into a Python script, called as one line. |
 | `GEN-008` | A workflow file (or one of its triggers) not declared in `[allow].workflows`, or more than one file declaring `pull_request`. | Declare it in `[allow].workflows`, or remove the trigger/file. |
 | `GEN-014` | (#23 §1) A `ci-precheck.yml` workflow file, a `uses:` of one, or an `[allow].workflows` entry naming it. The fast first workflow is `ci-pre.yml`. | Rename it to `ci-pre.yml` (`git mv`), and update `ci.yml`'s `uses:` and `[allow].workflows`. |
@@ -1196,6 +1202,7 @@ defined; the template's `ci.yml` must name its jobs to match:
 | `precheck` | always | the precheck job itself |
 | `fast` | always | the default `linux-x64` build+unit+smoke lane |
 | `dylint` | when `dylint_targets` is non-empty | the one Linux Dylint job (all declared targets) |
+| `[lint] job` (e.g. `lint`) | when ci.toml declares `[lint] job` | the host-run lint job (Ruff/Pylint for `GEN-004`), kept out of the bosn-replayed `fast` job (`GATE-016`) |
 | `platform-build` | when `needs_platform_lanes` | the Linux cross-build matrix job -- GitHub aggregates every matrix leg into one `needs.platform-build.result` |
 | `platform-run` | when `needs_platform_lanes` | the native-runner execute matrix job -- same aggregation |
 | `init` | when the `init` suite is selected | the from-zero job: no cache restore, template instantiation, precheck + build + smoke of the generated repo |

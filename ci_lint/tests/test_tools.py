@@ -156,6 +156,40 @@ class ToolFixtureTest(unittest.TestCase):
         self.assertFalse(any(f.status == Status.VIOLATION for f in findings), msg=findings)
 
 
+    def test_gen_004_accepts_the_plan_required_lint_job(self) -> None:
+        """forge-ci/ghd#41, zackees/template-python-rust-cmd#82: the local
+        gate replays jobs.fast under bosn, so Ruff/Pylint moved to the
+        dylint job (lint never runs under bosn, GATE-016). That job counts
+        once the plan requires it: `[lint.dylint]` or `[lint] job`."""
+
+        import dataclasses
+
+        ci = load_ci_toml(fixture("CACHE-009", "green-plan-save-cache")).ci
+        assert ci is not None
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            (repo / ".github" / "workflows").mkdir(parents=True)
+            (repo / "ci.py").write_text("print(1)\n", encoding="utf-8")
+            lint = ("      - run: uv run --no-project ruff check .\n"
+                    "      - run: uv run --no-project ruff format --check .\n"
+                    "      - run: uv run --no-project pylint src\n")
+            for job in ("dylint", "lint"):
+                (repo / ".github" / "workflows" / "ci.yml").write_text(
+                    "on: [pull_request]\njobs:\n  fast:\n    runs-on: ubuntu-24.04\n    steps:\n"
+                    "      - run: python3 ci.py\n"
+                    f"  {job}:\n    runs-on: ubuntu-24.04\n    steps:\n{lint}", encoding="utf-8")
+                bare = dataclasses.replace(ci, lint_dylint=None, lint_job=None)
+                self.assertEqual([f.status for f in check_gen_004(repo, bare)], [Status.VIOLATION])
+                self.assertEqual([f.status for f in check_gen_004(repo)], [Status.VIOLATION])
+                dylint = ci.lint_dylint if job == "dylint" else None
+                required = dataclasses.replace(ci, lint_dylint=dylint, lint_job=None if job == "dylint" else job)
+                if job == "dylint" and dylint is None:
+                    from ci_lint.schema import DylintBudget, DylintConfig
+                    required = dataclasses.replace(
+                        ci, lint_dylint=DylintConfig("all-platforms", "multi-target", DylintBudget("", "")))
+                self.assertEqual(check_gen_004(repo, required), [], job)
+
+
 class ToolUnitTest(unittest.TestCase):
     """Fast, YAML-independent checks on the plumbing itself."""
 
