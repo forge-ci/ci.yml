@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import shutil
+import subprocess
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -65,6 +67,53 @@ class Act002Test(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Act002BuildOutputTest(unittest.TestCase):
+    """FastLED/fbuild: gitignored `ci/bin/fbuild` (137 MB) and
+    `ci/bin/fbuild-daemon` (121 MB) are extensionless, so ACT-002 took them
+    for scripts and ran its regexes over them for hours. Only tracked (or
+    untracked, not ignored) files are scanned, and binary (NUL in the first
+    8 KB) or oversized files never are."""
+
+    PAYLOAD = b"act -j test --action-offline-mode\n"
+
+    def setUp(self) -> None:
+        self.tmp = Path(tempfile.mkdtemp())
+        (self.tmp / "ci" / "bin").mkdir(parents=True)
+        (self.tmp / ".gitignore").write_text("ci/bin/\n", encoding="utf-8")
+        # A sparse 300 MB "binary" whose head is lint-bait text.
+        with (self.tmp / "ci" / "bin" / "fbuild").open("wb") as fh:
+            fh.write(self.PAYLOAD)
+            fh.truncate(300 * 1024 * 1024)
+
+    def tearDown(self) -> None:
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _check(self) -> list[str]:
+        start = time.monotonic()
+        found = [f.path for f in check_act_002(self.tmp, (("ci/bin/fbuild", "--help"),))]
+        self.assertLess(time.monotonic() - start, 10)
+        return found
+
+    def test_gitignored_binary_in_a_git_repo(self) -> None:
+        subprocess.run(["git", "init", "-q", str(self.tmp)], check=True)
+        (self.tmp / "ci" / "run.sh").write_text("act -j test\n", encoding="utf-8")
+        self.assertEqual(self._check(), ["ci/run.sh"])
+
+    def test_walk_without_git_honours_gitignore_and_skips_binaries(self) -> None:
+        (self.tmp / "ci" / "tool").write_bytes(b"\0\0ELF" + self.PAYLOAD)
+        with (self.tmp / "ci" / "huge.sh").open("wb") as fh:
+            fh.write(self.PAYLOAD)
+            fh.truncate(5 * 1024 * 1024)
+        self.assertEqual(self._check(), [])
+
+    def test_gate_016_script_reader_skips_binaries(self) -> None:
+        from ci_lint.gate_lint_replay import script_targets
+
+        (self.tmp / "ci" / "gate.py").write_bytes(b"\0" + b"ARGV = ['bosn', 'ci', 'run', '--job', 'fast']\n")
+        self.assertEqual(script_targets(self.tmp, self.tmp / "ci" / "gate.py"), frozenset())
+        self.assertEqual(script_targets(self.tmp, self.tmp / "ci" / "bin" / "fbuild"), frozenset())
 
 
 class Act003Test(unittest.TestCase):

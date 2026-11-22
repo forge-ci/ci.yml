@@ -35,6 +35,7 @@ from ci_lint.gate_lint_host import (
     BOSN_COMMANDS, FIX, RULE, TEST_WORDS, bosn_ci_run_args, cmd_name, lint_like, runs_lint_command,
 )
 from ci_lint.lane_cache import LaneConfig
+from ci_lint.repo_files import read_source_text
 from ci_lint.rules.test_invocations import split_commands
 from ci_lint.workflow_scan import as_dict, jobs_of, steps_of
 from ci_lint.yaml_io import LoadStatus, YamlValue, load_yaml_file
@@ -416,15 +417,18 @@ def _lane_script(repo_root: Path, argv: Sequence[str]) -> Path | None:
 def script_targets(repo_root: Path, script: Path) -> frozenset[Target]:
     """Replay targets in `script` and, for Python, its local imports."""
 
-    text = script.read_text(encoding="utf-8", errors="replace")
+    text = read_source_text(script)
+    if text is None:
+        return frozenset()  # binary or oversized: not a script
     if script.suffix != ".py":
         return _shell_targets(text)
     scan = _python_scan(text)
     targets = set(scan.targets)
     for module in scan.imports:
         path = _module_file(repo_root, module)
-        if path is not None and path != script:
-            targets.update(_python_scan(path.read_text(encoding="utf-8", errors="replace")).targets)
+        imported = read_source_text(path) if path is not None and path != script else None
+        if imported is not None:
+            targets.update(_python_scan(imported).targets)
     return frozenset(targets)
 
 
