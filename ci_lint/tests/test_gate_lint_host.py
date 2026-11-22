@@ -221,11 +221,15 @@ class LintCommandTest(unittest.TestCase):
         for run in ("./ci.py fmt", "python ci.py clippy --all", "uv run ruff check .", "uvx ruff format --check",
                     "python3 -m pylint src", "pyright", "npx eslint .", "clang-tidy -p build a.cc",
                     "set -e\nsoldr lint --check", "cargo \\\n  clippy --all-targets",
-                    ".venv/bin/python -m ci.lint --static-only"):
+                    ".venv/bin/python -m ci.lint --static-only",
+                    # zackees/running-process preflight: a wrapper module passes `--module ci.lint` through
+                    "uv run --no-sync --module ci.run_logged --log lint.log --module ci.lint",
+                    "uv run --module=ci.lint", "python -m ci.run_logged -- -m ci.lint"):
             self.assertIsNotNone(lint_command_in(run), run)
         for run in ("pip install ruff pylint", "uv run --with ruff==1 pytest", "./ci.py test", "python3 -m ci_lint precheck",
                     "python3 ci/fast.py rust-test", "# ruff check", "npm install eslint",
-                    "python -P -m ci_lint cache janitor --repo ."):
+                    "python -P -m ci_lint cache janitor --repo .", "uv run --module ci.run_logged --module ci_lint precheck",
+                    "uv run --module=ci-lint", "python -m ci.run_logged -- -m pytest"):
             self.assertIsNone(lint_command_in(run), run)
 
 
