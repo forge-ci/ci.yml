@@ -152,8 +152,9 @@ same list the forge-quick image pre-seeds into its action cache, so the job
 downloads no action); no `container:` or `services:`; and `runs-on` through
 the `vars.FORGE_QUICK_LABELS` kill switch with a hosted fallback, as above.
 The example above passes it with the allowlisted sha, today
-`a36bc81ad6ada5fb17398e3e7ba38435cc67a951` (#550, the first with the signal
-source; `b53af982` is still allowed). A newer pool-select
+`82945f807590d469a2833f2a421a0a7861bc37d1` (#564, which counts the Dell
+dispatchers' spare room; `a36bc81a` (#550, the first with the signal source)
+and `b53af982` are still allowed). A newer pool-select
 sha must be added to the allowlist (and the image rebuilt) before a
 forge-quick job can use it. `c7ceb022` predates the signal source and the uv
 pin: it needs a token, and on forge-quick its uv step is killed by memguard.

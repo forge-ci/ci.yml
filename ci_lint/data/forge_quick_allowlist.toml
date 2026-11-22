@@ -47,6 +47,15 @@ path = "actions/pool-select"
 sha = "a36bc81ad6ada5fb17398e3e7ba38435cc67a951"
 version = "PR #550 merge"
 
+# Counts the Dell dispatchers' spare room (/v1/pool `dispatcher`) as capacity
+# (forge-ci/gh-runner#67), so a floor-0 lane with headroom is selectable;
+# a36bc81 and b53af98 stay allowed while callers move over.
+[[action]]
+repo = "forge-ci/ci.yml"
+path = "actions/pool-select"
+sha = "82945f807590d469a2833f2a421a0a7861bc37d1"
+version = "PR #564 merge"
+
 # pool-select's composite step pins this exact sha (actions/pool-select/action.yml),
 # so the seed must hold it too; jobs may also use it directly.
 [[action]]
