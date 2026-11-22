@@ -37,6 +37,7 @@ from ci_lint.workflow_scan import (
     as_list,
     jobs_of,
     load_composite_actions,
+    ParsedYamlFile,
     load_workflows,
     steps_of,
 )
@@ -827,7 +828,43 @@ def _scan_commands_for_gen_004(  # noqa: C901
             )
 
 
-def check_gen_004(repo_root: Path) -> list[Finding]:  # noqa: C901
+@dataclass(frozen=True)
+class _LintJob:
+    """A workflow job GEN-004 reads Ruff/Pylint coverage from."""
+
+    job_id: str
+    path: str
+    job: dict[str, YamlValue]
+
+
+def gen_004_lint_job_ids(ci: CiToml | None) -> tuple[str, ...]:
+    """The jobs whose Ruff/Pylint count for GEN-004: `fast`, plus the
+    plan-required lint jobs -- `dylint` when `[lint.dylint]` is declared and
+    `[lint] job` when set. Lint never runs under bosn (GATE-016), so a repo
+    whose local gate replays `fast` runs Ruff/Pylint in its lint job."""
+
+    ids = ["fast"]
+    if ci is not None and ci.lint_dylint is not None:
+        ids.append("dylint")
+    if ci is not None and ci.lint_job and ci.lint_job not in ids:
+        ids.append(ci.lint_job)
+    return tuple(ids)
+
+
+def _gen_004_jobs(workflows: list[ParsedYamlFile], ids: tuple[str, ...]) -> list[_LintJob]:
+    out: list[_LintJob] = []
+    for job_id in ids:
+        for wf in workflows:
+            if wf.status != LoadStatus.OK:
+                continue
+            jobs = jobs_of(as_dict(wf.document))
+            if job_id in jobs:
+                out.append(_LintJob(job_id, wf.path, jobs[job_id]))
+                break
+    return out
+
+
+def check_gen_004(repo_root: Path, ci: CiToml | None = None) -> list[Finding]:  # noqa: C901
     if not any(f.endswith(".py") for f in list_repo_files(repo_root)):
         return []  # GEN-004 only applies when the repo has Python sources
 
@@ -845,57 +882,42 @@ def check_gen_004(repo_root: Path) -> list[Finding]:  # noqa: C901
             )
         ]
 
-    fast_job: dict[str, YamlValue] | None = None
-    fast_path: str | None = None
-    for wf in workflows:
-        if wf.status != LoadStatus.OK:
-            continue
-        jobs = jobs_of(as_dict(wf.document))
-        if "fast" in jobs:
-            fast_job = jobs["fast"]
-            fast_path = wf.path
-            break
-
-    if fast_job is None:
+    ids = gen_004_lint_job_ids(ci)
+    lint_jobs = _gen_004_jobs(workflows, ids)
+    names = " or ".join(f"jobs.{i}" for i in ids)
+    if not any(j.job_id == "fast" for j in lint_jobs):
         return [
             Finding(
                 rule="GEN-004",
                 message="repository has Python sources but no job id 'fast' exists in any workflow",
                 fix="add a job id 'fast' that runs 'ruff check', 'ruff format --check', and "
-                "'pylint' over the Python sources (directly, or via a 'ci/*.py' script it calls)",
+                "'pylint' over the Python sources (directly, or via a 'ci/*.py' script it calls), "
+                "or run them in a plan-required lint job ('dylint', or ci.toml's [lint] job)",
             )
         ]
-
-    if "uses" in fast_job:
-        return [
-            Finding(
-                rule="GEN-004",
-                path=fast_path,
-                status=Status.NEEDS_REVIEW,
-                message="jobs.fast calls a reusable workflow ('uses:'); cannot statically verify its "
-                "Ruff/Pylint coverage from this file",
-                fix="re-run GEN-004 against the called reusable workflow file directly, or inline "
-                "jobs.fast's steps",
-            )
-        ]
-
-    run_texts = [s["run"] for s in steps_of(fast_job) if isinstance(s.get("run"), str)]
-    commands: list[list[str]] = []
-    for text in run_texts:
-        commands.extend(find_commands(text))
+    fast_path = next(j.path for j in lint_jobs if j.job_id == "fast")
 
     found: set[str] = set()
     black_isort_hits: list[LintToolHit] = []
     unresolved: list[str] = []
-    _scan_commands_for_gen_004(
-        commands,
-        repo_root,
-        found=found,
-        black_isort_hits=black_isort_hits,
-        unresolved=unresolved,
-        loc=f"jobs.fast.steps[*] in {fast_path}",
-        follow_scripts=True,
-    )
+    reusable: list[_LintJob] = []
+    for lint_job in lint_jobs:
+        if "uses" in lint_job.job:
+            reusable.append(lint_job)
+            continue
+        commands: list[list[str]] = []
+        for step in steps_of(lint_job.job):
+            if isinstance(step.get("run"), str):
+                commands.extend(find_commands(step["run"]))
+        _scan_commands_for_gen_004(
+            commands,
+            repo_root,
+            found=found,
+            black_isort_hits=black_isort_hits,
+            unresolved=unresolved,
+            loc=f"jobs.{lint_job.job_id}.steps[*] in {lint_job.path}",
+            follow_scripts=True,
+        )
 
     findings: list[Finding] = []
     for hit in sorted(set(black_isort_hits)):
@@ -912,7 +934,19 @@ def check_gen_004(repo_root: Path) -> list[Finding]:  # noqa: C901
         )
 
     missing = {"ruff-check", "ruff-format-check", "pylint"} - found
-    if missing:
+    if missing and reusable:
+        called = ", ".join(f"jobs.{j.job_id}" for j in reusable)
+        findings.append(
+            Finding(
+                rule="GEN-004",
+                path=fast_path,
+                status=Status.NEEDS_REVIEW,
+                message=f"{called} calls a reusable workflow ('uses:'); cannot statically verify its "
+                "Ruff/Pylint coverage from this file",
+                fix=f"re-run GEN-004 against the called reusable workflow file directly, or inline {called}'s steps",
+            )
+        )
+    elif missing:
         missing_desc = ", ".join(_LINT_KIND_LABEL[m] for m in sorted(missing))
         if unresolved:
             findings.append(
@@ -920,10 +954,10 @@ def check_gen_004(repo_root: Path) -> list[Finding]:  # noqa: C901
                     rule="GEN-004",
                     path=fast_path,
                     status=Status.NEEDS_REVIEW,
-                    message=f"jobs.fast may be missing {missing_desc}; it also invokes "
+                    message=f"{names} may be missing {missing_desc}; they also invoke "
                     f"{'; '.join(sorted(set(unresolved)))}, which could not be resolved to confirm "
                     "coverage",
-                    fix="make the fast job's Ruff/Pylint invocations directly inspectable: a literal "
+                    fix="make the Ruff/Pylint invocations directly inspectable: a literal "
                     "'ruff check'/'ruff format --check'/'pylint' in a run: line, or a tracked "
                     "'ci/*.py' script that calls them via a literal subprocess argv",
                 )
@@ -933,9 +967,11 @@ def check_gen_004(repo_root: Path) -> list[Finding]:  # noqa: C901
                 Finding(
                     rule="GEN-004",
                     path=fast_path,
-                    message=f"jobs.fast does not invoke {missing_desc}",
-                    fix=f"add {missing_desc} to jobs.fast's run: steps (directly, or via a 'ci/*.py' "
-                    f"script it calls) in {fast_path}",
+                    message=f"{names} does not invoke {missing_desc}" if len(lint_jobs) == 1
+                    else f"no job of {names} invokes {missing_desc}",
+                    fix=f"add {missing_desc} to the run: steps of {names} (directly, or via a 'ci/*.py' "
+                    "script it calls); a repo whose local gate replays jobs.fast under bosn runs them in "
+                    "its plan-required lint job (GATE-016)",
                 )
             )
     return findings
@@ -1120,5 +1156,5 @@ def check_group4(ci: CiToml, repo_root: Path) -> list[Finding]:
     findings.extend(check_tool_003(repo_root))
     findings.extend(check_cache_009(ci, repo_root))
     findings.extend(check_rust_002(repo_root))
-    findings.extend(check_gen_004(repo_root))
+    findings.extend(check_gen_004(repo_root, ci))
     return findings

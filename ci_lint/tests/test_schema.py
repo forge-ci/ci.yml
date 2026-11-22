@@ -179,3 +179,35 @@ class ExceptionFixtureTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LintJobTableTest(unittest.TestCase):
+    """`[lint] job` names the host-run lint job the plan requires (GEN-004,
+    GATE-016); with it, `[lint.dylint]` becomes optional."""
+
+    def _load(self, lint: str):
+        import shutil
+        import tempfile
+        from pathlib import Path
+
+        from ci_lint.schema import load_ci_toml
+
+        src = fixture("CACHE-009", "green-plan-save-cache") / "ci.toml"
+        text = src.read_text(encoding="utf-8")
+        start = text.index("[lint.dylint]")
+        end = text.index("[suites]")
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp, True)
+        (tmp / "ci.toml").write_text(text[:start] + lint + "\n" + text[end:], encoding="utf-8")
+        return load_ci_toml(tmp)
+
+    def test_job_without_dylint(self) -> None:
+        loaded = self._load('[lint]\njob = "lint"\n')
+        self.assertIsNotNone(loaded.ci)
+        assert loaded.ci is not None
+        self.assertEqual((loaded.ci.lint_job, loaded.ci.lint_dylint), ("lint", None))
+        self.assertFalse([f for f in loaded.findings if "lint" in f.message], loaded.findings)
+
+    def test_lint_without_job_still_requires_dylint(self) -> None:
+        loaded = self._load("[lint]\n")
+        self.assertTrue([f for f in loaded.findings if "lint.dylint" in f.message or "dylint" in f.message])

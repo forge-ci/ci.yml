@@ -491,6 +491,9 @@ class CiToml:
     fleet: FleetConfig
     reuse: ReuseConfig
     source_path: str
+    # `[lint] job`: a host-run lint job the plan requires (GEN-004 accepts
+    # Ruff/Pylint there instead of in the bosn-replayed `fast`, GATE-016).
+    lint_job: str | None = None
 
 
 def _parse_platforms(root: Cursor) -> PlatformIndex:
@@ -554,12 +557,19 @@ def _parse_rust(root: Cursor) -> RustConfig | None:
     return RustConfig(public=public, private=private, ship=ship, tests=tests, public_role=public_role)
 
 
-def _parse_lint_dylint(root: Cursor) -> DylintConfig | None:
+@dataclass(frozen=True)
+class _LintTable:
+    dylint: DylintConfig | None
+    job: str | None
+
+
+def _parse_lint(root: Cursor) -> _LintTable:
     lint_raw = root.table_("lint", required=False)
     if lint_raw is None:
-        return None
+        return _LintTable(None, None)
     lint_sub = Cursor(lint_raw, "lint", root.findings, root.source)
-    dylint_raw = lint_sub.table_("dylint", required=True)
+    job = lint_sub.str_("job", required=False)
+    dylint_raw = lint_sub.table_("dylint", required=job is None)
     result = None
     if dylint_raw is not None:
         dsub = Cursor(dylint_raw, "lint.dylint", root.findings, root.source)
@@ -576,7 +586,7 @@ def _parse_lint_dylint(root: Cursor) -> DylintConfig | None:
         dsub.finish()
         result = DylintConfig(targets=targets, shape=shape, budget=budget)
     lint_sub.finish()
-    return result
+    return _LintTable(result, job)
 
 
 def _parse_suites(root: Cursor) -> SuiteIndex:
@@ -1294,7 +1304,7 @@ def load_ci_toml(repo_root: Path) -> LoadResult:
     platforms = _parse_platforms(root)
     python = _parse_python(root)
     rust = _parse_rust(root)
-    lint_dylint = _parse_lint_dylint(root)
+    lint_table = _parse_lint(root)
     suites = _parse_suites(root)
     flows = _parse_flows(root)
     tags = _parse_tags(root)
@@ -1316,7 +1326,8 @@ def load_ci_toml(repo_root: Path) -> LoadResult:
         platforms=platforms,
         python=python,
         rust=rust,
-        lint_dylint=lint_dylint,
+        lint_dylint=lint_table.dylint,
+        lint_job=lint_table.job,
         suites=suites,
         flows=flows,
         tags=tags,

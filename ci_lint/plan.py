@@ -178,6 +178,7 @@ def _required_job_ids(
     dylint_targets: tuple[str, ...],
     suites: tuple[str, ...] = (),
     publish: str = "none",
+    lint_job: str | None = None,
 ) -> tuple[str, ...]:
     """The job `id:`s (`needs:` keys) `ci-lint gate` requires to have
     `result == "success"` (round-2A brief, part 2d; amended by the
@@ -188,6 +189,9 @@ def _required_job_ids(
       - "precheck" always (the precheck job itself).
       - "fast" always -- the default linux-x64 build+unit+smoke lane.
       - "dylint" when any dylint target is selected.
+      - `[lint] job` (e.g. "lint") when ci.toml declares one -- the host-run
+        lint job GEN-004 accepts Ruff/Pylint in, because lint never runs in
+        the bosn-replayed `fast` job (GATE-016).
       - "platform-build" and "platform-run" only when `needs_platform_lanes`
         is true -- these are matrix jobs (one leg per non-default
         platform); GitHub aggregates every matrix leg into a single
@@ -211,6 +215,8 @@ def _required_job_ids(
     jobs = ["precheck", "fast"]
     if dylint_targets:
         jobs.append("dylint")
+    if lint_job and lint_job not in jobs:
+        jobs.append(lint_job)
     if needs_platform_lanes:
         jobs.append("platform-build")
         jobs.append("platform-run")
@@ -542,7 +548,7 @@ def compute_plan(  # noqa: C901
         mergeable=mergeable,
         digest=digest,
         reasons=tuple(reasons),
-        required_jobs=_required_job_ids(needs_platform_lanes, dylint_targets, final_suites, publish),
+        required_jobs=_required_job_ids(needs_platform_lanes, dylint_targets, final_suites, publish, ci.lint_job),
         needs_platform_lanes=needs_platform_lanes,
         dispatch_sha=dispatch_sha,
         platform_lanes=platform_lanes,

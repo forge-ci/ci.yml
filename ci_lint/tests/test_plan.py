@@ -302,3 +302,5 @@ class RequiredJobsForSuitesAndPublishTest(unittest.TestCase):
             _required_job_ids(True, ("t",), ("unit",), "mock"),
             base + ("platform-build", "platform-run", "release-verify", "publish"),
         )
+        self.assertEqual(_required_job_ids(False, (), ("unit",), "none", "lint"), ("precheck", "fast", "lint"))
+        self.assertEqual(_required_job_ids(False, ("t",), ("unit",), "none", "dylint"), base)
