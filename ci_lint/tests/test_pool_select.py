@@ -435,6 +435,77 @@ class SignalSource(unittest.TestCase):
         doc["orgs"]["FastLED"]["runners"][0]["new_field"] = 1
         self.assertTrue(run(signal(), FakeApi(doc))[0].pool)
 
+    # -- dispatcher room (forge-ci/gh-runner#67)
+
+    def _with_dispatcher(self, *hosts: dict, groups: tuple[dict, ...] = (), org: str = "obs-rust") -> dict:
+        doc = status(*groups, org=org)
+        doc["orgs"][org]["dispatcher"] = {"hosts": list(hosts), "demand": {"state": "ok", "queued": 0}}
+        return doc
+
+    @staticmethod
+    def _lane(spare: int, labels: list[str] | None = None, age: object = 12.0, host: str = "dell-fsx3mn2") -> dict:
+        names = labels if labels is not None else [
+            "self-hosted", "linux", "x64", "nixos-host", "forge-pool", "forge-dispatch", host, "obs-ubuntu-2604"]
+        return {"host": host, "age_s": age, "lane": "obs-rust", "labels": names, "idle": 0, "busy": 0,
+                "starting": 0, "max": 10, "room": spare, "queued": 0, "spare": spare}
+
+    def test_floor_zero_lane_with_room_is_selectable(self) -> None:
+        labels = '["self-hosted","forge-pool","obs-ubuntu-2604"]'
+        doc = self._with_dispatcher(self._lane(3))
+        decision, out = run(signal(owner="obs-rust", labels=labels), FakeApi(doc))
+        self.assertTrue(decision.pool)
+        self.assertIn("room=3", decision.reason)
+        self.assertIn("a dispatcher starts the runner", decision.reason)
+        self.assertNotIn("::warning::", out)
+
+    def test_room_counts_only_matching_fresh_well_formed_lanes(self) -> None:
+        labels = '["self-hosted","forge-pool","obs-ubuntu-2604"]'
+        cases = {
+            "no spare (cap 0, hold or claimed)": self._lane(0),
+            "other lane's labels": self._lane(5, labels=["self-hosted", "forge-pool", "ubuntu-2404"]),
+            "stale report": self._lane(5, age=181),
+            "bool age": self._lane(5, age=True),
+            "negative spare": self._lane(-1),
+            "labels missing": {k: v for k, v in self._lane(5).items() if k != "labels"},
+            "spare not an int": {**self._lane(5), "spare": "5"},
+            "not an object": "dell-fsx3mn2",  # type: ignore[dict-item]
+        }
+        for name, host in cases.items():
+            with self.subTest(case=name):
+                decision, out = run(signal(owner="obs-rust", labels=labels), FakeApi(self._with_dispatcher(host)))
+                self.assertFalse(decision.pool)
+                self.assertIn("room=0", decision.reason)
+                self.assertNotIn("::warning::", out, "a bad dispatcher entry is no room, not an error")
+
+    def test_room_and_idle_add_up_for_min_idle(self) -> None:
+        labels = '["self-hosted","forge-pool","obs-ubuntu-2604"]'
+        idle = group(["self-hosted", "forge-pool", "dell-fsx3mn2", "obs-ubuntu-2604"], 1, 0)
+        doc = self._with_dispatcher(self._lane(1), self._lane(1, host="dell-jw22zc3", age=500), groups=(idle,))
+        self.assertTrue(run(signal(owner="obs-rust", labels=labels, min_idle="2"), FakeApi(doc))[0].pool)
+        self.assertFalse(run(signal(owner="obs-rust", labels=labels, min_idle="3"), FakeApi(doc))[0].pool)
+
+    def test_count_room_false_and_github_source_ignore_room(self) -> None:
+        labels = '["self-hosted","forge-pool","obs-ubuntu-2604"]'
+        doc = self._with_dispatcher(self._lane(4))
+        self.assertFalse(run(signal(owner="obs-rust", labels=labels, count_room="false"), FakeApi(doc))[0].pool)
+        cfg = sp.settings_from_env({"GITHUB_REPOSITORY": "obs-rust/obs-studio", "POOL_COUNT_ROOM": "false"})
+        self.assertEqual(cfg.count_room, "false")
+        self.assertEqual(sp.settings_from_env({"GITHUB_REPOSITORY": "a/b"}).count_room, "true")
+        decision, _ = run(settings(owner="obs-rust", labels=labels), FakeApi(page()))
+        self.assertFalse(decision.pool, "the github source has no dispatcher room")
+
+    def test_null_dispatcher_is_no_room(self) -> None:
+        decision, _ = run(signal(), FakeApi(status(group(DELL, 1, 1))))
+        self.assertFalse(decision.pool)
+        self.assertIn("room=0", decision.reason)
+
+    def test_action_wires_count_room(self) -> None:
+        action = (Path(__file__).resolve().parents[2] / "actions" / "pool-select" / "action.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("POOL_COUNT_ROOM: ${{ inputs.count-room }}", action)
+        self.assertIn("count-room:", action)
+
     def test_settings_from_env_reads_source_and_url(self) -> None:
         cfg = sp.settings_from_env({"GITHUB_REPOSITORY": "forge-ci/soldr", "POOL_SOURCE": "signal",
                                     "POOL_STATUS_URL": "https://x.test/v1/pool"})

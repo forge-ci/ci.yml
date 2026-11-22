@@ -11,9 +11,18 @@ Capacity comes from one of two sources:
 - `signal` (the default with no token): the tokenless read-only pool status
   `GET https://signal.forge-ci.com/v1/pool?org=<owner>` (schema
   `forge-ci.pool-status` version 1, forge-ci/signal.forge-ci.com
-  docs/droplet.md), which lists each org's online runners as label sets;
+  docs/droplet.md), which lists each org's online runners as label sets
+  and, in `dispatcher`, the Dell dispatchers' room to start runners
+  (forge-ci/gh-runner#67);
 - `github` (the default when a token is given): `GET /orgs/{owner}/actions/runners`
   with that token.
+
+Capacity is idle matching runners plus, with the signal source and
+`count-room` on (the default), the dispatchers' `spare` room for lanes whose
+labels carry every wanted label: a job routed there queues, signal sees it,
+and the host's dispatcher starts a runner for it (a lane at floor 0 has no
+idle runner but is still selectable). A dispatcher entry older than 180 s or
+malformed counts as no room.
 
 Every unknown state selects the hosted fallback: a missing token, an
 untrusted event, a fork pull request, an API or status error or timeout,
@@ -53,6 +62,8 @@ STATUS_SCHEMA = "forge-ci.pool-status"
 STATUS_VERSION = 1
 # Oldest status data the selector accepts, whatever the server's max_age_s says.
 STATUS_MAX_AGE_S = 30
+# Oldest dispatcher report whose room counts (signal drops older ones too).
+DISPATCHER_MAX_AGE_S = 180
 
 # fetch(url, token) -> parsed JSON page. Injected so tests never touch the network.
 Fetch: TypeAlias = Callable[[str, str], "JsonValue"]
@@ -77,6 +88,7 @@ class Settings:
     api_url: str
     source: str = ""
     status_url: str = ""
+    count_room: str = "true"
 
 
 @dataclass(frozen=True)
@@ -111,6 +123,7 @@ class StatusGroup:
 class Capacity:
     online: int
     busy: int
+    room: int = 0  # runners the dispatchers would start (signal `dispatcher` spare)
 
     @property
     def idle(self) -> int:
@@ -280,8 +293,8 @@ def status_group(value: JsonValue) -> StatusGroup:
     return StatusGroup(frozenset(str(label).casefold() for label in labels), online, busy)
 
 
-def org_status(document: JsonValue, owner: str) -> list[StatusGroup]:
-    """The owner's runner groups from a v1 pool status, or a fixed reason to run hosted."""
+def org_entry(document: JsonValue, owner: str) -> dict[str, JsonValue]:
+    """The owner's fresh `ok` entry of a v1 pool status, or a fixed reason to run hosted."""
     if not isinstance(document, dict) or document.get("schema") != STATUS_SCHEMA:
         raise ProbeError("pool status has an unknown schema")
     if document.get("version") != STATUS_VERSION:
@@ -298,17 +311,58 @@ def org_status(document: JsonValue, owner: str) -> list[StatusGroup]:
     limit = min(STATUS_MAX_AGE_S, server_max) if type(server_max) is int else STATUS_MAX_AGE_S
     if not isinstance(age, (int, float)) or isinstance(age, bool) or not 0 <= age <= limit:
         raise ProbeError("pool status is stale")
-    groups = entry.get("runners")
+    return entry
+
+
+def org_status(document: JsonValue, owner: str) -> list[StatusGroup]:
+    """The owner's runner groups from a v1 pool status, or a fixed reason to run hosted."""
+    groups = org_entry(document, owner).get("runners")
     if not isinstance(groups, list):
         raise ProbeError("malformed pool status")
     return [status_group(group) for group in groups]
 
 
+def dispatcher_room(entry: dict[str, JsonValue], wanted: set[str]) -> int:
+    """`spare` of every fresh dispatcher lane carrying all wanted labels.
+
+    Lenient: a missing, null or malformed `dispatcher` (or host entry) adds no
+    room, it never fails the selection; idle runners still count.
+    """
+    disp = entry.get("dispatcher")
+    hosts = disp.get("hosts") if isinstance(disp, dict) else None
+    if not isinstance(hosts, list):
+        return 0
+    room = 0
+    for host in hosts:
+        if not isinstance(host, dict):
+            continue
+        labels, spare, age = host.get("labels"), host.get("spare"), host.get("age_s")
+        if not isinstance(labels, list) or not all(isinstance(label, str) for label in labels):
+            continue
+        if type(spare) is not int or spare < 0:
+            continue
+        if not isinstance(age, (int, float)) or isinstance(age, bool) or not 0 <= age <= DISPATCHER_MAX_AGE_S:
+            continue
+        if wanted.issubset({str(label).casefold() for label in labels}):
+            room += spare
+    return room
+
+
+def counts_room(raw: str) -> bool:
+    """Only an explicit false turns the dispatcher room off."""
+    return raw.strip().casefold() not in {"false", "0", "no", "off"}
+
+
 def signal_capacity(fetch: Fetch, settings: Settings, wanted: set[str]) -> Capacity:
-    """Sum the online and busy counts of every label set carrying all wanted labels. No token is sent."""
-    groups = org_status(fetch(status_url(settings), ""), settings.owner)
-    matched = [group for group in groups if wanted.issubset(group.labels)]
-    return Capacity(online=sum(g.online for g in matched), busy=sum(g.busy for g in matched))
+    """Sum the online and busy counts of every label set carrying all wanted
+    labels, plus the dispatchers' spare room for them. No token is sent."""
+    entry = org_entry(fetch(status_url(settings), ""), settings.owner)
+    groups = entry.get("runners")
+    if not isinstance(groups, list):
+        raise ProbeError("malformed pool status")
+    matched = [g for g in (status_group(group) for group in groups) if wanted.issubset(g.labels)]
+    room = dispatcher_room(entry, wanted) if counts_room(settings.count_room) else 0
+    return Capacity(online=sum(g.online for g in matched), busy=sum(g.busy for g in matched), room=room)
 
 
 def describe_error(error: Exception) -> str:
@@ -332,12 +386,18 @@ def probe(fetch: Fetch, settings: Settings, labels: list[str], fallback: str) ->
         capacity = signal_capacity(fetch, settings, wanted)
     else:
         capacity = count_capacity(fetch, settings, wanted)
-    available = capacity.online if settings.mode == "prefer" else capacity.idle
+    available = (capacity.online if settings.mode == "prefer" else capacity.idle) + capacity.room
     counts = (
-        f"source={source}, online={capacity.online}, busy={capacity.busy}, idle={capacity.idle}, required={required}"
+        f"source={source}, online={capacity.online}, busy={capacity.busy}, idle={capacity.idle}, "
+        f"required={required}, room={capacity.room}"
     )
     if available >= required:
-        what = "matching online runner (prefer mode)" if settings.mode == "prefer" else "idle pool capacity"
+        if settings.mode == "prefer":
+            what = "matching online runner (prefer mode)"
+        elif capacity.idle >= required:
+            what = "idle pool capacity"
+        else:
+            what = "pool capacity (a dispatcher starts the runner)"
         return Decision(compact(labels), True, f"{what} ({counts})")
     return Decision(fallback, False, f"not enough pool capacity ({counts})")
 
@@ -389,6 +449,7 @@ def settings_from_env(env: dict[str, str]) -> Settings:
         api_url=env.get("GITHUB_API_URL", "") or "https://api.github.com",
         source=env.get("POOL_SOURCE", ""),
         status_url=env.get("POOL_STATUS_URL", ""),
+        count_room=env.get("POOL_COUNT_ROOM", "true"),
     )
 
 
