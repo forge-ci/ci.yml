@@ -29,6 +29,7 @@ from ci_lint.rules.default_branch_skip import check_gen_021
 from ci_lint.rules.merge_queue import check_gen_022
 from ci_lint.gate_bare_tools import check_no_bare_rust
 from ci_lint.gate_lint_host import check_gate_016, gate_replay_jobs, gate_replay_lanes
+from ci_lint.gate_push_prooft import check_push_prooft
 from ci_lint.local_gate import GATE_FILE, check_gate_static
 from ci_lint.remote_only import check_gate_012
 from ci_lint.act_static import check_act_002, check_act_003
@@ -192,7 +193,7 @@ GROUP_LABELS: dict[int, str] = {
     12: "ci-pre.yml shape + PR cache keys (GEN-014..018, CACHE-013)",
     15: "paths blast radius + platform check-only coverage + cook safety (GEN-007, RUST-008/010)",
     16: "default-branch skips only through verified reuse (GEN-021)",
-    17: "local gate first: remote quick gate mirrors the local gate, PR entry verifies it (GATE-001/002); lint runs on the host through soldr lint, never under bosn (GATE-016)",
+    17: "local gate first: remote quick gate mirrors the local gate, PR entry verifies it (GATE-001/002); lint runs on the host through soldr lint, never under bosn (GATE-016); ./push delegates to the prooft runner (GATE-014); a runnable lint lane comes before any build (GATE-017)",
     18: "remote-only checks never gate a PR: CodeRabbit suppressed, act-impossible steps confined, no app waits (GATE-012); local workflow runs go through bosn -> pinned act2, no legacy action-cache flags (ACT-002); no unregistered ACT-keyed workaround in a workflow (ACT-003)",
     19: "function-complexity ratchet: clippy and ruff ceilings, per-function expect/noqa only (RUST-018, PY-004)",
     20: "GitHub API budget: no unbounded GitHub re-read loops in run:, ci/ or skill/tool scripts (GHAPI-001)",
@@ -291,6 +292,7 @@ def run_precheck(repo_root: Path, *, title: str = "", local: bool = False, live:
                                            gate_replay_jobs(None if gate_cfg is None else gate_cfg.replay),
                                            gate_replay_lanes(None if gate_cfg is None else gate_cfg.replay),
                                            full_run=gate_cfg is not None and gate_cfg.full_run is not None))
+        all_findings.extend(check_push_prooft(repo_root))
         if ci.local.gate is not None:
             all_findings.extend(check_gate_static(ci.local.gate, repo_root))
             all_findings.extend(check_no_bare_rust(repo_root, ci.local.gate.run, workflows=False))
