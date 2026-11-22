@@ -74,9 +74,22 @@ def _tool_runs(tokens: Sequence[str]) -> bool:
             return True
         if name == "ci.py" and i + 1 < len(tokens) and tokens[i + 1] in CI_PY_LINT:
             return True
-        if token == "-m" and i + 1 < len(tokens) and lint_like(tokens[i + 1]):
-            return True  # `python -m ci.lint`, `python -m pylint` (never `-m ci_lint`)
+        if _module_flag_value(tokens, i) is not None and lint_like(_module_flag_value(tokens, i) or ""):
+            return True  # `python -m ci.lint`, `uv run --module ci.lint`, wrappers too (never ci_lint)
     return False
+
+
+def _module_flag_value(tokens: Sequence[str], i: int) -> str | None:
+    """The module named by `-m X`, `--module X` or `--module=X` at `tokens[i]`,
+    anywhere in the line (so a wrapper's own `--module ci.run_logged ...
+    --module ci.lint` passthrough counts too)."""
+
+    token = tokens[i]
+    if token.startswith("--module="):
+        return token.split("=", 1)[1]
+    if token in ("-m", "--module") and i + 1 < len(tokens):
+        return tokens[i + 1]
+    return None
 
 
 def _logical_lines(run: str) -> list[str]:
