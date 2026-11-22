@@ -39,7 +39,10 @@ inputs:
     required: false
     default: "https://signal.forge-ci.com/v1/pool"
   min-idle:
-    description: Idle matching online runners required to pick the pool.
+    description: >-
+      Matching capacity required to pick the pool: idle online runners, plus
+      (source 'signal', count-room on) the Dell dispatchers' spare room to
+      start one.
     required: false
     default: "1"
   mode:
@@ -49,6 +52,14 @@ inputs:
       queues for it).
     required: false
     default: ""
+  count-room:
+    description: >-
+      'true' (default): with source 'signal', count the dispatchers' spare
+      room (/v1/pool `dispatcher`, forge-ci/gh-runner#67) as capacity, so a
+      lane at floor 0 with headroom is selectable; the dispatcher starts a
+      runner for the queued job. 'false': idle runners only.
+    required: false
+    default: "true"
   trusted-only:
     description: >-
       'true' (default): use the pool only for push, merge_group,
@@ -88,6 +99,7 @@ runs:
         POOL_TRUSTED_ONLY: ${{ inputs.trusted-only }}
         POOL_SOURCE: ${{ inputs.source }}
         POOL_STATUS_URL: ${{ inputs.status-url }}
+        POOL_COUNT_ROOM: ${{ inputs.count-room }}
       run: uv run --no-project --script "${GITHUB_ACTION_PATH}/select_pool.py"
     - name: Fall back to hosted runners
       id: fallback

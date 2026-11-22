@@ -37,7 +37,21 @@ The action picks the pool only when all of these hold. Otherwise it picks
      label set that carries all of `labels`. It runs hosted when the response
      isn't HTTP 200, has another schema or version, has no `ok` entry for the
      org, or has data older than 30 s (or the server's `max_age_s`). It ignores
-     fields it doesn't know, including the reserved `dispatcher`.
+     fields it doesn't know.
+
+     With `count-room: true` (the default), the signal source also counts
+     the Dell dispatchers' room to start a runner (forge-ci/gh-runner#67).
+     For every entry in the org's `dispatcher.hosts` whose lane `labels`
+     carry all of `labels` and whose report is at most 180 s old, it adds
+     that lane's `spare`: room the dispatcher has (lane max, host cap, no
+     refill hold) that queued jobs have not already claimed. A lane at floor
+     0 has no idle runner, but with spare room it is still selectable. The
+     job queues, signal's demand poller sees it within about 20 s, and the
+     host's dispatcher starts a runner for it on its next pass. A missing,
+     null or malformed `dispatcher`, a stale report, or a host taken out of
+     CI (cap 0, which signal leaves out) adds no room. That is never an
+     error, and idle runners still count. `count-room: false` counts idle
+     runners only.
    - `github`, the default when `token` is set (the original behaviour):
      `GET /orgs/{github.repository_owner}/actions/runners` with the token (at
      most 5 pages of 100, 3 s timeout each). With `source: github` and no
@@ -71,7 +85,8 @@ onboard one job at a time (see gh-runner `docs/pool.md`).
 | `token` | `""` | Token that can list the owner's organization runners. Not needed with the signal source. |
 | `source` | `""` | `""`/`auto`: `github` with a token, else `signal`. `signal`: tokenless pool status. `github`: the org runners API with `token`. |
 | `status-url` | `https://signal.forge-ci.com/v1/pool` | Pool status for `source: signal`; https only; `?org=<owner>` is appended. |
-| `min-idle` | `1` | Idle matching runners required. |
+| `min-idle` | `1` | Matching capacity required: idle runners, plus the dispatchers' spare room (signal source, `count-room`). |
+| `count-room` | `true` | Count the Dell dispatchers' spare room (`/v1/pool` `dispatcher`) as capacity, so a floor-0 lane with headroom is selectable. |
 | `mode` | `""` | `""`/`idle`: require `min-idle` idle runners. `prefer`: any matching online runner. |
 | `trusted-only` | `true` | Only `false` turns the event and fork checks off. |
 
