@@ -452,6 +452,122 @@ def check_commit(repo: Path, sha: str, *, _depth: int = 0) -> CommitCheck:
     return CommitCheck(sha, "missing", f"no {TRAILER_KEY} trailer on {sha[:12]}")
 
 
+# ── inert-change exemption (soldr#4195) ─────────────────────────────────────
+#
+# A head that changes no path any declared lane can read cannot execute any
+# lane work: every lane's input set (GATE-007, lane_cache) is unchanged, so the
+# gate would replay all of them and stamp a tree whose build inputs are those of
+# a commit the gate already judged. Refusing such a push (or failing its PR)
+# asks an author to spend a full gate run to prove that a docs edit compiles
+# nothing, which is exactly the cost the *gate* exists to avoid.
+#
+# The decision is derived from the repository's own lane declarations, never
+# from a built-in list of "harmless" extensions: a `.md` file is a build input
+# in a crate that `include_str!`s it, and only the lane's `exclude`/`keep`
+# globs know that. Fail closed everywhere -- no lanes, an unreadable diff, a
+# delete or a type change, or any path some lane reads all keep the exemption
+# off.
+
+INERT_STATE = "inert"
+
+
+@dataclass(frozen=True)
+class PathChange:
+    """One entry of `git diff --name-status`: a git status letter and a path."""
+
+    status: str
+    path: str
+
+
+@dataclass(frozen=True)
+class LaneMatcher:
+    """A declared lane and its `exclude`/`keep` decision (GATE-007)."""
+
+    lane: LaneConfig
+    excluded: Callable[[str], bool]
+
+
+def _changed_paths(repo: Path, base: str, head: str) -> list[PathChange] | None:
+    """The changed paths in `base..head`, or None when git cannot answer.
+
+    `--no-renames` reports a rename as a delete plus an add, so a rename never
+    looks like a single modified path. `-z` keeps paths with spaces intact.
+    """
+
+    try:
+        out = _git(repo, "diff", "--name-status", "--no-renames", "--no-ext-diff", "-z", base, head)
+    except GitError:
+        return None
+    fields = out.split("\0")
+    changes: list[PathChange] = []
+    index = 0
+    while index + 1 < len(fields):
+        status, path = fields[index], fields[index + 1]
+        if not status or not path:
+            break
+        changes.append(PathChange(status, path))
+        index += 2
+    return changes
+
+
+def _lane_invisible(change: PathChange, lanes: list["LaneMatcher"], mandatory: set[str],
+                   declarations: frozenset[str]) -> bool:
+    """True when no declared lane can read `change`.
+
+    A delete (`D`), a type change (`T`) or any status other than `A`/`M` is
+    always visible: the gate may still have to prove something about the path.
+    """
+
+    if change.status not in ("A", "M"):
+        return False
+    if change.path.rsplit("/", 1)[-1] in declarations:
+        return False
+    if change.path in mandatory:
+        return False
+    return all(pair.excluded(change.path) for pair in lanes)
+
+
+def inert_change(repo: Path, base: str, head: str, config: GateConfig) -> str | None:
+    """Why `base..head` needs no gate attestation, or None when it does.
+
+    Only `M`/`A` count: `D` (a deleted path a lane may have read), `T` (a file
+    replaced by a symlink or submodule) and every other status need review, so
+    they keep the gate.
+    """
+
+    from ci_lint.lane_cache import (  # noqa: PLC0415 -- lane config is the GATE-007 layer
+        DECLARATION_BASENAMES,
+        _Matcher,
+        mandatory_paths,
+        tree_entries,
+    )
+
+    if not config.lanes:
+        return None
+    changes = _changed_paths(repo, base, head)
+    if changes is None or not changes:
+        return None
+    try:
+        head_paths = {entry.path for entry in tree_entries(repo, tree_of(repo, head))}
+    except GitError:
+        return None
+    # A removed path is no longer in the head tree, so `mandatory_paths` cannot
+    # see it; the declaration and pin basenames are exact names, so test them
+    # directly as well.
+    all_paths = head_paths | {change.path for change in changes}
+    lanes = [LaneMatcher(lane, _Matcher.of(lane).excluded) for lane in config.lanes]
+    mandatory: set[str] = set()
+    for pair in lanes:
+        mandatory |= mandatory_paths(pair.lane, config.run, config.source, all_paths)
+    if not all(_lane_invisible(change, lanes, mandatory, DECLARATION_BASENAMES) for change in changes):
+        return None
+    ids = ", ".join(lane.id for lane in config.lanes)
+    shown = ", ".join(change.path for change in changes[:5])
+    more = "" if len(changes) <= 5 else f" (+{len(changes) - 5} more)"
+    return (f"{len(changes)} changed path(s) ({shown}{more}), all excluded from every declared gate lane "
+            f"({ids}); no lane's inputs change, so the gate would replay every lane")
+
+
 class HeadMoved(ValueError):
     """HEAD is no longer the commit the gate ran against (ci.yml#515)."""
 
@@ -968,6 +1084,9 @@ class PushCheck:
     wip: list[str] = field(default_factory=list)
     # Unattested heads let through because the pushed policy is `mode = "shadow"`.
     shadow: list[str] = field(default_factory=list)
+    # Unattested heads let through because no declared lane reads any changed
+    # path (soldr#4195). Reported, never silent.
+    inert: list[str] = field(default_factory=list)
     # True when a checked head's policy leaves `mode` to the shadow default.
     mode_defaulted: bool = False
 
@@ -1082,6 +1201,66 @@ def _strictest_mode(repo: Path, local_sha: str, remote_sha: str, local_mode: str
     return EffectiveMode(local_mode)
 
 
+def _no_lane_work(repo: Path, sha: str, config: GateConfig) -> str | None:
+    """Reason when every declared lane already holds a fresh pass for `sha`.
+
+    The stronger of the two forms of "the gate would execute nothing": every
+    lane's GATE-007 key for this exact tree is a cache hit, so a gate run here
+    would replay all of them and do no work. It covers a docs commit even in a
+    repository whose guards lane deliberately reads every path -- the lane
+    re-runs only when *its* key changes, and a pass for this tree proves it did
+    not. Any lane without a fresh pass, and any failure to build the keys,
+    keeps the gate (a tool-version probe that dies must not admit a head).
+    """
+
+    from ci_lint.lane_cache import (  # noqa: PLC0415 -- GATE-007 lane cache
+        ToolVersions,
+        lane_key,
+        lookup,
+        tree_entries,
+        tree_file,
+    )
+    from ci_lint.workflow_replay_runtime import query_execution_pins  # noqa: PLC0415
+
+    if not config.lanes:
+        return None
+    try:
+        entries = tree_entries(repo, sha)
+        ci_toml = tree_file(repo, sha, "ci.toml")
+        pins = query_execution_pins(repo, config.replay)
+    except (OSError, ValueError, subprocess.TimeoutExpired, GitError):
+        return None
+    versions = ToolVersions()
+    query = config.replay.provider_query if config.replay else ()
+    for lane in config.lanes:
+        key = lane_key(entries, lane, gate_run=(*config.run, *query), gate_source=config.source,
+                       versions=versions, provider=pins, ci_toml=ci_toml)
+        if lookup(repo, lane, key.key) is None:
+            return None
+    return (f"every declared gate lane ({len(config.lanes)}) already holds a fresh pass for this exact "
+            "tree; the gate would execute nothing")
+
+
+def _push_inert_reason(repo: Path, local_sha: str, remote_sha: str, remote: str | None,
+                       config: GateConfig) -> str | None:
+    """soldr#4195: the inert-change reason for a pushed head, or None.
+
+    Judged against *every* base the push's policy is compared with, so a branch
+    cannot hide a lane-affecting commit behind a final docs commit.
+    """
+
+    bases = _remote_bases(repo, local_sha, remote_sha, remote)
+    if bases:
+        reason = None
+        for base in bases:
+            reason = inert_change(repo, base, local_sha, config)
+            if reason is None:
+                break
+        if reason is not None:
+            return reason
+    return _no_lane_work(repo, local_sha, config)
+
+
 def check_push(repo: Path, stdin_text: str, *, wip_reason: str | None = None,
                remote: str | None = None) -> PushCheck:
     """git's pre-push stdin: `<local ref> <local sha> <remote ref> <remote sha>`
@@ -1097,6 +1276,7 @@ def check_push(repo: Path, stdin_text: str, *, wip_reason: str | None = None,
     problems: list[str] = []
     wip: list[str] = []
     shadow: list[str] = []
+    inert: list[str] = []
     defaulted = False
     for line in stdin_text.splitlines():
         parts = line.split()
@@ -1115,6 +1295,11 @@ def check_push(repo: Path, stdin_text: str, *, wip_reason: str | None = None,
         not_explicit = not loaded.config.mode_explicit
         result = check_commit(repo, local_sha)
         if not result.ok:
+            inert_reason = _push_inert_reason(repo, local_sha, remote_sha, remote, loaded.config)
+            if inert_reason is not None:
+                inert.append(f"{local_ref} -> {remote_ref}: {inert_reason}")
+                defaulted = defaulted or not_explicit
+                continue
             detail = f"{local_ref} -> {remote_ref}: {result.detail}"
             if wip_reason:
                 wip.append(detail)
@@ -1130,7 +1315,8 @@ def check_push(repo: Path, stdin_text: str, *, wip_reason: str | None = None,
             defaulted = defaulted or not_explicit
             problems.extend(f"{local_ref} -> {remote_ref}: {problem}"
                             for problem in _publication_problems(repo, local_sha, loaded.config))
-    return PushCheck(exit_code=1 if problems else 0, problems=problems, wip=wip, shadow=shadow, mode_defaulted=defaulted)
+    return PushCheck(exit_code=1 if problems else 0, problems=problems, wip=wip, shadow=shadow,
+                     inert=inert, mode_defaulted=defaulted)
 
 
 def hook_script(launcher: str) -> str:
@@ -1242,11 +1428,19 @@ class VerifyOutcome:
 
 
 def verify(
-    repo: Path, config: GateConfig, *, sha: str, event: str, author: str | None
+    repo: Path, config: GateConfig, *, sha: str, event: str, author: str | None,
+    base: str | None = None
 ) -> VerifyOutcome:
     """Only `pull_request`/`pull_request_target` heads are judged: a push to
     the default branch is a merge of an already-verified PR, and schedule or
-    dispatch runs are not an author's iteration loop."""
+    dispatch runs are not an author's iteration loop.
+
+    `base` is the PR base commit. When the head is unattested but changes no
+    path any declared lane reads, the head is accepted (`state = "inert"`) --
+    the same exemption the pre-push hook applies (soldr#4195). It stays
+    unattested, so GATE-010 trust still runs every remote job instead of
+    skipping them.
+    """
 
     if event not in ("pull_request", "pull_request_target"):
         return VerifyOutcome(0, False, "not-applicable", f"[GATE-003] event '{event}' is not a pull request; nothing to verify")
@@ -1255,6 +1449,14 @@ def verify(
     result = check_commit(repo, sha)
     if result.ok:
         return VerifyOutcome(0, True, result.state, f"[GATE-003] {sha[:12]} {result.state}: {result.detail}")
+    if base is not None:
+        inert_reason = inert_change(repo, base, sha, config)
+        if inert_reason is not None:
+            return VerifyOutcome(
+                0, False, INERT_STATE,
+                f"[GATE-003] {sha[:12]} {INERT_STATE}: {inert_reason}\n"
+                "    the head stays unattested, so GATE-010 trust runs every remote job "
+                "(nothing is skipped); push a stamped commit to get the quick gate")
     fix = (
         f"run the local gate and push its stamped commit: `ci-lint local-gate run` (runs {config.command}), "
         "then `git push --force-with-lease`"

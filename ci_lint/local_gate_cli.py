@@ -122,7 +122,7 @@ def _verify_policy(repo: Path, config: GateConfig, inp: TrustInput, *,
         # Initial enrollment can have no base declaration. Once adopted, a
         # head cannot weaken mode or exemptions; the base owns both policies.
         config = base_policy.config or config
-    return verify(repo, config, sha=inp.head_sha, event=inp.event, author=author)
+    return verify(repo, config, sha=inp.head_sha, event=inp.event, author=author, base=inp.base_sha)
 
 
 def _cmd_verify(args: argparse.Namespace) -> int:
@@ -270,6 +270,9 @@ def _cmd_check_push(args: argparse.Namespace) -> int:
     for head in push.shadow:
         print(f"ci-lint local-gate: warning: unattested head pushed (mode = shadow; hosted CI runs the "
               f"full suite): {head}", file=sys.stderr)
+    for head in push.inert:
+        print(f"ci-lint local-gate: unattested head needs no gate (the gate would execute nothing here; "
+              f"hosted CI still runs the full suite): {head}", file=sys.stderr)
     if code:
         print("ci-lint local-gate: push refused -- these heads have not passed the local gate (GATE-003):", file=sys.stderr)
         for problem in problems:
