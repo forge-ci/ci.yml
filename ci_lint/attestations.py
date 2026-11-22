@@ -147,9 +147,12 @@ def parse_definition(text: str, *, source: str = DEFINITION_FILE, lanes: tuple[s
     if not isinstance(doc, dict):
         bad("the top level is not a mapping", "start with `version: 1`, `gates:` and `jobs:`")
         return DefinitionLoad(None, findings)
-    unknown = sorted(set(doc) - {"version", "gates", "jobs"})
+    # `lanes` and `mode` are prooft's: lane `run`/`stage`/`inputs`/`max-age-hours`
+    # (the runner, GATE-014/017) and shadow/enforce. ci-lint reads them in
+    # `ci_lint.gate_push_prooft`; here they are accepted, not interpreted.
+    unknown = sorted(set(doc) - {"version", "gates", "jobs", "lanes", "mode"})
     if unknown:
-        bad(f"unknown top-level key(s) {', '.join(unknown)}", "only version, gates and jobs are defined")
+        bad(f"unknown top-level key(s) {', '.join(unknown)}", "only version, mode, lanes, gates and jobs are defined")
     version = doc.get("version")
     if version != VERSION:
         bad(f"version is {version!r}", f"set `version: {VERSION}`")

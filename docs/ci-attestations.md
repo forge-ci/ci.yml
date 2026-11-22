@@ -84,12 +84,15 @@ failure and names the qualified commit already published. See the
 
 ### `./push`: the repository's one publishing command (GATE-014)
 
-An attesting repository wraps the steps above in an executable root `./push`
-([policy](policy-general.md#the-push-entry-point-gate-014)): refuse a dirty or
-default-branch checkout, run the attesting gate on the committed HEAD with no
-bypass, verify the stamped head, push it with `--force-with-lease`, and open
-the PR. Its lanes cover at least the gates of the PR's format/lint, Clippy,
-Dylint and Linux host unit-test jobs, so those jobs skip on the PR.
+An attesting repository's root `./push` delegates to the prooft runner,
+a few lines of Python that exec `prooft --push` ([policy](policy-general.md#the-push-entry-point-gate-014)).
+The runner refuses a dirty, detached or base-branch checkout. It runs the
+lint-stage lanes first and the test lanes with `--test`, stamping the
+committed HEAD. Then it pushes with `--force-with-lease` and opens or reuses
+the PR. Lanes declare `run:` (`run: soldr` for `soldr lint`) and optionally
+`stage: lint|test`. Each lint pass is recorded against the working tree, so
+`prooft check-build` can refuse a build that was never linted
+([GATE-017](policy-general.md#no-build-before-lint-gate-017)).
 
 ## In CI
 
