@@ -90,7 +90,10 @@ def _clean_table(*, default_branch: str = "main", gate_check_name: str = DEFAULT
             {"required_status_checks": {"strict": False, "contexts": [gate_check_name]}},
         ),
         f"{API}/repos/{REPO_SLUG}/rulesets": (200, []),
-        f"{API}/repos/{REPO_SLUG}": (200, {"owner": {"login": "org", "type": "Organization"}}),
+        f"{API}/repos/{REPO_SLUG}": (
+            200,
+            {"owner": {"login": "org", "type": "Organization"}, "default_branch": default_branch, "allow_auto_merge": True},
+        ),
     }
 
 

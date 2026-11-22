@@ -32,6 +32,12 @@ Rules implemented:
   - GEN-011: the default branch's required status checks don't include the
     gate check name (default "CI OK"); reported `needs_review` (a policy
     decision, not a code defect) when branch protection itself is absent.
+  - GEN-034 (live half): merge automation is either unpoliced or missing.
+    `allow_auto_merge` on with no required status check anywhere means a PR
+    can merge itself with no CI (violation); required checks with neither
+    auto-merge nor a merge queue mean no green PR can land without a human
+    (needs_review). Costs one GET of the repository payload, shared with
+    GEN-022's owner-type lookup.
   - GATE-012 (live half, ci.yml#206): a required status check (branch
     protection or an active ruleset) names a GitHub App check or is bound
     to an app other than GitHub Actions -- act cannot run it.
@@ -382,6 +388,14 @@ def _ruleset_covers_branch(ruleset: dict[str, JsonValue], default_branch: str) -
     return False
 
 
+def _ruleset_payloads(rulesets: SettingsReply | None) -> list[dict[str, JsonValue]]:
+    """The ruleset objects of a 200 reply, typed for the queue/context helpers."""
+
+    if rulesets is None or rulesets.status != 200 or not isinstance(rulesets.body, list):
+        return []
+    return [entry for entry in rulesets.body if isinstance(entry, dict)]
+
+
 def _has_active_merge_queue(rulesets: list[dict[str, JsonValue]], default_branch: str) -> bool:
     for rs in rulesets:
         if rs.get("enforcement") != "active":
@@ -573,6 +587,160 @@ def _fetch_owner_type(fetch_status: FetchStatusFn, token: str, repo: str) -> str
     return kind if isinstance(kind, str) else None
 
 
+@dataclass(frozen=True)
+class RepoFacts:
+    """The repository payload fields the merge-automation rules need.
+
+    One GET of `/repos/{repo}` answers both GEN-022's owner-type question and
+    GEN-034's `allow_auto_merge` question, so the audit pays for it once.
+    `None` on a field means "the payload did not say", which the caller
+    reports as `needs_review`, never as a pass.
+    """
+
+    owner_type: str | None
+    allow_auto_merge: bool | None
+    default_branch: str | None = None
+
+
+@dataclass(frozen=True)
+class RepoFactsReply:
+    """One `/repos/{repo}` read: the status-carrying reply (so a 403/404 can be
+    reported rather than guessed at) plus the typed fields when it was a 200."""
+
+    reply: SettingsReply | None
+    facts: RepoFacts | None
+
+
+def fetch_repo_facts(fetch_status: FetchStatusFn, token: str, repo: str) -> RepoFactsReply:
+    """Read `/repos/{repo}` once: the reply (for 403/404 verdicts) plus the
+    typed fields, or `(None, None)` on a transport failure."""
+
+    reply = _get(fetch_status, token, f"{API_ROOT}/repos/{repo}")
+    if reply is None or reply.status != 200 or not isinstance(reply.body, dict):
+        return RepoFactsReply(reply, None)
+    body = reply.body
+    owner = body.get("owner")
+    owner_type = owner.get("type") if isinstance(owner, dict) else None
+    allow_auto_merge = body.get("allow_auto_merge")
+    branch = body.get("default_branch")
+    facts = RepoFacts(
+        owner_type=owner_type if isinstance(owner_type, str) else None,
+        allow_auto_merge=allow_auto_merge if isinstance(allow_auto_merge, bool) else None,
+        default_branch=branch if isinstance(branch, str) else None,
+    )
+    return RepoFactsReply(reply, facts)
+
+
+def _unverifiable_finding(repo: str, detail: str) -> Finding:
+    return Finding(
+        rule="GEN-034",
+        status=Status.NEEDS_REVIEW,
+        path=f"repo:{repo}",
+        message=f"GEN-034 cannot be decided: {detail}",
+        fix="re-run with a token that can read the repository's rulesets and branch protection; "
+        "an unreadable policing setting is never treated as a pass",
+    )
+
+
+def _merge_automation_violation(path: str) -> Finding:
+    return Finding(
+        rule="GEN-034",
+        path=path,
+        message="merge automation is unpoliced: 'Allow auto-merge' is on but the default branch "
+        "requires no status check (branch protection or active ruleset), so a pull request can "
+        "merge itself with no CI verdict",
+        fix="add the gate's exact required status checks (the 'CI OK' aggregator) to the default "
+        "branch -- a ruleset 'required_status_checks' rule or classic branch protection -- or turn "
+        "'Allow auto-merge' off (admin: PATCH /repos/{owner}/{repo} allow_auto_merge=false)",
+    )
+
+
+def _merge_automation_gap() -> Finding:
+    return Finding(
+        rule="GEN-034",
+        status=Status.NEEDS_REVIEW,
+        path="auto_merge",
+        message="required checks gate the default branch but nothing can land a green pull request "
+        "unattended: 'Allow auto-merge' is off and no active merge-queue ruleset covers the branch, "
+        "so every verified PR still needs a human merge click (an agent fleet stalls here)",
+        fix="enable 'Allow auto-merge' (admin: PATCH /repos/{owner}/{repo} allow_auto_merge=true; "
+        "it is already policed by the required checks) or add a merge queue (GEN-022)",
+    )
+
+
+def check_gen_034(
+    repo: str,
+    facts_reply: SettingsReply | None,
+    facts: RepoFacts | None,
+    branch_protection: SettingsReply | None,
+    rulesets: SettingsReply | None,
+    default_branch: str,
+) -> list[Finding]:
+    """GEN-034 (live): auto-merge is a *policed* capability, and a green PR can
+    land without a human.
+
+    Clause A (violation) -- 'Allow auto-merge' on with no required status
+    check: the setting is a licence to merge unverified code, so it must
+    never be on without a policing gate. Clause B (needs_review) -- required
+    checks with neither auto-merge nor an active merge queue: the repository
+    verifies PRs and then requires a manual merge for every one of them,
+    which is the deadlock an unattended fleet hits (a green PR sits
+    `CLEAN`/`MERGEABLE` forever because nothing calls the merge mutation).
+
+    Settings unreadable is `needs_review`, never a pass. A rulesets payload
+    the audit could not read is left to GEN-022 rather than guessed at here.
+    """
+
+    if facts_reply is None:
+        return [_network_finding("GEN-034", f"repo:{repo}", f"{API_ROOT}/repos/{repo}")]
+    if facts_reply.status in (401, 403):
+        return [
+            Finding(
+                rule="GEN-034",
+                status=Status.NEEDS_REVIEW,
+                path=f"repo:{repo}",
+                message="could not read the repository settings needed to police auto-merge "
+                f"(HTTP {facts_reply.status})",
+                fix="re-run with a token that can read repository settings (admin scope); "
+                "an unreadable setting is never treated as a pass",
+            )
+        ]
+    if facts_reply.status != 200:
+        return [_unexpected_status_finding("GEN-034", f"repo:{repo}", "repository settings", facts_reply.status)]
+    if facts is None or facts.allow_auto_merge is None:
+        return [
+            Finding(
+                rule="GEN-034",
+                status=Status.NEEDS_REVIEW,
+                path=f"repo:{repo}",
+                message="the repository payload does not report 'allow_auto_merge', so whether "
+                "auto-merge is policed cannot be decided",
+                fix="re-run against the current GitHub API; a missing setting is never a pass",
+            )
+        ]
+    if rulesets is None or rulesets.status not in (200, 404):
+        # GEN-022 already reports the unreadable payload. GEN-034 must still not
+        # call an auto-merge licence "policed" when it cannot see the rules: with
+        # allow_auto_merge on and no ruleset visibility, clause A cannot be
+        # cleared, so it is needs_review rather than silence.
+        if facts.allow_auto_merge:
+            return [_unverifiable_finding(repo, "the rulesets could not be read, so whether a required "
+                                                "status check polices the default branch is unknown")]
+        return []
+    rs_list = _ruleset_payloads(rulesets)
+    required = _required_contexts(branch_protection, rs_list, default_branch)
+    path = f"branch:{default_branch}"
+    protection_unreadable = branch_protection is not None and branch_protection.status in (401, 403)
+    if facts.allow_auto_merge and not required:
+        if protection_unreadable:
+            return [_unverifiable_finding(repo, "branch protection could not be read, so whether "
+                                                "auto-merge is policed by a required check is unknown")]
+        return [_merge_automation_violation(path)]
+    if not facts.allow_auto_merge and required and not _has_active_merge_queue(rs_list, default_branch):
+        return [_merge_automation_gap()]
+    return []
+
+
 def _gen_022_findings(
     fetch_status: FetchStatusFn,
     token: str,
@@ -580,15 +748,24 @@ def _gen_022_findings(
     branch_protection: SettingsReply | None,
     rulesets: SettingsReply | None,
     default_branch: str,
+    owner_type: str | None = None,
 ) -> list[Finding]:
     """GEN-022 with the owner type looked up lazily: one extra GET, and only
-    when the check would otherwise report a missing queue (a violation)."""
+    when the check would otherwise report a missing queue (a violation).
 
-    findings = check_gen_022_live(branch_protection, rulesets, default_branch)
-    if any(f.status == Status.VIOLATION for f in findings) and rulesets is not None and rulesets.status in (200, 404):
-        owner_type = _fetch_owner_type(fetch_status, token, repo)
-        if owner_type is not None:
-            findings = check_gen_022_live(branch_protection, rulesets, default_branch, owner_type)
+    `owner_type` lets the caller hand over the type it already read for
+    GEN-034, so a repo with a missing queue costs no second GET."""
+
+    findings = check_gen_022_live(branch_protection, rulesets, default_branch, owner_type)
+    if (
+        owner_type is None
+        and any(f.status == Status.VIOLATION for f in findings)
+        and rulesets is not None
+        and rulesets.status in (200, 404)
+    ):
+        fetched = _fetch_owner_type(fetch_status, token, repo)
+        if fetched is not None:
+            findings = check_gen_022_live(branch_protection, rulesets, default_branch, fetched)
     return findings
 
 
@@ -759,9 +936,25 @@ def run_audit(
 
     branch_protection = _fetch_branch_protection(fetch_status, token, repo, default_branch)
     rulesets = _fetch_rulesets(fetch_status, token, repo)
+    repo_payload = fetch_repo_facts(fetch_status, token, repo)
+    repo_facts = repo_payload.facts
+
     findings.extend(check_gen_006(branch_protection, rulesets, default_branch))
     findings.extend(check_gen_011(branch_protection, default_branch, gate_check_name))
-    findings.extend(_gen_022_findings(fetch_status, token, repo, branch_protection, rulesets, default_branch))
+    findings.extend(
+        _gen_022_findings(
+            fetch_status,
+            token,
+            repo,
+            branch_protection,
+            rulesets,
+            default_branch,
+            owner_type=repo_facts.owner_type if repo_facts is not None else None,
+        )
+    )
+    findings.extend(
+        check_gen_034(repo, repo_payload.reply, repo_facts, branch_protection, rulesets, default_branch)
+    )
     protection_body = branch_protection.body if branch_protection is not None and branch_protection.status == 200 else None
     ruleset_list = rulesets.body if rulesets is not None and rulesets.status == 200 else None
     findings.extend(check_gate_012_required(protection_body, ruleset_list, default_branch))
@@ -789,7 +982,18 @@ def to_json_dict(report: AuditReport) -> dict[str, JsonValue]:
 
 def render_text(report: AuditReport) -> str:
     lines = [f"ci-lint audit: {report.repo} (default branch: {report.default_branch})"]
-    rules = ("SEC-005", "SEC-006", "SEC-007", "GEN-006", "GEN-010", "GEN-011", "GEN-022", "GATE-012", "RUST-014")
+    rules = (
+        "SEC-005",
+        "SEC-006",
+        "SEC-007",
+        "GEN-006",
+        "GEN-010",
+        "GEN-011",
+        "GEN-022",
+        "GEN-034",
+        "GATE-012",
+        "RUST-014",
+    )
     by_rule: dict[str, list[Finding]] = {r: [] for r in rules}
     for f in report.findings:
         by_rule.setdefault(f.rule, []).append(f)
