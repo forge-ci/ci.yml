@@ -56,6 +56,13 @@ path = "actions/pool-select"
 sha = "82945f807590d469a2833f2a421a0a7861bc37d1"
 version = "PR #564 merge"
 
+# OIDC reservation with a ready listener (forge-ci/ci.yml#567).
+[[action]]
+repo = "forge-ci/ci.yml"
+path = "actions/pool-select"
+sha = "ed73926bc2de1b5d71f50907cd93920daeecbe78"
+version = "PR #567 merge"
+
 # pool-select's composite step pins this exact sha (actions/pool-select/action.yml),
 # so the seed must hold it too; jobs may also use it directly.
 [[action]]
