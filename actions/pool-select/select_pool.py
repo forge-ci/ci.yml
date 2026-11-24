@@ -37,12 +37,14 @@ from __future__ import annotations
 
 import json
 import os
+import re
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TypeAlias
 from urllib.error import HTTPError
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 from urllib.request import Request, urlopen
 
 JsonValue: TypeAlias = "None | bool | int | float | str | list[JsonValue] | dict[str, JsonValue]"
@@ -58,6 +60,10 @@ PR_EVENTS = frozenset({"pull_request", "pull_request_target"})
 MODES = frozenset({"", "idle", "prefer"})
 SOURCES = frozenset({"", "auto", "signal", "github"})
 DEFAULT_STATUS_URL = "https://signal.forge-ci.com/v1/pool"
+LEDGER_URL = "https://signal.forge-ci.com/v1/lease"
+LEDGER_AUDIENCE = "signal.forge-ci.com"
+LEASE_WAIT_SECONDS = 45
+LEASE_ID = re.compile(r"[0-9a-f]{24}")
 STATUS_SCHEMA = "forge-ci.pool-status"
 STATUS_VERSION = 1
 # Oldest status data the selector accepts, whatever the server's max_age_s says.
@@ -89,6 +95,12 @@ class Settings:
     source: str = ""
     status_url: str = ""
     count_room: str = "true"
+    lease_class: str = ""
+    lease_job: str = ""
+    run_id: str = ""
+    run_attempt: str = ""
+    oidc_url: str = ""
+    oidc_token: str = ""
 
 
 @dataclass(frozen=True)
@@ -412,6 +424,8 @@ def select(settings: Settings, fetch: Fetch) -> Decision:
         reason = untrusted_reason(settings)
         if reason:
             return Decision(fallback, False, reason)
+        if settings.source.strip().casefold() == "lease":
+            return reserve_runner(settings, fetch, fallback)
         return probe(fetch, settings, labels, fallback)
     except Exception as error:  # noqa: BLE001 -- every failure falls back to hosted
         reason = describe_error(error)
@@ -433,6 +447,76 @@ def github_fetch(url: str, token: str) -> JsonValue:
         return json.load(response)
 
 
+def lease_post(url: str, token: str, body: dict[str, JsonValue], timeout: float) -> JsonValue:
+    request = Request(url, data=compact(body).encode(), headers={
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+        "User-Agent": "forge-ci-pool-select",
+    }, method="POST")
+    with urlopen(request, timeout=timeout) as response:  # noqa: S310 -- constant ledger origin
+        return json.loads(response.read(65_536))
+
+
+def lease_identity(settings: Settings, fetch: Fetch) -> str:
+    oidc = urlsplit(settings.oidc_url)
+    if (oidc.scheme != "https" or not (oidc.hostname or "").endswith(".actions.githubusercontent.com")
+            or oidc.username is not None or oidc.password is not None):
+        raise ProbeError("invalid GitHub OIDC endpoint")
+    identity = fetch(settings.oidc_url + ("&" if oidc.query else "?") + f"audience={LEDGER_AUDIENCE}",
+                     settings.oidc_token)
+    token = identity.get("value") if isinstance(identity, dict) else None
+    if not isinstance(token, str) or not token:
+        raise ProbeError("GitHub OIDC response did not contain an identity")
+    return token
+
+
+def reserve_runner(
+    settings: Settings,
+    fetch: Fetch,
+    fallback: str,
+    post: Callable[[str, str, dict[str, JsonValue], float], JsonValue] = lease_post,
+    clock: Callable[[], float] = time.monotonic,
+    delay: Callable[[float], None] = time.sleep,
+) -> Decision:
+    if not settings.lease_class or not settings.lease_job or not settings.oidc_token:
+        return Decision(fallback, False, "lease inputs or GitHub OIDC permission missing")
+    body: dict[str, JsonValue] = {
+        "class": settings.lease_class,
+        "job": settings.lease_job,
+        "run_id": int(settings.run_id),
+        "run_attempt": int(settings.run_attempt),
+        "labels": [label.casefold() for label in parse_labels(settings.labels)
+                   if label.casefold() not in {"self-hosted", "forge-pool"}],
+    }
+    token = lease_identity(settings, fetch)
+    expires = clock() + LEASE_WAIT_SECONDS
+    pending = None
+    try:
+        while (remaining := expires - clock()) > 0:
+            response = post(LEDGER_URL, token, body, min(API_TIMEOUT, remaining))
+            if not isinstance(response, dict):
+                raise ProbeError("invalid lease response")
+            lease_id = response.get("lease_id")
+            if isinstance(lease_id, str) and LEASE_ID.fullmatch(lease_id):
+                pending = lease_id
+            if response.get("grant") is True:
+                labels = response.get("runs_on")
+                if not pending or labels != ["self-hosted", f"lease-{pending}"]:
+                    raise ProbeError("invalid reserved runner labels")
+                pending = None
+                return Decision(compact(labels), True, "reserved runner is online")
+            if response.get("reason") != "runner_starting":
+                return Decision(fallback, False, "ledger declined the reservation")
+            delay(min(3, max(0, expires - clock())))
+        return Decision(fallback, False, "reserved runner did not come online in time")
+    finally:
+        if pending is not None:
+            try:
+                post(f"{LEDGER_URL}/{pending}/release", token, {}, API_TIMEOUT)
+            except (OSError, ValueError):
+                warning("could not release pending reservation")
+
+
 def settings_from_env(env: dict[str, str]) -> Settings:
     repository = env.get("GITHUB_REPOSITORY", "")
     return Settings(
@@ -450,6 +534,12 @@ def settings_from_env(env: dict[str, str]) -> Settings:
         source=env.get("POOL_SOURCE", ""),
         status_url=env.get("POOL_STATUS_URL", ""),
         count_room=env.get("POOL_COUNT_ROOM", "true"),
+        lease_class=env.get("POOL_LEASE_CLASS", "").strip(),
+        lease_job=env.get("POOL_LEASE_JOB", "").strip() or env.get("GITHUB_JOB", ""),
+        run_id=env.get("GITHUB_RUN_ID", ""),
+        run_attempt=env.get("GITHUB_RUN_ATTEMPT", ""),
+        oidc_url=env.get("ACTIONS_ID_TOKEN_REQUEST_URL", ""),
+        oidc_token=env.get("ACTIONS_ID_TOKEN_REQUEST_TOKEN", ""),
     )
 
 

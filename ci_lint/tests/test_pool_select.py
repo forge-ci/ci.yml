@@ -68,6 +68,48 @@ def settings(**overrides: str) -> sp.Settings:
     return replace(base, **overrides)
 
 
+class LeaseSelectionTest(unittest.TestCase):
+    def reserve(self, responses: list[dict], step: float = 3) -> tuple[sp.Decision, list[str]]:
+        lease = settings(source="lease", lease_class="linux-x64-large", lease_job="build", run_id="42",
+                         run_attempt="1", oidc_url="https://pipelines.actions.githubusercontent.com/oidc",
+                         oidc_token=TOKEN)
+        now = [0.0]
+        urls = []
+
+        def post(url, token, body, timeout):
+            self.assertEqual(token, "signed-identity")
+            self.assertGreater(timeout, 0)
+            urls.append(url)
+            if url == sp.LEDGER_URL:
+                self.assertEqual(body, {"class": "linux-x64-large", "job": "build",
+                                        "run_id": 42, "run_attempt": 1, "labels": []})
+                return responses.pop(0)
+            return {"released": True}
+
+        fetch = FakeApi({"value": "signed-identity"})
+        result = sp.reserve_runner(lease, fetch, '"ubuntu-latest"', post=post, clock=lambda: now[0],
+                                   delay=lambda _: now.__setitem__(0, now[0] + step))
+        self.assertEqual(fetch.urls, [lease.oidc_url + "?audience=signal.forge-ci.com"])
+        return result, urls
+
+    def test_waits_for_online_runner_without_releasing_the_grant(self) -> None:
+        lease_id = "a" * 24
+        labels = ["self-hosted", "lease-" + lease_id]
+        result, urls = self.reserve([{"grant": False, "reason": "runner_starting", "lease_id": lease_id},
+                                     {"grant": True, "runs_on": labels, "lease_id": lease_id}])
+        self.assertTrue(result.pool)
+        self.assertEqual(json.loads(result.runs_on), labels)
+        self.assertEqual(urls, [sp.LEDGER_URL, sp.LEDGER_URL])
+
+    def test_timeout_releases_the_reservation_and_uses_hosted(self) -> None:
+        lease_id = "b" * 24
+        result, urls = self.reserve([{"grant": False, "reason": "runner_starting", "lease_id": lease_id}],
+                                    step=sp.LEASE_WAIT_SECONDS)
+        self.assertFalse(result.pool)
+        self.assertEqual(json.loads(result.runs_on), "ubuntu-latest")
+        self.assertEqual(urls, [sp.LEDGER_URL, f"{sp.LEDGER_URL}/{lease_id}/release"])
+
+
 def run(cfg: sp.Settings, api: FakeApi) -> tuple[sp.Decision, str]:
     out = io.StringIO()
     with contextlib.redirect_stdout(out):

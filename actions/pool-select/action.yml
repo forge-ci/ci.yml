@@ -30,6 +30,15 @@ inputs:
       Where capacity comes from. Empty or 'auto' (default): 'github' when a
       token is given, else 'signal'. 'signal': GET status-url?org=<owner>, no
       token. 'github': list the org's runners with token (no token: hosted).
+      'lease': reserve a runner with GitHub OIDC before committing to it.
+    required: false
+    default: ""
+  lease-class:
+    description: Ledger capacity class when source is 'lease'.
+    required: false
+    default: ""
+  lease-job:
+    description: Stable key for the downstream job. Defaults to the selector job ID.
     required: false
     default: ""
   status-url:
@@ -100,6 +109,8 @@ runs:
         POOL_SOURCE: ${{ inputs.source }}
         POOL_STATUS_URL: ${{ inputs.status-url }}
         POOL_COUNT_ROOM: ${{ inputs.count-room }}
+        POOL_LEASE_CLASS: ${{ inputs.lease-class }}
+        POOL_LEASE_JOB: ${{ inputs.lease-job }}
       run: uv run --no-project --script "${GITHUB_ACTION_PATH}/select_pool.py"
     - name: Fall back to hosted runners
       id: fallback
