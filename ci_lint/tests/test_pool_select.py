@@ -96,7 +96,7 @@ class LeaseSelectionTest(unittest.TestCase):
         lease_id = "a" * 24
         labels = ["self-hosted", "lease-" + lease_id]
         result, urls = self.reserve([{"grant": False, "reason": "runner_starting", "lease_id": lease_id},
-                                     {"grant": True, "runs_on": labels, "lease_id": lease_id}])
+                                     {"grant": True, "runs_on": labels, "lease_id": lease_id}], step=69)
         self.assertTrue(result.pool)
         self.assertEqual(json.loads(result.runs_on), labels)
         self.assertEqual(urls, [sp.LEDGER_URL, sp.LEDGER_URL])

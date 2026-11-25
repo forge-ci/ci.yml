@@ -12,6 +12,14 @@ administrative jobs, so the routing decision does not wait in the
 organization's hosted-runner queue; unset `FORGE_QUICK_LABELS` and it runs
 hosted again.
 
+With `source: lease`, the selector authenticates to the DigitalOcean broker
+using GitHub OIDC. Set `lease-class` for the build and grant the selector job
+`id-token: write`. The broker reserves capacity, then delegates the runner
+start to an eligible host. The selector returns the unique lease label after
+GitHub reports the runner online. It falls back immediately when capacity is
+unavailable. If the broker is starting a runner, the selector waits up to 90
+seconds, then releases the reservation and selects the hosted fallback.
+
 ## Decision
 
 The action picks the pool only when all of these hold. Otherwise it picks
@@ -57,10 +65,8 @@ The action picks the pool only when all of these hold. Otherwise it picks
      most 5 pages of 100, 3 s timeout each). With `source: github` and no
      token, the action warns and runs hosted.
 
-   Both sources read state without reserving it, so two selectors can race
-   for the last idle runner. The forge pool ledger's OIDC lease
-   (signal.forge-ci.com, dynamic-pool M3) is the long-term default. Its probe
-   fallback is this read.
+   The signal and GitHub sources read capacity without reserving it, so
+   concurrent jobs can select the same idle runner.
 
 Any failure picks the fallback and adds a `::warning::`: an API error, a
 timeout, malformed data, an invalid input, or a selector that could not start

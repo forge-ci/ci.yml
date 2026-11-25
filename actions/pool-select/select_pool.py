@@ -62,7 +62,8 @@ SOURCES = frozenset({"", "auto", "signal", "github"})
 DEFAULT_STATUS_URL = "https://signal.forge-ci.com/v1/pool"
 LEDGER_URL = "https://signal.forge-ci.com/v1/lease"
 LEDGER_AUDIENCE = "signal.forge-ci.com"
-LEASE_WAIT_SECONDS = 45
+# Keep the selector within its two-minute job and the ledger's 120-second lease.
+LEASE_WAIT_SECONDS = 90
 LEASE_ID = re.compile(r"[0-9a-f]{24}")
 STATUS_SCHEMA = "forge-ci.pool-status"
 STATUS_VERSION = 1
