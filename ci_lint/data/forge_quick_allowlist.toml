@@ -63,6 +63,13 @@ path = "actions/pool-select"
 sha = "ed73926bc2de1b5d71f50907cd93920daeecbe78"
 version = "PR #567 merge"
 
+# Allow a reserved Dell listener time to come online (forge-ci/ci.yml#569).
+[[action]]
+repo = "forge-ci/ci.yml"
+path = "actions/pool-select"
+sha = "52f6ada3ed0cb8622e31f1a16d506fb853b731b0"
+version = "PR #569 merge"
+
 # pool-select's composite step pins this exact sha (actions/pool-select/action.yml),
 # so the seed must hold it too; jobs may also use it directly.
 [[action]]

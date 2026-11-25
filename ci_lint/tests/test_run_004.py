@@ -14,7 +14,7 @@ from ci_lint.rules.forge_quick import ALLOWLIST_PATH, check_run_004, load_allowl
 from ci_lint.tests.helpers import requires_yaml_tooling
 
 KILL = "${{ vars.FORGE_QUICK_LABELS != '' && fromJSON(vars.FORGE_QUICK_LABELS) || 'ubuntu-latest' }}"
-POOL_SELECT = "forge-ci/ci.yml/actions/pool-select@ed73926bc2de1b5d71f50907cd93920daeecbe78"
+POOL_SELECT = "forge-ci/ci.yml/actions/pool-select@52f6ada3ed0cb8622e31f1a16d506fb853b731b0"
 APP_TOKEN = "actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc"
 README = Path(__file__).resolve().parents[2] / "actions" / "pool-select" / "README.md"
 
