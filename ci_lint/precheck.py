@@ -48,6 +48,7 @@ from ci_lint.rules.acceptance_evidence import check_rel_008
 from ci_lint.rules.macos_signing import check_rel_006
 from ci_lint.rules.release_recompute import check_rel_007
 from ci_lint.rules.host_sweeps import check_gen_030
+from ci_lint.rules.script_tests import check_gate_018
 from ci_lint.rules.status_badges import check_gen_026
 from ci_lint.rules.release_gate import check_group11
 from ci_lint.rules.rust_dylint_target import check_rust_016
@@ -286,6 +287,7 @@ def run_precheck(repo_root: Path, *, title: str = "", local: bool = False, live:
         gate_cfg = ci.local.gate
         gate_runs = () if gate_cfg is None else (gate_cfg.run, *(lane.run for lane in gate_cfg.lanes))
         all_findings.extend(check_act_002(repo_root, gate_runs))
+        all_findings.extend(check_gate_018(repo_root, gate_runs, gate_cfg is not None))
         all_findings.extend(check_act_003(repo_root))
         all_findings.extend(check_gate_016(repo_root, () if gate_cfg is None else gate_cfg.run,
                                            () if gate_cfg is None else gate_cfg.lanes,

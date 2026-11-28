@@ -38,6 +38,7 @@ from ci_lint.remote_only import check_gate_012
 from ci_lint.act_static import check_act_002, check_act_003
 from ci_lint.rules.cpp_ctest import check_cpp_001
 from ci_lint.rules.host_sweeps import check_gen_030
+from ci_lint.rules.script_tests import check_gate_018
 from ci_lint.rules.swatinem_ban import check_cache_025
 from ci_lint.rules.tools import CI_SCRIPT_RE
 from ci_lint.gate_trust import TrustDecision, TrustInput
@@ -308,6 +309,7 @@ def _cmd_lint(args: argparse.Namespace) -> int:
         )
         findings = findings + check_cpp_001(repo, extra_scripts=gate_scripts)
         findings = findings + check_gen_030(repo)
+        findings = findings + check_gate_018(repo, (config.run, *(lane.run for lane in config.lanes)), True)
     for finding in findings:
         print(finding.render())
     violations = [f for f in findings if f.status == Status.VIOLATION]
